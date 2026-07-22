@@ -1,8 +1,6 @@
-NIP-ER
-======
+# NIP-ER
 
-Event Reminders
----------------
+## Event Reminders
 
 `draft` `optional` `relay`
 
@@ -51,7 +49,7 @@ Required tags for a reminder that may become due:
 [
   ["d", "<random-id>"],
   ["not_before", "<unix-timestamp-seconds>"],
-  ["alt", "Encrypted reminder"]
+  ["alt", "Encrypted reminder"],
 ]
 ```
 
@@ -60,7 +58,7 @@ For bookmarks (saved items) or terminal states (done/cancelled), `not_before` is
 ```jsonc
 [
   ["d", "<random-id>"],
-  ["alt", "Encrypted reminder"]
+  ["alt", "Encrypted reminder"],
 ]
 ```
 
@@ -84,10 +82,10 @@ The decrypted plaintext is a UTF-8 JSON object:
     "id": "<event-id>",
     "a": "<kind>:<pubkey>:<d>",
     "relays": ["wss://relay.example"],
-    "preview": "optional cached text"
+    "preview": "optional cached text",
   },
   "status": "pending",
-  "note": "optional private note"
+  "note": "optional private note",
 }
 ```
 
@@ -117,12 +115,12 @@ Reminder updates are normal addressable-event replacements. The winning event fo
 
 Common transitions:
 
-| Operation | Replacement |
-| --- | --- |
-| create | `status: "pending"` with future `not_before` |
-| snooze | `status: "pending"` with a later `not_before` |
-| complete | `status: "done"`, omit `not_before`, add `expiration` |
-| cancel | `status: "cancelled"`, omit `not_before`, add `expiration` |
+| Operation | Replacement                                                |
+| --------- | ---------------------------------------------------------- |
+| create    | `status: "pending"` with future `not_before`               |
+| snooze    | `status: "pending"` with a later `not_before`              |
+| complete  | `status: "done"`, omit `not_before`, add `expiration`      |
+| cancel    | `status: "cancelled"`, omit `not_before`, add `expiration` |
 
 After a reminder becomes `done` or `cancelled`, clients SHOULD create a new reminder with a fresh `d` tag rather than reusing the old address.
 
@@ -155,7 +153,7 @@ Clients SHOULD publish reminders to the author's [NIP-65](65.md) write relays wh
 Clients subscribe to their own reminders:
 
 ```jsonc
-{"kinds": [30300], "authors": ["<own-pubkey>"]}
+{ "kinds": [30300], "authors": ["<own-pubkey>"] }
 ```
 
 Clients that expect due-time `EVENT` messages SHOULD keep reminder subscriptions unbounded by `since` and `until`, or use periodic recovery queries. `since` and `until` compare against `created_at`, not `not_before`, so a reminder created long ago may become due after the client's last cursor.
@@ -181,14 +179,14 @@ NIP-44 protects reminder content: target, note, preview, and status. It does not
 
 Visible to supporting relays and storage observers:
 
-| Metadata | Source |
-| --- | --- |
-| reminder owner | event `pubkey` |
-| scheduled time | `not_before` tag |
-| reminder count | distinct `d` tags |
-| creation/update times | `created_at` |
-| approximate payload size | ciphertext length |
-| lifecycle timing | replacements and `expiration` |
+| Metadata                 | Source                        |
+| ------------------------ | ----------------------------- |
+| reminder owner           | event `pubkey`                |
+| scheduled time           | `not_before` tag              |
+| reminder count           | distinct `d` tags             |
+| creation/update times    | `created_at`                  |
+| approximate payload size | ciphertext length             |
+| lifecycle timing         | replacements and `expiration` |
 
 `not_before` is not a security boundary. A malicious relay can serve early, serve late, refuse to serve, or leak metadata. Clients must treat relay scheduling as best-effort.
 
@@ -214,11 +212,11 @@ Create a reminder:
   "tags": [
     ["d", "a3f8c2e1b4d79600e5d2f1a8c3b6094d"],
     ["not_before", "1770000000"],
-    ["alt", "Encrypted reminder"]
+    ["alt", "Encrypted reminder"],
   ],
   "content": "<nip44-ciphertext>",
   "id": "<event-id>",
-  "sig": "<signature>"
+  "sig": "<signature>",
 }
 ```
 
@@ -230,10 +228,10 @@ Decrypted content for a target-backed reminder:
     "a": "30023:79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798:proposal",
     "id": "7b4f3c2a1e9d8c7061524334aabbccddeeff00112233445566778899aabbccdd",
     "relays": ["wss://relay.example"],
-    "preview": "Can you review this before Friday?"
+    "preview": "Can you review this before Friday?",
   },
   "status": "pending",
-  "note": "Follow up before planning"
+  "note": "Follow up before planning",
 }
 ```
 
@@ -242,7 +240,7 @@ Decrypted content for a note-only reminder:
 ```jsonc
 {
   "status": "pending",
-  "note": "Submit travel receipt"
+  "note": "Submit travel receipt",
 }
 ```
 
@@ -256,11 +254,11 @@ Snooze by replacing the same address with a later `not_before`:
   "tags": [
     ["d", "a3f8c2e1b4d79600e5d2f1a8c3b6094d"],
     ["not_before", "1770086400"],
-    ["alt", "Encrypted reminder"]
+    ["alt", "Encrypted reminder"],
   ],
   "content": "<nip44-ciphertext-with-status-pending>",
   "id": "<event-id>",
-  "sig": "<signature>"
+  "sig": "<signature>",
 }
 ```
 
@@ -274,11 +272,11 @@ Complete by replacing the same address without `not_before`:
   "tags": [
     ["d", "a3f8c2e1b4d79600e5d2f1a8c3b6094d"],
     ["alt", "Encrypted reminder"],
-    ["expiration", "1777542730"]
+    ["expiration", "1777542730"],
   ],
   "content": "<nip44-ciphertext-with-status-done>",
   "id": "<event-id>",
-  "sig": "<signature>"
+  "sig": "<signature>",
 }
 ```
 
@@ -291,11 +289,11 @@ Delete stored reminder data with NIP-09:
   "created_at": 1770086420,
   "tags": [
     ["a", "30300:<author-pubkey>:a3f8c2e1b4d79600e5d2f1a8c3b6094d"],
-    ["k", "30300"]
+    ["k", "30300"],
   ],
   "content": "",
   "id": "<event-id>",
-  "sig": "<signature>"
+  "sig": "<signature>",
 }
 ```
 
@@ -311,7 +309,6 @@ R: ["EOSE", "r1"]
 ... not_before passes ...
 R: ["EVENT", "r1", <same-latest-reminder>]
 ```
-
 
 ## Registry
 

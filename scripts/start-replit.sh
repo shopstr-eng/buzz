@@ -76,18 +76,25 @@ export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:3000}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 
 if [[ -d web/dist ]]; then
-  echo "==> Serving web UI from web/dist"
+  export BUZZ_WEB_DIR="$(pwd)/web/dist"
+  # Enable full workspace UI at / (not just the invite landing page)
+  export BUZZ_SERVE_GIT_WEB_GUI="${BUZZ_SERVE_GIT_WEB_GUI:-true}"
+  echo "==> Serving web UI from web/dist (BUZZ_SERVE_GIT_WEB_GUI=${BUZZ_SERVE_GIT_WEB_GUI})"
 else
-  echo "==> Warning: web/dist not found — run 'cd web && npm run build' to enable web UI"
+  echo "==> Warning: web/dist not found — run 'cd web && npm install && npm run build' to enable web UI"
 fi
 
 if [[ -d admin-web/dist ]]; then
-  echo "==> Serving admin UI from admin-web/dist"
+  export BUZZ_ADMIN_WEB_DIR="$(pwd)/admin-web/dist"
+  if [[ -n "${BUZZ_ADMIN_HOST:-}" ]]; then
+    echo "==> Serving admin UI from admin-web/dist (host-based: ${BUZZ_ADMIN_HOST})"
+  else
+    echo "==> Serving admin UI from admin-web/dist (path-based: /admin/)"
+  fi
+else
+  echo "==> Warning: admin-web/dist not found — run 'cd admin-web && npm install && npm run build' to enable admin UI"
 fi
 
 echo "==> Starting Buzz relay on ${BUZZ_BIND_ADDR}..."
-
-[[ -d web/dist ]]       && export BUZZ_WEB_DIR="$(pwd)/web/dist"
-[[ -d admin-web/dist ]] && export BUZZ_ADMIN_WEB_DIR="$(pwd)/admin-web/dist"
 
 exec cargo run -p buzz-relay --release --ignore-rust-version

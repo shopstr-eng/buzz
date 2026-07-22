@@ -35,7 +35,7 @@ Next to it, a "Connect on Buzz" button.
 
 No separate website. No static site generator, no deploy step, no "pages" concept.
 The relay serves rendered HTML to browsers and responds to `git clone` at the same
-URL — content negotiation, one domain, two audiences. The repo *is* the website.
+URL — content negotiation, one domain, two audiences. The repo _is_ the website.
 A browser gets a rendered page. A git client gets a git server. Same URL.
 
 You clone it. It works. No special tooling. No new protocol. Git is git. You push

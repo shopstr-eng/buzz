@@ -10,13 +10,13 @@ code style, PR process, architecture), see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Buzz spans five repos. This one (`block/buzz`) is the OSS source for the relay, desktop, mobile, and CLI. The others handle internal builds and deployment:
 
-| Repo | Purpose |
-|------|---------|
-| [block/buzz](https://github.com/block/buzz) | OSS source — relay, desktop app, mobile app, CLI, agent harness |
-| [squareup/sprout-releases](https://github.com/squareup/sprout-releases) | Buildkite pipeline producing Block-signed macOS + iOS builds with `-block` version suffix |
-| [squareup/sprout-oss](https://github.com/squareup/sprout-oss) | CI pipeline building the relay Docker image and pushing to internal ECR |
-| [squareup/block-coder-tf-stacks](https://github.com/squareup/block-coder-tf-stacks) | Terraform + ArgoCD deploying the relay to the staging Kubernetes cluster |
-| [squareup/sprout-backend-blox](https://github.com/squareup/sprout-backend-blox) | Desktop backend provider script connecting Blox workstation agents to the relay |
+| Repo                                                                                | Purpose                                                                                   |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [block/buzz](https://github.com/block/buzz)                                         | OSS source — relay, desktop app, mobile app, CLI, agent harness                           |
+| [squareup/sprout-releases](https://github.com/squareup/sprout-releases)             | Buildkite pipeline producing Block-signed macOS + iOS builds with `-block` version suffix |
+| [squareup/sprout-oss](https://github.com/squareup/sprout-oss)                       | CI pipeline building the relay Docker image and pushing to internal ECR                   |
+| [squareup/block-coder-tf-stacks](https://github.com/squareup/block-coder-tf-stacks) | Terraform + ArgoCD deploying the relay to the staging Kubernetes cluster                  |
+| [squareup/sprout-backend-blox](https://github.com/squareup/sprout-backend-blox)     | Desktop backend provider script connecting Blox workstation agents to the relay           |
 
 ```
 block/buzz (source)
@@ -109,6 +109,7 @@ repo's Hermit environment (`. ./bin/activate-hermit`); do not rewrite hook
 commands to compensate for an unconfigured shell `PATH`.
 
 Additional rules:
+
 - No `unsafe` code
 - Do not introduce new `unwrap()` or `expect()` in production paths — use `?` and proper error types
 - New public API must have doc comments
@@ -204,6 +205,7 @@ just test         # full integration suite (requires Postgres + Redis)
 ```
 
 E2E tests live in `crates/buzz-test-client/tests/`:
+
 - `e2e_relay.rs` — WebSocket relay protocol
 - `e2e_media.rs` — media upload/download (Blossom)
 - `e2e_media_extended.rs` — extended media scenarios
@@ -256,7 +258,10 @@ fields are optional and passed through to `__BUZZ_E2E_EMIT_MOCK_MESSAGE__`:
     "pubkey": "953d...",
     "kind": 40002,
     "mentionPubkeys": ["deadbeef..."],
-    "extraTags": [["broadcast", "1"], ["e", "some-root-id"]],
+    "extraTags": [
+      ["broadcast", "1"],
+      ["e", "some-root-id"]
+    ],
     "parentEventId": "abc123"
   }
 ]
@@ -309,11 +314,13 @@ compatible).
 
 ```markdown
 ### Unread dot
+
 A message arrives in `#random`.
 
 {{01-unread-dot}}
 
 ### Context menu
+
 Right-click shows "Mark as read".
 
 {{02-context-menu}}
@@ -375,7 +382,10 @@ For per-element waits (rare — prefer the page-level helper above):
 ```ts
 await menuItem.evaluate((el) =>
   Promise.all(
-    el.closest("[data-state]")?.getAnimations().map((a) => a.finished) ?? [],
+    el
+      .closest("[data-state]")
+      ?.getAnimations()
+      .map((a) => a.finished) ?? [],
   ),
 );
 ```
@@ -385,7 +395,7 @@ for sidebar features. Sidebar = 256px; context menus ~450px.
 
 **Distinct states — verify before posting:** when one view renders many
 elements at once (e.g. all team cards in a single grid), an unscoped
-full-page `page.screenshot()` captures the *same* pixels for every shot, so
+full-page `page.screenshot()` captures the _same_ pixels for every shot, so
 multiple PNGs come out byte-identical. Scope each shot to its subject with
 `locator.screenshot()` (full-page `clip` only when an overlay like an open
 dropdown must be included). Then gate on hash distinctness before posting:
@@ -414,7 +424,7 @@ description. See [PR #803](https://github.com/block/buzz/pull/803).
 4. **Worktrees: `cd` in the same command** — shell CWD doesn't persist between tool calls. Use `cd /path && cargo build` as one command.
 5. **Desktop crate excluded from root workspace** — `cargo test` at repo root does NOT run desktop tests. Use `cargo test --manifest-path desktop/src-tauri/Cargo.toml` explicitly.
 6. **Desktop Tauri fmt fails in worktrees and blocks commits** — the pre-commit hook runs `just desktop-tauri-fmt`, which fails in git worktrees because `cargo fmt` resolves workspace paths relative to the worktree root. Run `just desktop-tauri-fmt` from the main checkout to apply the fix, then re-stage and commit. CI is unaffected.
-7. **React render perf: `React.memo` is all-or-nothing** — it only skips a re-render when *every* prop is reference-stable; one unstable prop (inline arrow/JSX, or a hook returning a fresh `{}`/`[]`/`Map` each render) defeats it. Two repeat offenders: (a) React Query results (`useMutation`/`useQuery`) are a **new object each render** — depend on the stable method (`mutation.mutateAsync`), not the object; (b) derived `Map`/array state that recomputes on a version bump — wrap in a content-equality ref cache (`shared/hooks/useStableReference.ts`). When chasing interaction lag, **measure with DevTools closed and no perf probes** (an open Web Inspector + per-keystroke `console.log` inflate the numbers), and isolate by removing one suspect at a time rather than guessing.
+7. **React render perf: `React.memo` is all-or-nothing** — it only skips a re-render when _every_ prop is reference-stable; one unstable prop (inline arrow/JSX, or a hook returning a fresh `{}`/`[]`/`Map` each render) defeats it. Two repeat offenders: (a) React Query results (`useMutation`/`useQuery`) are a **new object each render** — depend on the stable method (`mutation.mutateAsync`), not the object; (b) derived `Map`/array state that recomputes on a version bump — wrap in a content-equality ref cache (`shared/hooks/useStableReference.ts`). When chasing interaction lag, **measure with DevTools closed and no perf probes** (an open Web Inspector + per-keystroke `console.log` inflate the numbers), and isolate by removing one suspect at a time rather than guessing.
 
 ---
 
@@ -476,6 +486,7 @@ singleton needs a reset function wired into `resetCommunityState()` in
 `desktop/src/features/communities/useCommunityInit.ts`.
 
 Current singletons that are reset on community switch:
+
 - `relayClient.disconnect()` — WebSocket teardown + promise rejection
 - `resetRateLimitGate()` — clears any active rate-limit window from the old relay
 - `clearAllDrafts()` — message draft cache
@@ -494,6 +505,7 @@ community-scoped data, you must add its reset to `resetCommunityState()`.**
 Failure to do so causes data from the old community to leak into the new one.
 
 Key files:
+
 - `desktop/src/app/App.tsx` — community key, init gate, remount boundary
 - `desktop/src/features/communities/useCommunityInit.ts` — `resetCommunityState()`, applies config to Tauri backend
 - `desktop/src/main.tsx` — provider hierarchy (`QueryClientProvider` > `App`)

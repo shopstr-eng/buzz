@@ -20,6 +20,7 @@ two workers overlapping or conflicting work — they share one task
 environment and one filesystem.
 
 Rules:
+
 1. Read the task instruction. Break it into the smallest concrete steps.
 2. Assign each step to a worker with an @mention. One step per message.
    State the exact goal and the success check, not just the command to run.

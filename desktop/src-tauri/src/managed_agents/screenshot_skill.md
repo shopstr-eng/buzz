@@ -48,8 +48,8 @@ Write a JSON array to a temp file. `channelName` and `content` are required:
 
 ```json
 [
-  {"channelName": "random", "content": "Hey check this out", "kind": 40002},
-  {"channelName": "random", "content": "Another message"}
+  { "channelName": "random", "content": "Hey check this out", "kind": 40002 },
+  { "channelName": "random", "content": "Another message" }
 ]
 ```
 
@@ -83,11 +83,13 @@ The optional third argument is a markdown file with `{{filename}}` placeholders
 
 ```markdown
 ### Context menu
+
 Right-click shows "Star channel".
 
 {{01-ctx-menu}}
 
 ### Starred section
+
 `engineering` appears under Starred.
 
 {{02-starred}}

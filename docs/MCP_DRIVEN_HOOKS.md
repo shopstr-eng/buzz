@@ -47,20 +47,20 @@ injected.
 
 Hooks are advisory, not authoritative. The agent enforces:
 
-| Constraint | Behavior |
-|---|---|
-| Timeout (2.5s default) | Treated as no objection. Server killed only on second consecutive timeout (tolerates one-off slowness) |
-| Rejection budget (3/prompt) | After exhaustion, agent stops regardless; the budget resets on the next prompt |
+| Constraint                  | Behavior                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Timeout (2.5s default)      | Treated as no objection. Server killed only on second consecutive timeout (tolerates one-off slowness) |
+| Rejection budget (3/prompt) | After exhaustion, agent stops regardless; the budget resets on the next prompt                         |
 
 These constraints ensure a buggy or malicious hook cannot trap the agent.
 
 ## Configuration
 
-| Env Var | Default | Description |
-|---|---|---|
-| `MCP_HOOK_SERVERS` | (unset = no hooks) | Allowlist: `*` for all servers, or comma-separated names |
-| `BUZZ_AGENT_HOOK_TIMEOUT_MS` | 2500 | Per-hook call timeout in milliseconds |
-| `BUZZ_AGENT_STOP_MAX_REJECTIONS` | 3 | Per-prompt `_Stop` budget (0 = disable) |
+| Env Var                          | Default            | Description                                              |
+| -------------------------------- | ------------------ | -------------------------------------------------------- |
+| `MCP_HOOK_SERVERS`               | (unset = no hooks) | Allowlist: `*` for all servers, or comma-separated names |
+| `BUZZ_AGENT_HOOK_TIMEOUT_MS`     | 2500               | Per-hook call timeout in milliseconds                    |
+| `BUZZ_AGENT_STOP_MAX_REJECTIONS` | 3                  | Per-prompt `_Stop` budget (0 = disable)                  |
 
 Hooks are **off by default**. The operator must explicitly opt in via
 `MCP_HOOK_SERVERS`.
@@ -93,16 +93,16 @@ corresponds to `PostCompact`.
 Additional hook points may be added to support the fuller Open Plugin Spec
 event set:
 
-| Open Plugin Event | Potential Hook | Status |
-|---|---|---|
-| `Stop` | `_Stop` | ✅ Implemented |
-| `PostCompact` | `_PostCompact` | ✅ Implemented |
-| `PreToolUse` | `_PreToolUse` | Deferred (overlaps with MCP Interceptors SEP-2624) |
-| `PostToolUse` | `_PostToolUse` | Deferred (overlaps with MCP Interceptors SEP-2624) |
-| `SessionStart` | `_SessionStart` | Candidate for future revision |
-| `SessionEnd` | `_SessionEnd` | Candidate for future revision |
-| `UserPromptSubmit` | `_UserPromptSubmit` | Candidate for future revision |
-| `SubagentStart` | `_SubagentStart` | Candidate for future revision |
+| Open Plugin Event  | Potential Hook      | Status                                             |
+| ------------------ | ------------------- | -------------------------------------------------- |
+| `Stop`             | `_Stop`             | ✅ Implemented                                     |
+| `PostCompact`      | `_PostCompact`      | ✅ Implemented                                     |
+| `PreToolUse`       | `_PreToolUse`       | Deferred (overlaps with MCP Interceptors SEP-2624) |
+| `PostToolUse`      | `_PostToolUse`      | Deferred (overlaps with MCP Interceptors SEP-2624) |
+| `SessionStart`     | `_SessionStart`     | Candidate for future revision                      |
+| `SessionEnd`       | `_SessionEnd`       | Candidate for future revision                      |
+| `UserPromptSubmit` | `_UserPromptSubmit` | Candidate for future revision                      |
+| `SubagentStart`    | `_SubagentStart`    | Candidate for future revision                      |
 
 Pre/post tool-call hooks are deferred pending coordination with the MCP
 Interceptors working group (SEP-2624), which addresses similar concerns at

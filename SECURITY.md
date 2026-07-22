@@ -28,9 +28,9 @@ We will credit reporters in release notes unless you prefer to remain anonymous.
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| `main` (latest) | ✅ Active |
+| Version           | Supported                           |
+| ----------------- | ----------------------------------- |
+| `main` (latest)   | ✅ Active                           |
 | Previous releases | ⚠️ Best-effort; upgrade recommended |
 
 Buzz is pre-1.0. We do not maintain long-term support branches at this stage.

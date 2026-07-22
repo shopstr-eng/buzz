@@ -26,10 +26,10 @@ Baseline scenario used for the PR summary:
 Measured output shape:
 
 | pods | old global cluster ingress/s | old avg pod ingress/s | new scoped cluster ingress/s | new avg pod ingress/s | reduction | old irrelevant/pod | new irrelevant/pod |
-|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 6,400 | 6,400 | 100 | 100 | 64.0× | 98.44% | 0.00% |
-| 2 | 12,800 | 6,400 | 200 | 100 | 64.0× | 98.44% | 0.00% |
-| 4 | 25,600 | 6,400 | 400 | 100 | 64.0× | 98.44% | 0.00% |
+| ---: | ---------------------------: | --------------------: | ---------------------------: | --------------------: | --------: | -----------------: | -----------------: |
+|    1 |                        6,400 |                 6,400 |                          100 |                   100 |     64.0× |             98.44% |              0.00% |
+|    2 |                       12,800 |                 6,400 |                          200 |                   100 |     64.0× |             98.44% |              0.00% |
+|    4 |                       25,600 |                 6,400 |                          400 |                   100 |     64.0× |             98.44% |              0.00% |
 
 The harness fails non-zero by default unless:
 

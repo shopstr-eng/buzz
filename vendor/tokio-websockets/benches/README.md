@@ -16,10 +16,10 @@ In order to bottleneck faster, we're also using a single-threaded runtime.
 
 The following libraries are compared (in alphabetical order):
 
-* fastwebsockets ([unsound and not thread-safe](https://github.com/denoland/fastwebsockets/issues/42), *non-strict* spec compliance)
-* tokio-tungstenite (*non-strict* spec compliance)
-* tokio-websockets (*strict* spec compliance)
-* uWebSockets (*non-strict* spec compliance)
+- fastwebsockets ([unsound and not thread-safe](https://github.com/denoland/fastwebsockets/issues/42), _non-strict_ spec compliance)
+- tokio-tungstenite (_non-strict_ spec compliance)
+- tokio-websockets (_strict_ spec compliance)
+- uWebSockets (_non-strict_ spec compliance)
 
 The benchmarking script was taken from [fastwebsockets](https://github.com/denoland/fastwebsockets/tree/main/benches) and modified.
 

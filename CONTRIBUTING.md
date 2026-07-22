@@ -37,16 +37,16 @@ unacceptable behavior to **conduct@buzz-relay.org**.
 
 ### Prerequisites
 
-| Tool | Version | Notes |
-|------|---------|-------|
-| Rust | 1.88+ | Install via [rustup](https://rustup.rs/) |
-| Node.js | 24+ | Required for desktop app commands and `just ci` |
-| pnpm | 10+ | Required for desktop app commands and `just ci` |
-| Flutter | 3.41+ | Required for mobile app — install via [flutter.dev](https://docs.flutter.dev/get-started/install) |
-| Docker | 24+ | For Postgres, Redis, MinIO |
-| `just` | latest | Task runner — `cargo install just` |
-| `lefthook` | 2.1.3 (Hermit-pinned) | Auto-installed by `just hooks` — no manual install needed |
-| `sqlx` migrations | workspace crate | `just migrate` applies embedded migrations from `migrations/` |
+| Tool              | Version               | Notes                                                                                             |
+| ----------------- | --------------------- | ------------------------------------------------------------------------------------------------- |
+| Rust              | 1.88+                 | Install via [rustup](https://rustup.rs/)                                                          |
+| Node.js           | 24+                   | Required for desktop app commands and `just ci`                                                   |
+| pnpm              | 10+                   | Required for desktop app commands and `just ci`                                                   |
+| Flutter           | 3.41+                 | Required for mobile app — install via [flutter.dev](https://docs.flutter.dev/get-started/install) |
+| Docker            | 24+                   | For Postgres, Redis, MinIO                                                                        |
+| `just`            | latest                | Task runner — `cargo install just`                                                                |
+| `lefthook`        | 2.1.3 (Hermit-pinned) | Auto-installed by `just hooks` — no manual install needed                                         |
+| `sqlx` migrations | workspace crate       | `just migrate` applies embedded migrations from `migrations/`                                     |
 
 This repo uses [Hermit](https://cashapp.github.io/hermit/) for toolchain
 pinning. Activate it once per shell session:
@@ -387,7 +387,7 @@ for team access setup, onboarding, and the full repo inventory. See
 6. **Index for search** (if applicable) — Postgres FTS indexes persisted
    events automatically via the `events.search_tsv` generated column. To
    exclude a privacy-sensitive kind from search, add it to the `CASE WHEN
-   kind IN (...)` exclusion in the `search_tsv` definition (see the initial
+kind IN (...)` exclusion in the `search_tsv` definition (see the initial
    schema migration) rather than wiring a separate indexer.
 
 7. **Audit** — the audit log captures all events automatically; no changes
@@ -449,5 +449,5 @@ their sign-off. When in doubt, check with your legal team.
 
 ---
 
-*Thank you for contributing to Buzz. Every bug report, documentation fix,
-and code contribution makes the project better for everyone. 🐝*
+_Thank you for contributing to Buzz. Every bug report, documentation fix,
+and code contribution makes the project better for everyone. 🐝_

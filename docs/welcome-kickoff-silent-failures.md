@@ -13,39 +13,40 @@ The file name says "silent-failures" for link stability (referenced from
 The kickoff fails in three directions, and they look unrelated until you notice
 what they share:
 
-| Class | Failure | Status |
-|---|---|---|
-| **Wrong story** | The team is announced as late/broken while it is working fine | **Open** — [§1](#1-wrong-story-the-closer-speaks-on-a-timer) |
-| **Too loud** | Agents reply to each other indefinitely | **Fixed 2026-07-18** — [§2](#2-too-loud-runaway-reply-loop-fixed) |
-| **Too quiet** | Nobody speaks; the user stares at an empty channel | **Open** — [§3](#3-too-quiet-silent-paths) |
+| Class           | Failure                                                       | Status                                                            |
+| --------------- | ------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Wrong story** | The team is announced as late/broken while it is working fine | **Open** — [§1](#1-wrong-story-the-closer-speaks-on-a-timer)      |
+| **Too loud**    | Agents reply to each other indefinitely                       | **Fixed 2026-07-18** — [§2](#2-too-loud-runaway-reply-loop-fixed) |
+| **Too quiet**   | Nobody speaks; the user stares at an empty channel            | **Open** — [§3](#3-too-quiet-silent-paths)                        |
 
 **The shared root cause: the kickoff decides what to say from a timer and the
 absence of evidence, then writes that guess in permanent ink.**
 
 It has exactly one fact-based health check — `failedAfterKickoff`
 (`welcomeKickoff.ts:282`), which reads real agent state (`status === "stopped"`
-+ `lastError` + `lastStoppedAt` after the opener). That is a genuine fact: the
-process died. Everything else that drives a user-visible decision is a stopwatch:
 
-| Timer | Value | Decides |
-|---|---|---|
-| `TEAMMATE_READY_WAIT_MS` | 60s | whether to post the degraded opener |
-| `TEAMMATE_INTRO_WAIT_MS` | **15s** (now `TEAMMATE_INTRO_BACKSTOP_MS`, 120s — [§1](#1-wrong-story-the-closer-speaks-on-a-timer)) | whether to announce teammates as slow |
-| `WELCOME_KICKOFF_STAGE_TIMEOUT_MS` | 90s | whether to retire the kickoff stage |
+- `lastError` + `lastStoppedAt` after the opener). That is a genuine fact: the
+  process died. Everything else that drives a user-visible decision is a stopwatch:
+
+| Timer                              | Value                                                                                                | Decides                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `TEAMMATE_READY_WAIT_MS`           | 60s                                                                                                  | whether to post the degraded opener   |
+| `TEAMMATE_INTRO_WAIT_MS`           | **15s** (now `TEAMMATE_INTRO_BACKSTOP_MS`, 120s — [§1](#1-wrong-story-the-closer-speaks-on-a-timer)) | whether to announce teammates as slow |
+| `WELCOME_KICKOFF_STAGE_TIMEOUT_MS` | 90s                                                                                                  | whether to retire the kickoff stage   |
 
 **The facts decorate; the timers decide.** `failedAfterKickoff` only chooses
-*wording* inside a message the 15s stopwatch already decided to send. Invert
+_wording_ inside a message the 15s stopwatch already decided to send. Invert
 that and most of this doc collapses: **facts decide, timers are a last-resort
 backstop.**
 
 The distinction the code is missing is between two things it treats as one:
 
 - **"The agent crashed"** — a fact. We have it. Worth announcing.
-- **"No intro yet"** — *not* a fact. That is ignorance. It is not news.
+- **"No intro yet"** — _not_ a fact. That is ignorance. It is not news.
 
 Announcing ignorance on a deadline is what produces the wrong story. Being
 unable to announce anything is what produces the silent paths. And the loop was
-the same disease one layer up: agents were *required to speak every turn*
+the same disease one layer up: agents were _required to speak every turn_
 regardless of whether they had anything true to add, so they said "got it"
 forever.
 
@@ -54,22 +55,22 @@ prompt fix in §2 and the closer fix in §1 are the same change in two places.
 
 ## Plan
 
-| # | Work | Where | PR |
-|---|---|---|---|
-| 1 | Stop "no intro yet" from writing the permanent closer | `welcomeKickoff.ts` | **✅ landed, this branch** |
-| 2 | Loop hardening | `base_prompt.md` | **✅ landed, this branch** |
-| 3 | Thread replies don't render live | `hooks.ts` / thread cache | **separate PR** — app-wide, not kickoff ([§4](#4-thread-replies-dont-render-live-separate-pr)) |
-| 4 | Silent paths — surface a cause in the UI | `useWelcomeKickoff` + stage | later ([§3](#3-too-quiet-silent-paths)) |
-| 5 | Loop circuit breaker | `buzz-acp` | backlog ([§2](#2-too-loud-runaway-reply-loop-fixed)) |
-| 6 | `!cancel` unreachable from any surface | `buzz-acp` + CLI | backlog ([§5](#5-backlog)) |
+| #   | Work                                                  | Where                       | PR                                                                                             |
+| --- | ----------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------- |
+| 1   | Stop "no intro yet" from writing the permanent closer | `welcomeKickoff.ts`         | **✅ landed, this branch**                                                                     |
+| 2   | Loop hardening                                        | `base_prompt.md`            | **✅ landed, this branch**                                                                     |
+| 3   | Thread replies don't render live                      | `hooks.ts` / thread cache   | **separate PR** — app-wide, not kickoff ([§4](#4-thread-replies-dont-render-live-separate-pr)) |
+| 4   | Silent paths — surface a cause in the UI              | `useWelcomeKickoff` + stage | later ([§3](#3-too-quiet-silent-paths))                                                        |
+| 5   | Loop circuit breaker                                  | `buzz-acp`                  | backlog ([§2](#2-too-loud-runaway-reply-loop-fixed))                                           |
+| 6   | `!cancel` unreachable from any surface                | `buzz-acp` + CLI            | backlog ([§5](#5-backlog))                                                                     |
 
 ---
 
 ## 1. Wrong story: the closer speaks on a timer
 
 **Status: fixed on this branch. Observed 2026-07-18, 14:26.** Opener at 2:26. At 2:26+15s Fizz
-posted *"Honey and Bumble are taking longer than expected. I'm still here to
-help."* Honey and Bumble posted good intros at 2:27. The false story was never
+posted _"Honey and Bumble are taking longer than expected. I'm still here to
+help."_ Honey and Bumble posted good intros at 2:27. The false story was never
 corrected, because it was already stamped final.
 
 ### Mechanism
@@ -87,7 +88,7 @@ corrected, because it was already stamped final.
 5. Intros arrive. Nothing re-runs. **There is no path that ever posts a real
    closer.**
 
-### Why 15s is the wrong number *and* the wrong question
+### Why 15s is the wrong number _and_ the wrong question
 
 - Its neighbour allows **60s for a process to boot** (`TEAMMATE_READY_WAIT_MS`)
   but **15s for two cold agents to receive a dispatched event, run a full LLM
@@ -101,10 +102,10 @@ corrected, because it was already stamped final.
 But the deeper problem is structural: **the closer welds a terminal fact to a
 provisional guess.**
 
-| Part of the closer | Nature | Wants |
-|---|---|---|
-| The CTA — *"What can we help you build?"* | terminal, exactly once | ✅ a one-shot marker |
-| Teammate status — *"X is taking longer"* | **provisional, corrigible** | ❌ currently welded to that marker |
+| Part of the closer                        | Nature                      | Wants                              |
+| ----------------------------------------- | --------------------------- | ---------------------------------- |
+| The CTA — _"What can we help you build?"_ | terminal, exactly once      | ✅ a one-shot marker               |
+| Teammate status — _"X is taking longer"_  | **provisional, corrigible** | ❌ currently welded to that marker |
 
 ### The fix
 
@@ -115,7 +116,7 @@ when one of these is true:
 - **`failed` is non-empty** → the "couldn't start / check Agents" closer,
   immediately (fact-based, so it can be fast and still honest)
 - **a long backstop elapses with teammates alive but silent** → the "taking
-  longer" text, which by then is *true*
+  longer" text, which by then is _true_
 
 **The code already has this structure. Only the backstop's value was wrong.**
 `classifyWelcomeKickoffResolution` (`:292`) already excludes `failed` from
@@ -135,15 +136,15 @@ on a teammate that is alive but silent. A real failure never waits for it;
 
 ### Decided: keep the CTA bundled in the closer
 
-The CTA only exists *inside* the closer, so waiting for intros delays the "you
+The CTA only exists _inside_ the closer, so waiting for intros delays the "you
 can talk to us now" handoff from ~15s to ~60s. **Accepted** (Morgan, 2026-07-18):
 the room is not dead while we wait — the opener is up and the stage shows
-*"Fizz: Working"*. The alternative (post the CTA early on its own, and post
+_"Fizz: Working"_. The alternative (post the CTA early on its own, and post
 status only when there is status worth reporting) is honest but adds a second
 message, with its own marker and idempotency, to solve a problem the stage
 already solves.
 
-**Note:** this failure is a *shrunken* §3. The channel is not dead — a CTA
+**Note:** this failure is a _shrunken_ §3. The channel is not dead — a CTA
 arrives — but the story is false. Any fix here must not reopen §3: if we wait
 longer and the wait ends in nothing, we are back to unexplained silence.
 
@@ -164,26 +165,26 @@ Observed on the Codex runtime (`codex-acp`), never reproduced on Claude Code.
 
 **The content was the tell: every agent was trying to end the conversation, and
 announcing it is what kept it alive.** The agents were not malfunctioning — they
-were complying exactly. The loop was *correct* behavior given the prompt.
+were complying exactly. The loop was _correct_ behavior given the prompt.
 
 ### Root cause
 
 Two rules in `crates/buzz-acp/src/base_prompt.md` composed into a perpetual
 motion machine:
 
-1. *"**Every turn that processes a user message MUST publish a reply.** […] A
-   turn that ends without a published message is a silent failure."*
-2. *"When you finish delegated work, you MUST `@mention` the delegator […]. This
-   is the #1 cause of stalled collaboration."*
+1. _"**Every turn that processes a user message MUST publish a reply.** […] A
+   turn that ends without a published message is a silent failure."_
+2. _"When you finish delegated work, you MUST `@mention` the delegator […]. This
+   is the #1 cause of stalled collaboration."_
 
-Rule 1: *always speak*. Rule 2: *when you speak, tag whoever tagged you*. On a
+Rule 1: _always speak_. Rule 2: _when you speak, tag whoever tagged you_. On a
 mutual mention the circuit closes and never opens. Rule 1 said "user message"
 but was phrased as an absolute with no exception for an agent-authored trigger.
-Rule 2 was written to fix the *opposite* failure — the two hardenings worked
+Rule 2 was written to fix the _opposite_ failure — the two hardenings worked
 against each other and nothing reconciled them.
 
-The Welcome kickoff was the worst case: the opener says *"Don't start any work
-yet"* (`:162`), so teammates were told they **must** reply and that there is
+The Welcome kickoff was the worst case: the opener says _"Don't start any work
+yet"_ (`:162`), so teammates were told they **must** reply and that there is
 **nothing to report** — stripping away every substantive thing a reply could
 contain. The only output satisfying rule 1 was a content-free acknowledgement.
 The kickoff didn't just permit the loop; its instructions selected for it.
@@ -200,11 +201,11 @@ Scoped both rules by **what the turn has to say**, not who triggered it:
 - Otherwise publishing is optional and **silence is explicitly a success**.
 - **No bare acknowledgements**, with the observed offenders named ("Got it",
   "Confirmed", "Standing by", "Parked", "I won't reply again") and the kicker:
-  *if you are tempted to announce you are done replying, that is the message not
-  to send.*
+  _if you are tempted to announce you are done replying, that is the message not
+  to send._
 - Rule 2 scoped to **completed work only** — not assignment acks, not
   conversational loop-closing.
-- Mentions rule hardened: naming someone while talking *about* them ("waiting on
+- Mentions rule hardened: naming someone while talking _about_ them ("waiting on
   @morgan") is narrative — drop the `@`. The loop spammed Morgan with 4 such
   false notifications.
 
@@ -214,12 +215,12 @@ Scoped both rules by **what the turn has to say**, not who triggered it:
 global property of a conversation; each agent sees only its own turn, and every
 individual reply looks locally reasonable — which is why the sign-offs read as
 polite rather than broken. The rule had to become a **local, per-turn test**:
-*does this add information the thread doesn't have?* An acknowledgement is
+_does this add information the thread doesn't have?_ An acknowledgement is
 definitionally not new information, which makes "no bare acknowledgements" the
 checkable form of the intent.
 
-A soft caveat would also have failed: *"you may end the turn"* sitting next to
-*"**MUST** publish a reply"* leaves a literal model correctly following the
+A soft caveat would also have failed: _"you may end the turn"_ sitting next to
+_"**MUST** publish a reply"_ leaves a literal model correctly following the
 stronger instruction. The mandate had to be **narrowed**, not exception-ed.
 
 ### Still open: the circuit breaker
@@ -228,13 +229,13 @@ Prompt-only means prose-compliance-only, and Codex is proof models don't
 reliably comply. There is still **no reply-depth counter, hop limit, cooldown,
 or agent-to-agent budget anywhere in the path.** Existing guards that don't help:
 
-| Guard | Why not |
-|---|---|
-| `ignore_self` (`lib.rs:1864`) | Blocks self-replies only. The *only* loop guard, and A→B→A is exactly what it misses. |
-| Author gate (`respond_to`) | **Admits siblings by design** — `is_owner_or_sibling` (`lib.rs:166`) verifies same-owner agents via NIP-OA. It's an *admission* mechanism; a loop needs *termination*. No setting stops this. |
-| `max_turns_per_session` (`config.rs:372`) | Defaults 0 = disabled; it's session rotation for context hygiene, not a reply brake. |
-| Queue caps (`queue.rs:24`) | Backpressure on *pending* events. A ping-pong is never backed up. |
-| `closerMarker` | Idempotency for the client-authored closer only; never observes agent replies. |
+| Guard                                     | Why not                                                                                                                                                                                       |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ignore_self` (`lib.rs:1864`)             | Blocks self-replies only. The _only_ loop guard, and A→B→A is exactly what it misses.                                                                                                         |
+| Author gate (`respond_to`)                | **Admits siblings by design** — `is_owner_or_sibling` (`lib.rs:166`) verifies same-owner agents via NIP-OA. It's an _admission_ mechanism; a loop needs _termination_. No setting stops this. |
+| `max_turns_per_session` (`config.rs:372`) | Defaults 0 = disabled; it's session rotation for context hygiene, not a reply brake.                                                                                                          |
+| Queue caps (`queue.rs:24`)                | Backpressure on _pending_ events. A ping-pong is never backed up.                                                                                                                             |
+| `closerMarker`                            | Idempotency for the client-authored closer only; never observes agent replies.                                                                                                                |
 
 Candidate: **consecutive agent-to-agent reply budget** — count unbroken
 agent-authored turns in a thread; past N, drop the trigger. A human message
@@ -255,7 +256,7 @@ false-positive, not the success.
 
 ## 3. Too quiet: silent paths
 
-**Status: open.** The *perception* gap is handled; the paths are not.
+**Status: open.** The _perception_ gap is handled; the paths are not.
 
 Every fallback message assumes Fizz — the lead and sender — is alive and able to
 post. **When Fizz is the thing that failed, nobody speaks.**
@@ -294,13 +295,13 @@ next visit), not a failure.
 
 All hard-coded client-side; only teammate intro replies are LLM-generated.
 
-| # | Message | Trigger | Sender |
-|---|---|---|---|
-| 1 | Provider fallback ("connect to an AI provider in Settings…") | Readiness check fails before kickoff | Fizz (`provider-required.v1`) |
-| 2 | Happy-path opener | Team online | Fizz (`opener.v1`) |
-| 3 | Degraded opener ("I'm here with Honey and Bumble…") | Fizz online, zero teammates online within 60s | Fizz (opener + closer markers) |
-| 4 | Closer variants (clean / failed / slow) | 3s beat after intros resolve, **or the 120s intro backstop** — see [§1](#1-wrong-story-the-closer-speaks-on-a-timer) | Fizz (`closer.v1`) |
-| 5 | Setup-mode nudge ("here's what you still need to configure") | Agent spawns but requirements check fails (e.g. missing API key) | The agent process itself (buzz-acp setup-listener mode) |
+| #   | Message                                                      | Trigger                                                                                                              | Sender                                                  |
+| --- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 1   | Provider fallback ("connect to an AI provider in Settings…") | Readiness check fails before kickoff                                                                                 | Fizz (`provider-required.v1`)                           |
+| 2   | Happy-path opener                                            | Team online                                                                                                          | Fizz (`opener.v1`)                                      |
+| 3   | Degraded opener ("I'm here with Honey and Bumble…")          | Fizz online, zero teammates online within 60s                                                                        | Fizz (opener + closer markers)                          |
+| 4   | Closer variants (clean / failed / slow)                      | 3s beat after intros resolve, **or the 120s intro backstop** — see [§1](#1-wrong-story-the-closer-speaks-on-a-timer) | Fizz (`closer.v1`)                                      |
+| 5   | Setup-mode nudge ("here's what you still need to configure") | Agent spawns but requirements check fails (e.g. missing API key)                                                     | The agent process itself (buzz-acp setup-listener mode) |
 
 ### Constraints for the fix
 
@@ -312,7 +313,7 @@ All hard-coded client-side; only teammate intro replies are LLM-generated.
   UI state is the cheap, honest option.
 - Must be **idempotent across revisits** — same rule as the opener markers.
   Don't re-alarm the user every time they click Welcome.
-- Distinguish *retryable* (relay hiccup, rate-limit) from *actionable* (harness
+- Distinguish _retryable_ (relay hiccup, rate-limit) from _actionable_ (harness
   missing → point at Agents/Settings). `Requirement` in
   `desktop/src-tauri/src/managed_agents/readiness.rs` already classifies the
   actionable ones.
@@ -351,11 +352,11 @@ every missing reply.
 
 One fact — "there are new replies" — travels three independent roads:
 
-| What the user sees | Source |
-|---|---|
-| **Reply count** | Relay pushes a **kind 39005 thread-summary recount** → merged into the window-store overlay (`hooks.ts:266-277`). **Does not come from the replies themselves.** |
-| **Thread pane rows** | A separate React Query cache `["thread-replies", channelId, rootId]` (`useThreadReplies.ts`), filled on open; live replies must be *filed into it* by `appendMessage` (`hooks.ts:282-291`) |
-| **Channel timeline** | Window store — thread replies deliberately early-return before reaching it (`hooks.ts:292`) |
+| What the user sees   | Source                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Reply count**      | Relay pushes a **kind 39005 thread-summary recount** → merged into the window-store overlay (`hooks.ts:266-277`). **Does not come from the replies themselves.**                           |
+| **Thread pane rows** | A separate React Query cache `["thread-replies", channelId, rootId]` (`useThreadReplies.ts`), filled on open; live replies must be _filed into it_ by `appendMessage` (`hooks.ts:282-291`) |
+| **Channel timeline** | Window store — thread replies deliberately early-return before reaching it (`hooks.ts:292`)                                                                                                |
 
 So the badge is **correct** and the pane is wrong — the count is the relay's own
 tally, arriving whether or not the client ever received the reply. **The badge
@@ -371,7 +372,7 @@ agents.
 ### Cleared so far
 
 - **Not `getThreadReference` normalization.** It returns `rootId: rootTag?.[1] ?? parentId`
-  (`threading.ts:50`), so a direct reply to the opener *does* get a `rootId` —
+  (`threading.ts:50`), so a direct reply to the opener _does_ get a `rootId` —
   the thread-cache write condition should pass.
 - **Not the live filter.** `buildChannelFilter` is `#h`-scoped across the broad
   `CHANNEL_EVENT_KINDS` set — thread replies carry the same `h` tag.
@@ -382,7 +383,7 @@ agents.
 
 `welcomeKickoff.ts:504` calls `useThreadReplies` on the **same cache key** the
 open thread pane uses (`ChannelScreen.tsx:186`) — in the Welcome kickoff the
-open thread *is* the opener thread, so two features with different lifecycles
+open thread _is_ the opener thread, so two features with different lifecycles
 share one cache entry at `staleTime: 0`. When `kickoffResolved` latched, the
 kickoff's observer passed `null`, flipping its key to
 `["thread-replies","none",openerId]` and detaching — **~30s before the intros
@@ -406,9 +407,9 @@ That splits the problem in half in one run:
 ## 5. Backlog
 
 **`!cancel` / `!shutdown` / `!rotate` are unreachable from every product
-surface.** `is_owner_control_command` (`lib.rs:2476`) requires *all* of: kind:9,
+surface.** `is_owner_control_command` (`lib.rs:2476`) requires _all_ of: kind:9,
 `content.trim() == "!cancel"` (**exact**), and a `p` tag naming the agent. But
-every surface derives the `p` tag *from `@Name` text in the content* (Desktop:
+every surface derives the `p` tag _from `@Name` text in the content_ (Desktop:
 `hasMention.ts:143`; CLI: `resolve_content_mentions`, `messages.rs:128` —
 `SendMessageParams` has no mention flag). So `@Fizz !cancel` fails the exact
 match, and bare `!cancel` produces no `p` tag. **Mutually exclusive on every
@@ -427,7 +428,7 @@ tracked as its own bug.
 
 **What works today for a runaway team:** steering (just send a message —
 `multiple_event_handling` defaults to `steer`, `config.rs:357`) redirects an
-agent that is *working*, but a loop is many short *completed* turns, so steering
+agent that is _working_, but a loop is many short _completed_ turns, so steering
 can't break it. The only real tool is **Stop in the Agents UI**
 (`useManagedAgentActions.ts:245`), which also kills legitimate in-flight work
 and requires the user to recognize the loop and know where the kill switch is.
@@ -440,31 +441,31 @@ turns).** Rejected 2026-07-18. The obvious fix is to key rule 1 on
 invisible until you trace real transcript `p` tags:
 
 `parse_thread_tags` (`queue.rs:835-837`) collects **every `p` tag with no notion
-of who is being addressed**, and `turn_is_human_facing` returns `true` if *any*
+of who is being addressed**, and `turn_is_human_facing` returns `true` if _any_
 mentioned pubkey is human (`:1167`). The loop's signature content is agents
-narrating *"stay parked until `@morgan` brings a real task"* — which `p`-tags
+narrating _"stay parked until `@morgan` brings a real task"_ — which `p`-tags
 the human:
 
-| Turn | Trigger | `p` tags | Classified |
-|---|---|---|---|
-| Honey/Bumble | Fizz: *"…until `@morgan` brings a real task"* | Honey, Bumble, **morgan** | **human → MUST reply** |
-| Fizz | Honey: *"@Fizz understood"* | Fizz | agent → optional |
+| Turn         | Trigger                                       | `p` tags                  | Classified             |
+| ------------ | --------------------------------------------- | ------------------------- | ---------------------- |
+| Honey/Bumble | Fizz: _"…until `@morgan` brings a real task"_ | Honey, Bumble, **morgan** | **human → MUST reply** |
+| Fizz         | Honey: _"@Fizz understood"_                   | Fizz                      | agent → optional       |
 
 It exempts only the leg that happens not to name the human — cutting 1 of 3 legs
-**by luck**. Had Honey written *"@Fizz understood, waiting on @morgan"* —
+**by luck**. Had Honey written _"@Fizz understood, waiting on @morgan"_ —
 entirely in character — the loop survives the fix intact. **The loop's own
 content re-arms the rule meant to stop it.** A guard the symptom disables is not
 a guard. Worse, those narrative `@morgan` mentions already violated the Mentions
 rule, so the guard would have taken an existing prose non-compliance as input.
 
-Root insight: `turn_is_human_facing` answers *"is a human named?"*, not *"is a
-human asking?"* — and those diverge exactly where it matters. It is a fine
+Root insight: `turn_is_human_facing` answers _"is a human named?"_, not _"is a
+human asking?"_ — and those diverge exactly where it matters. It is a fine
 reply-anchor heuristic and a wrong safety signal. This also killed the planned
 `[Context]` `Triggered by: human|agent` plumbing: correct signal delivery, wrong
 signal.
 
 **Fixing the loop in the personas** (`personas.rs`). Rejected: they are
-*character* prompts (tone, wordplay), so a conversation-protocol rule is a
+_character_ prompts (tone, wordplay), so a conversation-protocol rule is a
 layering violation; it would need duplicating across all three and every future
 persona; and stored copies are user-editable with modification tracking
 (`migrate_retired_personas`, `was_unmodified`) — a user rewording Fizz must not
@@ -492,11 +493,11 @@ covers this one team, so it complements rather than replaces §2.
   recurs it is an independent retry bug.
 - **Why Codex and not Claude Code.** Ruled out: prompt content (identical across
   runtimes — `[Workspace]`+`[Base]`+`[System]`+`[Team Instructions]`+
-  `[Agent Memory]`+`[Channel Canvas]`, `pool.rs:742-797`; only *delivery*
+  `[Agent Memory]`+`[Channel Canvas]`, `pool.rs:742-797`; only _delivery_
   differs and no path omitted rule 1), per-runtime config (args, env, permission
   handling — none adds or removes a loop guard), and persona content. Remaining
   hypothesis: **literal compliance** — Codex read "MUST publish a reply" as
-  absolute; Claude Code applied judgment and quietly *violated* rule 1, and that
+  absolute; Claude Code applied judgment and quietly _violated_ rule 1, and that
   violation was the only thing preventing the loop. If so the loop was latent on
   every runtime and Claude Code's good behavior was luck. This is why §2 keeps a
   structural breaker on the backlog rather than trusting prose.

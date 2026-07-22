@@ -1,8 +1,6 @@
-NIP-WP
-======
+# NIP-WP
 
-Workspace Profile
------------------
+## Workspace Profile
 
 `draft` `optional` `relay`
 
@@ -16,9 +14,9 @@ The write path mirrors NIP-43's admin command shape (`kind:9030`–`9032`): user
 
 ## Motivation
 
-In Buzz the relay *is* the workspace ([VISION.md](../../VISION.md)). A client connected to several relays needs a way to tell them apart that every member sees identically — initials derived from a locally-configured workspace name differ per device and say nothing about the workspace itself.
+In Buzz the relay _is_ the workspace ([VISION.md](../../VISION.md)). A client connected to several relays needs a way to tell them apart that every member sees identically — initials derived from a locally-configured workspace name differ per device and say nothing about the workspace itself.
 
-Upstream Nostr already standardizes the *read* side of this: NIP-11 defines a first-class `icon` field on the relay information document, fetched with an unauthenticated `GET` + `Accept: application/nostr+json`. This NIP adopts that read path unchanged, so any NIP-11-aware client renders the workspace icon with zero Buzz-specific code.
+Upstream Nostr already standardizes the _read_ side of this: NIP-11 defines a first-class `icon` field on the relay information document, fetched with an unauthenticated `GET` + `Accept: application/nostr+json`. This NIP adopts that read path unchanged, so any NIP-11-aware client renders the workspace icon with zero Buzz-specific code.
 
 What upstream does not provide is an in-protocol, role-gated **write** path suited to this deployment model:
 
@@ -36,8 +34,8 @@ This document uses MUST, MUST NOT, SHOULD, SHOULD NOT, MAY, and RECOMMENDED as d
 
 ## Kinds
 
-| Kind | Name | Signer | Purpose |
-|------|------|--------|---------|
+| Kind   | Name                  | Signer        | Purpose                                  |
+| ------ | --------------------- | ------------- | ---------------------------------------- |
 | `9033` | Set Workspace Profile | admin / owner | Command: set or clear the workspace icon |
 
 ## Event Format
@@ -51,14 +49,12 @@ A command signed by a relay admin or owner. The icon value is carried in an `ico
   "kind": 9033,
   "pubkey": "<admin-or-owner-pubkey-hex>",
   "content": "",
-  "tags": [
-    ["icon", "data:image/webp;base64,..."]
-  ]
+  "tags": [["icon", "data:image/webp;base64,..."]],
 }
 ```
 
 - exactly one `icon` tag. An empty value (or an absent tag) clears the icon.
-- the value MUST be an `https` URL, an `http` URL, or a `data:image/*` URL. Inline data URLs are RECOMMENDED for small icons (≤128px): they render on clients connected to *other* relays without a cross-origin media fetch behind another relay's auth wall.
+- the value MUST be an `https` URL, an `http` URL, or a `data:image/*` URL. Inline data URLs are RECOMMENDED for small icons (≤128px): they render on clients connected to _other_ relays without a cross-origin media fetch behind another relay's auth wall.
 
 The `content` field is empty and carries no meaning. Relays MUST NOT parse semantics from `content`.
 

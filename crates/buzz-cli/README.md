@@ -10,8 +10,8 @@ cargo install --path crates/buzz-cli
 
 ## Authentication
 
-| Env Var | Mode | Use Case |
-|---------|------|----------|
+| Env Var            | Mode                     | Use Case              |
+| ------------------ | ------------------------ | --------------------- |
 | `BUZZ_PRIVATE_KEY` | NIP-98 Schnorr signature | Agents with a keypair |
 
 ```bash
@@ -97,71 +97,71 @@ stored rules in `validation_error` so an owner can remove and repair them.
 
 ## Commands
 
-| Group | Subcommand | Description |
-|-------|-----------|-------------|
-| `messages` | `send` | Send a message to a channel |
-| | `send-diff` | Send a code diff with metadata |
-| | `edit` | Edit a message you sent |
-| | `delete` | Delete a message |
-| | `get` | List messages in a channel |
-| | `thread` | Get a message thread |
-| | `search` | Full-text search, filterable by author |
-| | `vote` | Vote on a forum post |
-| `channels` | `list` | List channels |
-| | `get` | Get channel details |
-| | `create` | Create a channel |
-| | `update` | Update channel name/description |
-| | `topic` | Set channel topic |
-| | `purpose` | Set channel purpose |
-| | `join` | Join a channel |
-| | `leave` | Leave a channel |
-| | `archive` | Archive a channel |
-| | `unarchive` | Unarchive a channel |
-| | `delete` | Delete a channel |
-| | `members` | List channel members |
-| | `add-member` | Add a member |
-| | `remove-member` | Remove a member |
-| `canvas` | `get` | Get channel canvas |
-| | `set` | Set channel canvas |
-| `reactions` | `add` | React to a message |
-| | `remove` | Remove a reaction |
-| | `get` | List reactions |
-| `dms` | `list` | List DM conversations |
-| | `open` | Open a DM (1–8 pubkeys) |
-| | `add-member` | Add member to DM group |
-| `users` | `get` | Get user profile(s) |
-| | `set-profile` | Update your profile |
-| | `presence` | Get presence status |
-| | `set-presence` | Set presence status |
-| `workflows` | `list` | List workflows |
-| | `get` | Get workflow definition |
-| | `create` | Create a workflow |
-| | `update` | Update a workflow |
-| | `delete` | Delete a workflow |
-| | `trigger` | Trigger a workflow |
-| | `runs` | Get workflow run history |
-| | `approve` | Approve/deny a workflow step |
-| `feed` | `get` | Get your activity feed |
-| `social` | `publish` | Publish a NIP-01 note |
-| | `set-contacts` | Set NIP-02 contact list |
-| | `event` | Get a Nostr event |
-| | `notes` | Get notes for a user |
-| | `contacts` | Get NIP-02 contact list |
-| `repos` | `create` | Announce a git repository (NIP-34) |
-| | `get` | Get a repository announcement |
-| | `list` | List repository announcements |
-| | `protect list` | List branch and tag protection rules |
-| | `protect set` | Create or replace a protection rule |
-| | `protect remove` | Remove a protection rule |
-| `upload` | `file` | Upload a file to the Blossom store |
-| `pack` | `validate` | Validate a persona pack (local, no relay) |
-| | `inspect` | Inspect a persona pack (local, no relay) |
-| `mem` | `ls` | List non-tombstoned memories |
-| | `get` | Print memory value to stdout |
-| | `hash` | Print SHA-256 hex of memory value |
-| | `set` | Write a memory value (use `-` for stdin) |
-| | `patch` | Apply unified diff to memory value |
-| | `rm` | Publish a tombstone to delete memory |
+| Group       | Subcommand       | Description                               |
+| ----------- | ---------------- | ----------------------------------------- |
+| `messages`  | `send`           | Send a message to a channel               |
+|             | `send-diff`      | Send a code diff with metadata            |
+|             | `edit`           | Edit a message you sent                   |
+|             | `delete`         | Delete a message                          |
+|             | `get`            | List messages in a channel                |
+|             | `thread`         | Get a message thread                      |
+|             | `search`         | Full-text search, filterable by author    |
+|             | `vote`           | Vote on a forum post                      |
+| `channels`  | `list`           | List channels                             |
+|             | `get`            | Get channel details                       |
+|             | `create`         | Create a channel                          |
+|             | `update`         | Update channel name/description           |
+|             | `topic`          | Set channel topic                         |
+|             | `purpose`        | Set channel purpose                       |
+|             | `join`           | Join a channel                            |
+|             | `leave`          | Leave a channel                           |
+|             | `archive`        | Archive a channel                         |
+|             | `unarchive`      | Unarchive a channel                       |
+|             | `delete`         | Delete a channel                          |
+|             | `members`        | List channel members                      |
+|             | `add-member`     | Add a member                              |
+|             | `remove-member`  | Remove a member                           |
+| `canvas`    | `get`            | Get channel canvas                        |
+|             | `set`            | Set channel canvas                        |
+| `reactions` | `add`            | React to a message                        |
+|             | `remove`         | Remove a reaction                         |
+|             | `get`            | List reactions                            |
+| `dms`       | `list`           | List DM conversations                     |
+|             | `open`           | Open a DM (1–8 pubkeys)                   |
+|             | `add-member`     | Add member to DM group                    |
+| `users`     | `get`            | Get user profile(s)                       |
+|             | `set-profile`    | Update your profile                       |
+|             | `presence`       | Get presence status                       |
+|             | `set-presence`   | Set presence status                       |
+| `workflows` | `list`           | List workflows                            |
+|             | `get`            | Get workflow definition                   |
+|             | `create`         | Create a workflow                         |
+|             | `update`         | Update a workflow                         |
+|             | `delete`         | Delete a workflow                         |
+|             | `trigger`        | Trigger a workflow                        |
+|             | `runs`           | Get workflow run history                  |
+|             | `approve`        | Approve/deny a workflow step              |
+| `feed`      | `get`            | Get your activity feed                    |
+| `social`    | `publish`        | Publish a NIP-01 note                     |
+|             | `set-contacts`   | Set NIP-02 contact list                   |
+|             | `event`          | Get a Nostr event                         |
+|             | `notes`          | Get notes for a user                      |
+|             | `contacts`       | Get NIP-02 contact list                   |
+| `repos`     | `create`         | Announce a git repository (NIP-34)        |
+|             | `get`            | Get a repository announcement             |
+|             | `list`           | List repository announcements             |
+|             | `protect list`   | List branch and tag protection rules      |
+|             | `protect set`    | Create or replace a protection rule       |
+|             | `protect remove` | Remove a protection rule                  |
+| `upload`    | `file`           | Upload a file to the Blossom store        |
+| `pack`      | `validate`       | Validate a persona pack (local, no relay) |
+|             | `inspect`        | Inspect a persona pack (local, no relay)  |
+| `mem`       | `ls`             | List non-tombstoned memories              |
+|             | `get`            | Print memory value to stdout              |
+|             | `hash`           | Print SHA-256 hex of memory value         |
+|             | `set`            | Write a memory value (use `-` for stdin)  |
+|             | `patch`          | Apply unified diff to memory value        |
+|             | `rm`             | Publish a tombstone to delete memory      |
 
 ## Architecture
 

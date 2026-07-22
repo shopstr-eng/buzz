@@ -8,23 +8,23 @@ This document specifies the data and authorization model that lets one shared
 Postgres instance, served by N stateless relay processes, host M independent
 **communities** without one community observing or acting on another, and gives
 a formal proof of its safety properties. It proves two families of property:
-**isolation** — a community is *non-interfering* with every other community
+**isolation** — a community is _non-interfering_ with every other community
 across the relay's logical interface (query results, authorization decisions,
 emitted errors, and audit-chain contents) — and **authorization soundness** — no
 credential, signature, or forged event lets an actor cross a community boundary.
 
-Today a Buzz relay *process* is the security boundary: one `DATABASE_URL`, one
+Today a Buzz relay _process_ is the security boundary: one `DATABASE_URL`, one
 relay keypair, one relay-global `relay_members` table, with `channel_id` (the
 `h` tag) as the only sub-relay locality. The model proven here demotes the relay
 process to stateless compute and elevates a new **community** entity to the
 tenant/security boundary, carried as a `community_id` on every scoped row. That
 move collapses a process-level boundary into a row-level one. The contribution of
 this document is the formal characterization that the collapse loses nothing —
-proven *relative to* explicitly stated axioms about Postgres row-level security,
+proven _relative to_ explicitly stated axioms about Postgres row-level security,
 Schnorr/NIP-98, a collision-resistant hash, and the relay's own
 `channel_id → community_id` resolution.
 
-The architecture is not novel as a *pattern*: row-level multi-tenancy with a
+The architecture is not novel as a _pattern_: row-level multi-tenancy with a
 discriminator column and row-level security (RLS) is established practice (see
 §Prior Art). The contribution is the **formal treatment** — stating tenant
 isolation as non-interference encoded as a label-flow invariant (not a
@@ -43,12 +43,12 @@ does **not** prove:
   by theorem.
 - **Postgres's internal correctness.** RLS enforcement, MVCC snapshot isolation,
   and `ON CONFLICT DO NOTHING` semantics are trusted and stated as axioms
-  (§Axioms). We prove our *composition* on top of them; we do not reprove them.
+  (§Axioms). We prove our _composition_ on top of them; we do not reprove them.
 - **Cryptographic primitives.** Schnorr signature unforgeability (BIP-340), the
   NIP-98 request binding, and second-preimage resistance of the event-id hash are
   the Tamarin model's equational theory, not reproven.
 - **Physical-resource isolation.** Communities share an id space, time
-  partitions, a connection pool, and a CPU. The proof covers the *logical*
+  partitions, a connection pool, and a CPU. The proof covers the _logical_
   interface; bandwidth-limited physical channels are a named, explicit carve-out
   (§Isolation Boundary, class C1).
 - **Above-the-interface client leakage.** The proof boundary is the relay's
@@ -58,7 +58,7 @@ does **not** prove:
   out-of-band and can probe the existence oracle from a B connection. The
   composite-index closure (A-RLS-5) means the probe still reveals nothing — B's
   write at that id is a fresh `(community_id, id)` key — but we name this surface
-  explicitly: closing it for any *weaker* index shape is above the interface and
+  explicitly: closing it for any _weaker_ index shape is above the interface and
   is the client's obligation, not the relay's.
 
 Stating this boundary is part of the claim. "Provably isolated" without naming
@@ -118,7 +118,7 @@ A community is either **allowlisted** or **open**. An allowlisted community admi
 actors only via a signed NIP-43 member list (§Authorization, S7); an **open**
 community (one with no member-pubkey allowlist) auto-registers any authenticated
 npub on AUTH — but the registration is stamped to the **host-resolved** community,
-never a client-claimed one, so "open" widens *who* may join, never *which*
+never a client-claimed one, so "open" widens _who_ may join, never _which_
 community they join. Two further control-plane writes are first-class: **channel
 creation** stamps a fresh channel atomically from `HostCommunity[host]` (the client
 supplies no community id, and the stamp is immutable thereafter), and **no-`#h`
@@ -129,12 +129,12 @@ These surfaces are modeled, not asserted: see §Isolation (I5) and
 §Authorization (S5/S8).
 
 **The resolved `community_id` is the sole tenant authority.** The `h` tag on a
-wire event is a *routing hint* a client asserts; it is never the commit point of
+wire event is a _routing hint_ a client asserts; it is never the commit point of
 tenancy. This is the **confused-deputy** hazard (Hardy 1988): the relay holds
 broad authority over a shared DB, and a client supplies an ambient name; if the
 relay acts on its broad authority under the client's name, the client escapes its
 community. The defense is capability discipline — authority is bound to the
-*resolved object* `(community_id, channel_id, capabilities)`, never to a
+_resolved object_ `(community_id, channel_id, capabilities)`, never to a
 caller-supplied tag. The model treats the `h` tag as adversary-controlled and
 proves it is not load-bearing (Theorem I2 / S1).
 
@@ -144,13 +144,13 @@ Tenant isolation is stated as **non-interference**: for any two executions equal
 on community B's inputs and initial B-visible state, B's observable outputs are
 equal regardless of community-A-only actions (Goguen–Meseguer 1982; the
 concurrent variant is observational determinism). A `WHERE community_id = $1`
-row-return invariant is only *one projection* of this theorem — it implies
+row-return invariant is only _one projection_ of this theorem — it implies
 nothing about timing, errors, uniqueness collisions, projection rebuild, or the
 auth gate. Two execution traces cannot be expressed directly in TLA+; the
 standard tractable encoding is a **label-flow invariant**: every state element
 (message row, membership, projection cell, in-flight query, emitted error, audit
 entry) carries the community label it originated from, and the single-run safety
-invariant is *"no high-labeled value ever flows into a low-labeled observation."*
+invariant is _"no high-labeled value ever flows into a low-labeled observation."_
 This encoding forces enumeration of every state element's label, which is what
 catches the projection-rebuild and error-surface channels that a predicate hides.
 
@@ -164,19 +164,19 @@ the channel is bandwidth-bounded and orthogonal to the threat model
 class as git-on-s3 declares physical pack pruning: named, with a deferred future
 bandwidth bound. **We do not claim timing non-interference.**
 
-**(C2) Logical channels — in scope, enumerated, each closed.** These are *not*
+**(C2) Logical channels — in scope, enumerated, each closed.** These are _not_
 carve-outs; a B-scoped connection can observe them at the interface, so each must
 be closed in-model or by a named axiom:
 
 1. **Event-id existence oracle.** `INSERT … ON CONFLICT DO NOTHING` on the
-   content-hash id: a B-writer observing zero rows affected learns *some* tenant
+   content-hash id: a B-writer observing zero rows affected learns _some_ tenant
    wrote that id. Closed by **A-RLS-5** (§Axioms): the uniqueness constraint is
    composite over `(community_id, …, id)`, so a B-scoped write at an id A already
-   holds gets a *fresh* key, not a conflict — B's rows-affected count is a
-   function of B's own state alone, never A's. **A_HASH** is the *supporting*
+   holds gets a _fresh_ key, not a conflict — B's rows-affected count is a
+   function of B's own state alone, never A's. **A_HASH** is the _supporting_
    axiom: it additionally rules out the adversarial-search variant (B cannot
-   *find* a fresh event hashing to a chosen id). Note the residual: A_HASH says
-   nothing about ids B already *knows* out-of-band (NIP-19 `nevent` shares,
+   _find_ a fresh event hashing to a chosen id). Note the residual: A_HASH says
+   nothing about ids B already _knows_ out-of-band (NIP-19 `nevent` shares,
    multi-tenant client UIs that surface a user's own ids across communities) —
    that exposure is closed by the composite index, not the hash, and any
    above-the-interface client surface that leaks a user's A-ids while they are
@@ -197,27 +197,27 @@ be closed in-model or by a named axiom:
    context, no audit service. Today `RelayInfo::build`
    (`crates/buzz-relay/src/nip11.rs:122`) takes only static inputs and
    `nip11_facts` (`:176`) reads only `state.config`/`state.relay_keypair`, so the
-   surface is clean — but by *current code*, not by the proof; adding a
+   surface is clean — but by _current code_, not by the proof; adding a
    `total_events` counter is one `&PgPool` argument away and the labeling
    invariant catches none of it. This is the same enforcement class as the Σ_err
    alphabet (C2.2) — a typed constraint at a seam, lintable over `build`'s
-   signature — but disjoint: Σ_err governs *what symbols leave on authenticated
-   paths*, C2.4 governs *what state populates unauthenticated paths*. Any future
+   signature — but disjoint: Σ_err governs _what symbols leave on authenticated
+   paths_, C2.4 governs _what state populates unauthenticated paths_. Any future
    unauthenticated relay-level endpoint (NIP-66 monitoring, health probes that
    expose counters) lives under C2.4 by default.
 
-The numeric COUNT (NIP-45) and EOSE cardinality channels are deliberately *not*
+The numeric COUNT (NIP-45) and EOSE cardinality channels are deliberately _not_
 on this list: they are closed by the same label propagation as event rows (a
 count is `|{B-labeled rows matching the filter}|`), so they belong in the typed
-interface, not as distinct C2 mechanisms. The C2 list is the index of *distinct
-closure mechanisms* — A_HASH, the Σ_err alphabet, the rebuild behavioral
+interface, not as distinct C2 mechanisms. The C2 list is the index of _distinct
+closure mechanisms_ — A_HASH, the Σ_err alphabet, the rebuild behavioral
 invariant, and the C2.4 typed-input fence — not the index of channels.
 
 **(C3) Historical writes after revocation — declared, out of scope.** The
 admission fence (I5, `Inv_AdmissionFence`) governs **current** capability: it
 proves that no membership or channel-less read capability survives for an actor
 not currently admitted to that community. Revocation (`RevokeMember`) removes the
-current `admittedMembers` row and therefore the capability, but it does *not*
+current `admittedMembers` row and therefore the capability, but it does _not_
 relabel or delete rows the actor wrote while admitted — those historical writes
 retain their original community label and remain present. This is sound and
 intended: the property we mechanize is "current membership and read capability
@@ -228,8 +228,8 @@ claim historical writes are revoked when a member is revoked.**
 
 ### The typed observational interface
 
-The non-interference theorem is stated *over an interface*: the exclusive set of
-observations a **B-scoped connection** (one whose *resolved* community is B) can
+The non-interference theorem is stated _over an interface_: the exclusive set of
+observations a **B-scoped connection** (one whose _resolved_ community is B) can
 make. Enumerating this set is load-bearing — a `WHERE community_id = $1` invariant
 silently omits cardinality, error, status-code, and global-document channels.
 **Any observation not in this set is either C1 (declared) or a model violation.
@@ -241,9 +241,9 @@ relay emits exactly these client-bound messages:
 
 - **`O.WS.EVENT(sub_id, event)`** — a delivered Nostr event. Its `content` is
   high-labeled at the row's community; `e`/`p`/`q` tag references inherit the
-  row's label (they may *name* globally-existing ids, but the row reaches B only
+  row's label (they may _name_ globally-existing ids, but the row reaches B only
   if B-labeled).
-- **`O.WS.EOSE(sub_id)`** — end-of-stored-events. The *count* of preceding events
+- **`O.WS.EOSE(sub_id)`** — end-of-stored-events. The _count_ of preceding events
   is the cardinality of B-visible rows matching the filter; it must be a function
   only of B-labeled state.
 - **`O.WS.OK(event_id, accepted, message)`** — write ack. `event_id` echoes the
@@ -271,15 +271,15 @@ relay emits exactly these client-bound messages:
 **O.AUTH — auth verdict.** The Boolean "did this pass the gate," observable via
 `O.WS.OK.accepted` and `O.REST.META.status`. It is a function of (submitted
 credentials, server-side resolution `channel_id → community`, B-labeled
-membership/token/policy state). The *claimed* community never appears in this
-function — only the *resolved* one. (Theorem S1.)
+membership/token/policy state). The _claimed_ community never appears in this
+function — only the _resolved_ one. (Theorem S1.)
 
 **O.AUDIT — audit chain.** `get_entries(scope=B)` returns only B-chain entries;
 `verify_chain(scope=B)` is decidable from B-labeled entries alone; compromise of
 A's chain key does not affect B's. (Theorem S4.)
 
 **O.NIP11 — relay info document (`/`).** Global and unauthenticated, so by
-construction it *cannot* be tenant-labeled — therefore its content must be a
+construction it _cannot_ be tenant-labeled — therefore its content must be a
 function of relay-static configuration only. `supported_nips` is fine;
 `total_events` would be a cross-tenant leak.
 
@@ -291,7 +291,7 @@ closed by A_HASH).
 
 ### Label-propagation rules
 
-The labeling discipline that makes non-interference a *single-run* safety
+The labeling discipline that makes non-interference a _single-run_ safety
 invariant (every state element carries a community label; the invariant is "no
 high-labeled value flows into a low observation"):
 
@@ -300,8 +300,8 @@ high-labeled value flows into a low observation"):
   event the label is `resolve(channel_id)`; for a **channel-less** event
   (`kind:0` profiles, `1059` DMs, `30023`/`30174`/`30315`/`30078`, lists —
   `channel_id = NULL`) the label is the connection's host-bound community
-  `resolve_host(connection.host)`, with the token stamp required to *agree* (never
-  to *supply* it). The `h` tag is **not** the label source, and neither is the
+  `resolve_host(connection.host)`, with the token stamp required to _agree_ (never
+  to _supply_ it). The `h` tag is **not** the label source, and neither is the
   client-claimed community. (Resolution is a fence — see P-RESOLVE and
   P-RESOLVE-HOST.)
 - **L2 — Projection inheritance.** Each projection row (`event_mentions`,
@@ -313,37 +313,37 @@ high-labeled value flows into a low observation"):
   community label, never the **claimed** one.
 - **L5 — Token stamp.** A NIP-98 token has exactly one community stamp, assigned
   at mint from the resolved channel set; a mint resolving to >1 community is
-  rejected fail-closed (S2). The token's label *is* its stamp.
+  rejected fail-closed (S2). The token's label _is_ its stamp.
 - **L6 — Connection scope.** A connection has exactly one resolved community at a
   time, **bound from its host** (`resolve_host(connection.host)`) at establishment
   before any handler runs; re-scoping requires a new connection to a different
   host; all its observations inherit that scope. An unmapped host binds to no
   community and is rejected fail-closed (P-RESOLVE-HOST), never defaulted.
 - **L7 — Error label.** A finite, statically-declared alphabet `Σ_err` governs the
-  *authenticated, tenant-scoped* WS error surface: every `O.WS.OK.message`,
+  _authenticated, tenant-scoped_ WS error surface: every `O.WS.OK.message`,
   `O.WS.NOTICE`, and `O.WS.CLOSED` is drawn from it (the 9 NIP-01-reachable
   prefixes — `auth-required`, `restricted`, `invalid`, `duplicate`, `pow`,
   `rate-limited`, `blocked`, `error`, `frame-too-large`). Emitting a non-`Σ_err`
   string is a structural code violation (the C2.2 code-fence — a lint, not a model
   property). Today `RelayError::Database(#[from] buzz_db::DbError)` (`error.rs:11`)
-  is the seam. The *unauthenticated/REST* error surface (`not-found`,
+  is the seam. The _unauthenticated/REST_ error surface (`not-found`,
   `bad-request`) is a **distinct fence** — C2.4's typed-input constraint, not
   `Σ_err` — because it has no tenant scope and no label, so it sits outside the
   labeling invariant entirely. One Rust enum may back both for ergonomics, but the
   model treats them as two alphabets closed by two mechanisms.
-- **L8 — No injection.** Per L7, A-labeled state cannot influence *which* `Σ_err`
+- **L8 — No injection.** Per L7, A-labeled state cannot influence _which_ `Σ_err`
   symbol B observes.
 
-In one line: *for every reachable state `s`, every B-scoped connection `c`, and
-every observation `o ∈ O.* ∪ Σ_err` emitted to `c`, `o` is a deterministic
-function of (B-labeled state in `s`, `c`'s request history, relay-static config);
-no A-labeled element is an input to `o`.* This is what the TLA+ model encodes —
+In one line: _for every reachable state `s`, every B-scoped connection `c`, and
+every observation `o ∈ O._ ∪ Σ_err`emitted to`c`, `o`is a deterministic
+function of (B-labeled state in`s`, `c`'s request history, relay-static config);
+no A-labeled element is an input to `o`.\* This is what the TLA+ model encodes —
 strictly stronger than row-equality, because it forces enumeration of every
 observation channel above.
 
 ## Axioms
 
-The proof holds *relative to* the following. Each is a documented property of
+The proof holds _relative to_ the following. Each is a documented property of
 Postgres / the crypto primitives, and a testable assumption admitted per
 deployment (§Conformance).
 
@@ -363,14 +363,14 @@ manual, "Row Security Policies"). We state the configuration as obligations:
   combine tenant context across requests.
 - **(A-RLS-4)** `SECURITY DEFINER` and `leakproof`/user-defined functions in the
   request path are audited as part of the trusted boundary: a `leakproof`
-  function may be evaluated *ahead of* the RLS check, and a `SECURITY DEFINER`
+  function may be evaluated _ahead of_ the RLS check, and a `SECURITY DEFINER`
   function can read data unavailable to the caller.
 - **(A-RLS-5)** Uniqueness and foreign-key constraints include `community_id`, so
   a conflict outcome or a dangling reference cannot reveal or reach another
   community.
 
 A query that fails to set `app.community_id` matches the policy predicate over
-NULL → no rows, never all rows. This is what makes a missed *application*
+NULL → no rows, never all rows. This is what makes a missed _application_
 predicate fail closed rather than leak (Theorem I4).
 
 ### Concurrency, crypto, and resolution
@@ -397,7 +397,7 @@ predicate fail closed rather than leak (Theorem I4).
 - **(P-RESOLVE-HOST)** `resolve_host : host → community_id ∪ {⊥}` is the upstream
   binding for **every** connection, lifting today's per-relay URL identity one
   level up to the community. A connection's community is `resolve_host(host)`,
-  fixed at establishment; the URL the client connects to *is* the selector,
+  fixed at establishment; the URL the client connects to _is_ the selector,
   exactly as a relay URL is today. `ResolveTenant(req, event)` composes the two:
   if the event has an `h` tag, require `resolve(h) = resolve_host(host)` (the
   host/channel **agreement** fence — an A-host presenting a B-channel event is a
@@ -408,8 +408,8 @@ predicate fail closed rather than leak (Theorem I4).
   resolving to `⊥`, which can never equal a real channel community) is rejected
   generically (`auth-required`/`restricted`), never bound to a default tenant —
   `resolve_host` is partial and the absence/disagreement of a binding is a reject,
-  not a fallback. **Host wins:** a NIP-98 token's community stamp (L5) must *agree
-  with* the host-derived community; a token that disagrees is rejected, so the
+  not a fallback. **Host wins:** a NIP-98 token's community stamp (L5) must _agree
+  with_ the host-derived community; a token that disagrees is rejected, so the
   confused-deputy fence (I2) is intact with authority binding to the host-resolved
   object. Tamarin encodes this as the persistent `!HostCommunity` fact
   (`MultiTenantAuth.spthy`): the channel-less use rule fires only when token stamp
@@ -420,7 +420,7 @@ predicate fail closed rather than leak (Theorem I4).
   `channelbearing_use_agrees_with_host` asserting `used_comm = host_comm`). TLA+
   encodes it as the `HostCommunity` resolver (with a `⊥` sentinel for unmapped
   hosts) and an `Inv_HostBindingFence` invariant quantifying over **every** accepted
-  write — channel-bearing and channel-less — *and* every observable duplicate/no-op
+  write — channel-bearing and channel-less — _and_ every observable duplicate/no-op
   outcome, that its stored community equals its originating host's mapping. The
   duplicate/no-op path carries the same obligation because it is client-observable
   write surface (the `Duplicate` result exposes the scoped existence/conflict rows):
@@ -431,7 +431,7 @@ predicate fail closed rather than leak (Theorem I4).
 - **(A_HASH)** The event id `sha256(canonical event)` is second-preimage
   resistant: an actor cannot find a distinct event hashing to a chosen id. (NIP-01
   already relies on this; we cite it the way git-on-s3 cites its CAS axiom.)
-- **(P3)** *NIP-98 mint freshness.* A NIP-98 mint event (kind:27235) is accepted
+- **(P3)** _NIP-98 mint freshness._ A NIP-98 mint event (kind:27235) is accepted
   at most once. The implementation enforces this with two checks: a `created_at`
   within ±60s of server time (`buzz-auth/src/nip98.rs:77-83`,
   `TIMESTAMP_TOLERANCE_SECS = 60`) **and** a seen-set keyed on event id
@@ -442,10 +442,10 @@ predicate fail closed rather than leak (Theorem I4).
   implementation by treating every mint as structurally unique; the spthy comment
   at `:84-86` references this obligation as "P3."
 
-P-RESOLVE is the load-bearing *application* assumption for channel-bearing events
+P-RESOLVE is the load-bearing _application_ assumption for channel-bearing events
 and P-RESOLVE-HOST is its channel-less counterpart — together the fence the
 `h`-tag and claimed-community adversary cannot circumvent. A-RLS-1..5 are the
-load-bearing *backstop*.
+load-bearing _backstop_.
 
 ## Safety Theorems
 
@@ -460,12 +460,12 @@ load-bearing *backstop*.
 - **I2 (Resolution fence).** `ctx.community = resolve(channel_id)` for
   channel-bearing events and `resolve_host(host)` for channel-less ones, never the
   `h` tag, the claimed community, or the token stamp; an adversary `h = C' ≠
-  resolve = C` cannot widen what is served or accepted. The **host axis** is fenced
+resolve = C` cannot widen what is served or accepted. The **host axis** is fenced
   on both paths: a channel-less write over host A cannot land in community B, and a
   channel-bearing op over host A on a B-channel is rejected rather than acted on as
   B — including the **duplicate/no-op outcome**, so an A-host cannot use a B-channel
   id-conflict result as a cross-tenant existence oracle (`Inv_HostBindingFence`
-  quantifies over accepted writes *and* recorded duplicates, making "default to C",
+  quantifies over accepted writes _and_ recorded duplicates, making "default to C",
   "A-host drives a B-channel insert", and "A-host probes a B-channel duplicate"
   caught mutations, not invisible ones).
 - **I3 (Write non-loss & no cross-contamination).** Every accepted append commits
@@ -476,10 +476,10 @@ load-bearing *backstop*.
   A-RLS, and NI still holds; removing the RLS guard makes the dropped predicate
   produce a cross-label row — proving RLS load-bearing, not decorative.
 - **I5 (Admission fence).** Channel membership and channel-less read capability
-  exist only for actors admitted to *that* community. The NIP-43 allowlist is the
+  exist only for actors admitted to _that_ community. The NIP-43 allowlist is the
   `admittedMembers` relation keyed on `(community, actor)`; `AddMembership` and
   every channel-less read are gated on `IsAdmitted(c, a)`, and `Inv_AdmissionFence`
-  quantifies over every membership *and* every recorded channel-less read,
+  quantifies over every membership _and_ every recorded channel-less read,
   requiring same-community admission on both — the channel-less branch additionally
   binding `HostCommunity[host] = community`, so the host axis is fenced here too.
   The same gate covers the **open-community** and **no-`#h`-read** surfaces: an
@@ -505,7 +505,7 @@ load-bearing *backstop*.
 
 - **S1 (Token confinement).** A token accepted for a B-resolved operation was
   minted with stamped community B; a token stamped A never authorizes in B. A
-  *leaked* token authorizes within its own community (blast radius is not zero and
+  _leaked_ token authorizes within its own community (blast radius is not zero and
   we do not pretend otherwise) but never another — containment, proven.
 - **S2 (Mint integrity).** A token exists only as the output of a NIP-98 mint by
   the holder of `owner_pubkey`'s key (P-SIG); it carries exactly one stamped
@@ -532,7 +532,7 @@ load-bearing *backstop*.
   over an A-host never authorizes for B. This is I2's host counterpart, mechanized
   as `channelless_use_confined_to_host_community`,
   `channelless_token_agrees_with_host`, and `host_token_mismatch_not_authorized`.
-- **S6 (Channel-bearing host/channel agreement).** A channel-*bearing*
+- **S6 (Channel-bearing host/channel agreement).** A channel-_bearing_
   authorization is confined to the community bound to the connection's **host**:
   the host and the channel mapping must agree. An A-host presenting a B-channel
   event never authorizes as B — the host axis of the confused-deputy fence, which
@@ -555,19 +555,19 @@ load-bearing *backstop*.
   non-vacuous. This is the authorization-world half of the same admission property
   TLA+'s I5 proves in the in-relay world: `!Admitted(pk, comm)` /
   `MemberAdmitted(pk, comm)` ⇔ `admittedMembers`/`IsAdmitted(c, a)` — one property,
-  two worlds (Tamarin proves the admission *event* per-community unforgeable, TLA+
+  two worlds (Tamarin proves the admission _event_ per-community unforgeable, TLA+
   proves the resulting capability in-relay scoped).
 - **S8 (Open-community AUTH confinement).** When a community carries no NIP-43
   member-pubkey allowlist it is **open**: any authenticated npub auto-registers on
   AUTH. The registration is still confined to the **host-resolved** community —
   `Authenticate_To_Open_Community` stamps the registration from the connection's
-  host binding, never a client-supplied selector, so "open" relaxes the *gate* on
-  membership without relaxing the *boundary* it lands in. Mechanized as
+  host binding, never a client-supplied selector, so "open" relaxes the _gate_ on
+  membership without relaxing the _boundary_ it lands in. Mechanized as
   `open_auth_registration_confined_to_host_community` (a host-bound npub registers
   only into its host's community), with the exists-trace witness
   `executable_open_auth_registration` proving a legitimate open registration is
   producible so the confinement lemma is non-vacuous. This is S5/S6's host-binding
-  discipline applied to the admission *event*: the same confused-deputy fence that
+  discipline applied to the admission _event_: the same confused-deputy fence that
   stops a B-stamped token authorizing over an A-host stops a B-host AUTH
   registering into A. Its in-relay counterpart is I5's open-community branch
   (`AuthenticateOpenCommunity`, mutation M10).
@@ -622,9 +622,9 @@ confinement lemma is non-vacuous; its in-relay counterpart is the M10 open-AUTH
 stamp mutation, confirmed red in TLA+ (a 2-state `Inv_AdmissionFence` violation).
 
 The S5 confinement lemma was deliberately framed to keep its mutation
-*cheaply* refutable. An earlier framing joined two action facts
+_cheaply_ refutable. An earlier framing joined two action facts
 (`ChannelLessAuthorized` ⋈ `HostBoundFor`) on a shared host; the proof verified,
-but the *mutation refutation* did not terminate — Tamarin chased which
+but the _mutation refutation_ did not terminate — Tamarin chased which
 `HostBoundFor` instance applied for a given host across both the real and mutated
 rules. The fix emits a single combined witness
 `ChannelLessResolved(tok, used_comm, host, host_comm)` from the authorizing rule
@@ -636,7 +636,7 @@ exhibit" discipline as the S1 claimed-community mutation.
 
 The S3/S4 round corrected one vacuity bug in the committed
 `1e7fb042…aceaacf24` artifact: `other_community_key_compromise_does_not_authorize`
-bound `Neq(commA, commB)` to the *same* timepoint as `CommunityKeyCompromised(commB)`,
+bound `Neq(commA, commB)` to the _same_ timepoint as `CommunityKeyCompromised(commB)`,
 but no rule emits `Neq` at the compromise point, so that premise was unsatisfiable —
 the lemma verified vacuously and asserted nothing. (Independently confirmed: an
 exists-trace probe of the old premise returns `no trace found`.) The fix decouples
@@ -650,7 +650,7 @@ unchanged in the current `.spthy`.
 
 ## Conformance
 
-Each axiom is *admitted* per deployment, not assumed universally:
+Each axiom is _admitted_ per deployment, not assumed universally:
 
 - **A-RLS-1..5** are admitted by a startup/CI assertion suite: enumerate every
   tenant-bearing table and assert RLS enabled + restrictive policy present; assert
@@ -664,7 +664,7 @@ Each axiom is *admitted* per deployment, not assumed universally:
   (no `UPDATE`/`ALTER`/drop-recreate). A failing lint rejects the deployment.
 - **P-SIG / A_HASH** are the standard Nostr crypto assumptions; admitted by using
   the audited libraries the rest of Buzz uses.
-- **P3** is admitted by the NIP-98 handler enforcing *both* timestamp-range
+- **P3** is admitted by the NIP-98 handler enforcing _both_ timestamp-range
   validation and the seen-event-id check (`check_nip98_replay`) before any mint.
   Two structural gates make the seen-set sound, and both are conformance checks
   because the implementation is silent if either is violated:
@@ -675,7 +675,7 @@ Each axiom is *admitted* per deployment, not assumed universally:
      and a replay slips through.
   2. **Per-pod scope.** The seen-set is `Arc<AppState>`-scoped, not cross-pod, so
      the same replayed event reaching two pods succeeds once on each. P3 therefore
-     requires *either* NIP-98 mints be pod-sticky on `event_id` *or* the seen-set
+     requires _either_ NIP-98 mints be pod-sticky on `event_id` _or_ the seen-set
      be shared across pods (e.g. Redis with the same atomic insert-if-absent
      semantics and TTL ≥ 120 s). The chart default (`replicaCount: 1`) satisfies
      this gate today; the shipped HA examples (`replicaCount: 3` in
@@ -684,7 +684,7 @@ Each axiom is *admitted* per deployment, not assumed universally:
      P3-non-conforming as shipped unless the operator adds one of:
      - **(a)** an ingress annotation hashing upstream selection on a header stable
        across replays — `nginx.ingress.kubernetes.io/upstream-hash-by:
-       "$http_authorization"` works for today's NIP-98 HTTP path, since the signed
+"$http_authorization"` works for today's NIP-98 HTTP path, since the signed
        event rides in `Authorization: Nostr <base64>` (`bridge.rs:34-46`) and is
        bit-identical across replays. Two caveats keep this from being the
        recommended fix: it couples replay-stickiness to literal-byte-identity of
@@ -703,19 +703,18 @@ Each axiom is *admitted* per deployment, not assumed universally:
 
 ## Prior Art
 
-The *pattern* (discriminator column + RLS) is established; the *formal treatment*
+The _pattern_ (discriminator column + RLS) is established; the _formal treatment_
 as label-flow non-interference is, to our knowledge, new for a Nostr relay.
 
 - **Goguen & Meseguer, "Security Policies and Security Models" (IEEE S&P 1982)** —
   the origin of non-interference; the theorem shape ("A's actions do not affect
   B's observations"), with "community" for "security domain."
-- **Sabelfeld & Myers, "Language-Based Information-Flow Security" (IEEE JSAC
-  2003)** — the canonical label-based IFC survey; its declassification discipline
+- **Sabelfeld & Myers, "Language-Based Information-Flow Security" (IEEE JSAC 2003)** — the canonical label-based IFC survey; its declassification discipline
   is the model for our named C1 carve-out.
 - **Jean Yang et al., "Precise, Dynamic Information Flow for Database-Backed
   Applications" (arXiv:1507.03513, Jacqueline)** and **Parker, Vazou, Hicks,
   "LWeb" (arXiv:1901.07665)** — the closest formal analogs: label-based per-row
-  policy over a real relational store with a *mechanized* non-interference proof.
+  policy over a real relational store with a _mechanized_ non-interference proof.
   They justify "RLS is a backstop axiom; the theorem is the composition."
 - **Hardy, "The Confused Deputy" (ACM SIGOPS OSR 1988)** and **Miller et al.,
   "Capability Myths Demolished" (HPL-2003-222)** — the resolution-as-capability
@@ -739,8 +738,8 @@ as label-flow non-interference is, to our knowledge, new for a Nostr relay.
   `java -cp tla2tools.jar tlc2.TLC -config MultiTenantRelay.cfg MultiTenantRelay.tla`.
   On the core finite harness (2 communities × 4 channels, 2 message ids, 1 actor,
   1 worker, 2 audit values, bounded observation set, symmetry over the permutable
-  model-value sets) TLC **completes exhaustively**: *Model checking completed. No
-  error has been found.* — 472,530,528 states generated, 16,226,016 distinct, 0 left
+  model-value sets) TLC **completes exhaustively**: _Model checking completed. No
+  error has been found._ — 472,530,528 states generated, 16,226,016 distinct, 0 left
   on queue, depth 13 (8 workers, ~5m). The distinct-state count grew from the
   pre-host-binding baseline (4,350,464 → 5,091,328 with channel-less host binding →
   5,621,760 with channel-bearing host/channel agreement → 9,232,992 with the
@@ -792,10 +791,10 @@ as label-flow non-interference is, to our knowledge, new for a Nostr relay.
   `IsAdmitted(c, a)` to any-community `AdmittedInAnyCommunity(a)`) →
   `Inv_AdmissionFence` violated in two surfaces: a 5-state membership trace
   (`Init → WriteInsert → WriteInsert → AdmitMember(commA, alice) →
-  AddMembership(commB/chanB1, alice)`) where alice, admitted to A, joins B's
+AddMembership(commB/chanB1, alice)`) where alice, admitted to A, joins B's
   channel through the global hole; and a 4-state channel-less-read trace
   (`Init → WriteInsert → AdmitMember(commB, alice) →
-  ReadMessageRows(commA, NoChannel, hostA)`). The two M9 variants prove both the
+ReadMessageRows(commA, NoChannel, hostA)`). The two M9 variants prove both the
   `AddMembership` gate and the channel-less-read gate are independently
   load-bearing, not just one. The four newest surfaces — open-community AUTH
   auto-registration, server-stamped channel creation, and the two no-`#h` host
@@ -818,7 +817,7 @@ as label-flow non-interference is, to our knowledge, new for a Nostr relay.
   (`Init → AdmitMember(commB, alice) → ReadHostAuxRows(hostA)`). M10–M13 confirm the
   open-AUTH/create/feed/aux fences are load-bearing, not decorative — the same
   "every new conjunct earns a confirmed red" contract as M1–M9. (To reproduce M12/M13,
-  the substitution that trips `Inv_AdmissionFence` is the action's admission *guard*
+  the substitution that trips `Inv_AdmissionFence` is the action's admission _guard_
   (`IsAdmitted(c, a)` → `GloballyAdmitted(a)` in `ReadHostFeedRows`/`ReadHostAuxRows`),
   not the row-set helper alone, since the invariant quantifies over the recorded
   `feedReads`/`auxReads` witnesses rather than the returned row set — the `.tla`
@@ -880,7 +879,7 @@ as label-flow non-interference is, to our knowledge, new for a Nostr relay.
 
 The model's obligations map to concrete code seams:
 
-- **P-RESOLVE / I2** — `resolve(channel_id)` must be the *only* source of
+- **P-RESOLVE / I2** — `resolve(channel_id)` must be the _only_ source of
   `ctx.community_id`; the `h` tag is never written into tenancy. Today there is no
   community layer; `channel_id` is the only locality.
 - **P-RESOLVE (immutability) / S2** — `channels.community_id` must be immutable
@@ -894,7 +893,7 @@ The model's obligations map to concrete code seams:
   same gate-on-the-migration class as the C2.1 composite-index and C2.4
   `RelayInfo::build` signature lints.
 - **I1 / I4** — every DB entry point takes `TenantContext` and `SET LOCAL
-  app.community_id`; the unscoped `get_accessible_channel_ids()`
+app.community_id`; the unscoped `get_accessible_channel_ids()`
   (`crates/buzz-db/src/channel.rs:545-560`, which unions every open channel in the
   DB) must not exist in any tenant-scoped path. RLS is the backstop.
 - **C2.1 / A-RLS-5** — the message-uniqueness constraint must be composite over
@@ -988,7 +987,7 @@ The model's obligations map to concrete code seams:
   `(community_id, pubkey, ...)`. No deployment-global user gate is
   tenant-observable unless it is modeled as a separate operator surface. This is
   no longer asserted-only: the `(community_id, pubkey)` admission key and the
-  *absence* of a deployment-global gate are both mechanized. TLA+ carries the
+  _absence_ of a deployment-global gate are both mechanized. TLA+ carries the
   allowlist as the `admittedMembers` relation
   (`MultiTenantRelay.tla:149`), keyed on `[community, actor]`; `IsAdmitted(c, a)`
   (`:317`) gates `AddMembership` and every channel-less read, and
@@ -996,7 +995,7 @@ The model's obligations map to concrete code seams:
   survives that is not same-community-admitted (Theorem I5). The
   deployment-global gate is exactly mutation M9: replacing `IsAdmitted(c, a)`
   with the any-community `AdmittedInAnyCommunity(a)` (`:324`) makes the model go
-  red — so admit-into-A-then-act-in-B is a *caught* escape, not an invisible one.
+  red — so admit-into-A-then-act-in-B is a _caught_ escape, not an invisible one.
   On the authorization side, NIP-43 member-list events are signed and accepted
   per-community in Tamarin (`Community_Signs_NIP43_MemberList` /
   `Relay_Accepts_NIP43_MemberList`, `MultiTenantAuth.spthy:403`/`:413`), and
@@ -1013,8 +1012,8 @@ actions, indexed by `(worker, actor, community, channel)`; it has no
 This is sound — the model proves `Inv_LabelPropagation` over the **aggregate**
 row-set delivered to a B-scoped worker, and the prose observational interface
 (§The typed observational interface) presents the same property over
-**per-sub streams**. The refinement from aggregate to per-stream is *coarser
-than the interface, not wrong* — but it is not mechanized, and it is closed
+**per-sub streams**. The refinement from aggregate to per-stream is _coarser
+than the interface, not wrong_ — but it is not mechanized, and it is closed
 here, by code-fence and obligation, against the implementation.
 
 **Governing rule.** Every observation kind enumerated in §The typed
@@ -1027,12 +1026,12 @@ subscription-pipeline abstraction itself).
 
 #### G1 — establishment (`crates/buzz-relay/src/handlers/req.rs:79-204`)
 
-A `REQ` from a connection authenticated under pubkey *p* and token *t*
+A `REQ` from a connection authenticated under pubkey _p_ and token _t_
 registers a subscription only after:
 
 1. `accessible_channels ← get_accessible_channel_ids_cached(p)` (`:79`) —
    the DB-derived UUID set the connection's pubkey is a member of.
-2. If *t* carries a `channel_ids` claim, intersect with it (`:88-90`). This
+2. If _t_ carries a `channel_ids` claim, intersect with it (`:88-90`). This
    is the one-token-one-community enforcement at the WS surface.
 3. `extract_channel_id_from_filters(filters)` (`:92`, body at `:795-822`)
    returns `Some(uuid)` **only if every filter pins the same `#h=<uuid>`**;
@@ -1042,7 +1041,7 @@ registers a subscription only after:
    re-confirm via `is_member` against the DB (`:112`); on `Ok(false)` or
    `Err(_)` emit `CLOSED "restricted: …"` (`:127-132`).
 5. Global path (`channel_id = None`): per-filter p/engram/author gates must
-   hold against *p* (`:144-167`); otherwise `CLOSED`.
+   hold against _p_ (`:144-167`); otherwise `CLOSED`.
 6. Only then is `sub_registry.register_scoped(...)` called. Direct `register`
    calls are confined to test setup; production subscription registration goes
    through the community-scoped API in `req.rs`.
@@ -1051,9 +1050,9 @@ registers a subscription only after:
 
 Every candidate from `sub_registry.fan_out` passes through
 `filter_fanout_by_access` before any `send_to`. The function (`:59`) and its
-doc comment (`:117-124`) state the invariant: *a registered subscription is
+doc comment (`:117-124`) state the invariant: _a registered subscription is
 never sufficient for delivery — delivery always revalidates access on the
-sending pod*. Three checks, in order:
+sending pod_. Three checks, in order:
 
 - **Author-only kinds** (`:70-83`) — filter to recipients whose
   `pubkey_for_conn` equals the event author.

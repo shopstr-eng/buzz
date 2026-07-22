@@ -40,7 +40,18 @@ pre-push:
     branch-skew:
       run: ./scripts/check-branch-skew.sh
     rust-tests:
-      glob: ["crates/**", "migrations/**", "schema/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "deny.toml", "scripts/run-tests.sh", "justfile"]
+      glob:
+        [
+          "crates/**",
+          "migrations/**",
+          "schema/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "rust-toolchain.toml",
+          "deny.toml",
+          "scripts/run-tests.sh",
+          "justfile",
+        ]
       run: just test-unit
     desktop-check:
       glob: ["desktop/**", "pnpm-lock.yaml"]
@@ -54,7 +65,19 @@ pre-push:
       # ci.yml:113 — Desktop Core triggers on `rust` OR `desktop-rust`;
       # desktop/src-tauri path-depends on crates/buzz-core, buzz-persona,
       # buzz-sdk, buzz-agent (desktop/src-tauri/Cargo.toml:88-91).
-      glob: ["desktop/src-tauri/**", "crates/**", "migrations/**", "schema/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "deny.toml", "scripts/run-tests.sh", "justfile"]
+      glob:
+        [
+          "desktop/src-tauri/**",
+          "crates/**",
+          "migrations/**",
+          "schema/**",
+          "Cargo.toml",
+          "Cargo.lock",
+          "rust-toolchain.toml",
+          "deny.toml",
+          "scripts/run-tests.sh",
+          "justfile",
+        ]
       run: just desktop-tauri-test
     mobile-test:
       glob: ["mobile/**"]

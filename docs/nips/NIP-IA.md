@@ -1,8 +1,6 @@
-NIP-IA
-======
+# NIP-IA
 
-Identity Archival
------------------
+## Identity Archival
 
 `draft` `optional` `relay`
 
@@ -61,13 +59,13 @@ This document uses MUST, MUST NOT, SHOULD, SHOULD NOT, MAY, and RECOMMENDED as d
 
 ## Kinds
 
-| Kind | Name | Signer | Storage | Purpose |
-|------|------|--------|---------|---------|
-| `9035` | Archive Request | user / agent | policy-defined; MAY be stored | Ask relay to archive a target |
-| `9036` | Unarchive Request | user / agent | policy-defined; MAY be stored | Ask relay to unarchive a target |
-| `8002` | Archived Identity | relay | regular | Relay-signed archive delta |
-| `8003` | Unarchived Identity | relay | regular | Relay-signed unarchive delta |
-| `13535` | Archived Identities List | relay | replaceable | Current relay archive state |
+| Kind    | Name                     | Signer       | Storage                       | Purpose                         |
+| ------- | ------------------------ | ------------ | ----------------------------- | ------------------------------- |
+| `9035`  | Archive Request          | user / agent | policy-defined; MAY be stored | Ask relay to archive a target   |
+| `9036`  | Unarchive Request        | user / agent | policy-defined; MAY be stored | Ask relay to unarchive a target |
+| `8002`  | Archived Identity        | relay        | regular                       | Relay-signed archive delta      |
+| `8003`  | Unarchived Identity      | relay        | regular                       | Relay-signed unarchive delta    |
+| `13535` | Archived Identities List | relay        | replaceable                   | Current relay archive state     |
 
 `kind:13535` is replaceable per NIP-01 (`10000 <= n < 20000`). Clients use the latest valid `kind:13535` signed by the relay identity as current state. The snapshot is relay-scoped: it is signed by the relay identity advertised in NIP-11 `self`, mirroring NIP-43's relay-membership snapshot shape. Relays without a stable NIP-11 `self` pubkey MUST NOT publish NIP-IA relay-signed state, because clients would have no stable key against which to verify it.
 
@@ -87,8 +85,8 @@ An archive request is signed by the actor and asks the relay to archive a target
     ["p", "<target-pubkey-hex>"],
     ["reason", "<optional machine-readable reason-code>"],
     ["replaced-by", "<replacement-pubkey-hex>"],
-    ["auth", "<owner-pubkey-hex>", "<conditions>", "<sig-hex>"]
-  ]
+    ["auth", "<owner-pubkey-hex>", "<conditions>", "<sig-hex>"],
+  ],
 }
 ```
 
@@ -120,8 +118,8 @@ An unarchive request is signed by the actor and asks the relay to unarchive a ta
     ["-"],
     ["p", "<target-pubkey-hex>"],
     ["reason", "<optional machine-readable reason-code>"],
-    ["auth", "<owner-pubkey-hex>", "<conditions>", "<sig-hex>"]
-  ]
+    ["auth", "<owner-pubkey-hex>", "<conditions>", "<sig-hex>"],
+  ],
 }
 ```
 
@@ -147,8 +145,8 @@ An archive delta is signed by the relay identity after the relay accepts an arch
     ["consent", "<self|owner|admin|relay>", "<actor-or-owner-pubkey-hex>"],
     ["e", "<request-event-id-hex>"],
     ["reason", "<optional machine-readable reason-code>"],
-    ["replaced-by", "<replacement-pubkey-hex>"]
-  ]
+    ["replaced-by", "<replacement-pubkey-hex>"],
+  ],
 }
 ```
 
@@ -181,8 +179,8 @@ An unarchive delta is signed by the relay identity after the relay accepts an un
     ["p", "<target-pubkey-hex>"],
     ["consent", "<self|owner|admin|relay>", "<actor-or-owner-pubkey-hex>"],
     ["e", "<request-event-id-hex>"],
-    ["reason", "<optional machine-readable reason-code>"]
-  ]
+    ["reason", "<optional machine-readable reason-code>"],
+  ],
 }
 ```
 
@@ -274,7 +272,7 @@ To accept the request, the relay MUST verify the target's latest `kind:0` under 
 3. The owner pubkey in the `auth` tag MUST equal the request actor (`request.pubkey`).
 4. The Schnorr signature MUST verify under the owner pubkey over the NIP-OA preimage `nostr:agent-auth:` || `<target-pubkey>` || `:` || `<conditions>`, where `<conditions>` is the exact string from the profile's `auth` tag.
 5. The conditions string MUST be syntactically valid per NIP-OA.
-6. NIP-OA condition clauses MUST NOT be evaluated on this path. Like the request-borne path, this path reuses the NIP-OA signing preimage as identity-binding owner-of-target evidence in a NIP-IA-specific verification context; it is not full event-level NIP-OA provenance verification of the archive request. Because the proof is the target's latest profile used as a standing *ownership declaration*, this path additionally does not evaluate time clauses: `kind=`, `created_at<`, and `created_at>` describe the profile event, not the request, and MUST NOT deny an otherwise valid request. The request-borne path above still evaluates time clauses against the request's `created_at`.
+6. NIP-OA condition clauses MUST NOT be evaluated on this path. Like the request-borne path, this path reuses the NIP-OA signing preimage as identity-binding owner-of-target evidence in a NIP-IA-specific verification context; it is not full event-level NIP-OA provenance verification of the archive request. Because the proof is the target's latest profile used as a standing _ownership declaration_, this path additionally does not evaluate time clauses: `kind=`, `created_at<`, and `created_at>` describe the profile event, not the request, and MUST NOT deny an otherwise valid request. The request-borne path above still evaluates time clauses against the request's `created_at`.
 
 If accepted, relay deltas MUST use `consent=owner` and place the owner pubkey in the third element of the `consent` tag. The delta SHOULD reference the profile event used as proof with a marked `e` tag, `["e", "<profile-event-id>", "", "proof", "<target-pubkey>"]`, kept distinct from the unmarked request `e` tag, so the ownership evidence remains independently auditable.
 
@@ -425,9 +423,9 @@ Three places where independent re-derivations are most likely to diverge:
 
 2. **BIP-340 Schnorr signatures are non-deterministic in `aux`.** The signatures in §Test Vectors were produced with 32-byte zero `aux`; a different `aux` (or a library that defaults to random `aux`) produces a different — equally valid — signature for the same `id`. Verifiers MUST verify a signature cryptographically; they MUST NOT compare a re-signed reproduction byte-for-byte against the published value.
 
-3. **`auth` tag preimage is the NIP-OA preimage of the target, not of the request signer.** When verifying an owner-of-agent archive request (§Owner-of-Agent Requests), the `<event.pubkey>` slot in the NIP-OA preimage `nostr:agent-auth:<event.pubkey>:<conditions>` is the *target* (agent) pubkey, not the request signer (owner). Implementations that reuse a generic NIP-OA verifier MUST substitute the target before computing the preimage.
+3. **`auth` tag preimage is the NIP-OA preimage of the target, not of the request signer.** When verifying an owner-of-agent archive request (§Owner-of-Agent Requests), the `<event.pubkey>` slot in the NIP-OA preimage `nostr:agent-auth:<event.pubkey>:<conditions>` is the _target_ (agent) pubkey, not the request signer (owner). Implementations that reuse a generic NIP-OA verifier MUST substitute the target before computing the preimage.
 
-4. **Condition evaluation differs by proof source.** In the request-borne owner path the relay evaluates `created_at<`/`created_at>` clauses against the *request's* `created_at`. In the published-profile-attestation path the relay MUST NOT evaluate any clause: the profile `auth` tag is a standing ownership declaration, not authorization for the request, and an agent that only ever issued time-bounded credentials would otherwise be permanently un-archivable once those windows close — defeating the zombie case. A verifier that evaluates conditions on the profile path will silently reject valid requests.
+4. **Condition evaluation differs by proof source.** In the request-borne owner path the relay evaluates `created_at<`/`created_at>` clauses against the _request's_ `created_at`. In the published-profile-attestation path the relay MUST NOT evaluate any clause: the profile `auth` tag is a standing ownership declaration, not authorization for the request, and an agent that only ever issued time-bounded credentials would otherwise be permanently un-archivable once those windows close — defeating the zombie case. A verifier that evaluates conditions on the profile path will silently reject valid requests.
 
 ## Security Considerations
 
@@ -472,8 +470,8 @@ Alice rotates from `alice_old` to `alice_new`. She signs:
     ["-"],
     ["p", "<alice_old>"],
     ["reason", "rotated"],
-    ["replaced-by", "<alice_new>"]
-  ]
+    ["replaced-by", "<alice_new>"],
+  ],
 }
 ```
 
@@ -490,8 +488,8 @@ The relay verifies `actor == target`, archives `alice_old`, emits:
     ["consent", "self", "<alice_old>"],
     ["e", "<request-id>"],
     ["reason", "rotated"],
-    ["replaced-by", "<alice_new>"]
-  ]
+    ["replaced-by", "<alice_new>"],
+  ],
 }
 ```
 
@@ -508,7 +506,7 @@ The relay verifies the owner signature on the request, verifies the NIP-OA `auth
   ["p", "<agent_old>"],
   ["consent", "owner", "<owner_pubkey>"],
   ["e", "<request-id>"],
-  ["reason", "bot-rebuilt"]
+  ["reason", "bot-rebuilt"],
 ]
 ```
 
@@ -531,7 +529,7 @@ A non-banned user decides they should be visible again. They sign:
   "kind": 9036,
   "pubkey": "<target>",
   "content": "I am active again.",
-  "tags": [["-"], ["p", "<target>"], ["reason", "returned"]]
+  "tags": [["-"], ["p", "<target>"], ["reason", "returned"]],
 }
 ```
 
@@ -541,30 +539,30 @@ The relay verifies `actor == target`, removes the target from archive state, emi
 
 Relays MUST reject each of the following requests:
 
-| Scenario | Reason |
-|----------|--------|
-| Missing `p` tag | no target |
-| Multiple `p` tags | ambiguous target |
-| Missing NIP-70 `-` tag | unprotected administrative request |
-| Invalid event signature | not a valid actor request |
-| `replaced-by` equals target | nonsensical replacement |
-| Non-admin actor archives someone else without valid NIP-OA owner proof | unauthorized |
-| Owner-of-agent request where `auth` owner does not equal actor | unauthorized |
-| Owner-of-agent request where NIP-OA signature was made for a different agent pubkey | unauthorized |
-| Profile-attestation request where the target's latest `kind:0` carries no valid `auth` tag | revoked or never declared; no fallback to older profiles |
-| Profile-attestation request where the owner in the latest `kind:0` `auth` tag does not equal actor | unauthorized |
-| Self-unarchive from a pubkey currently banned by access-control policy | access-control policy wins |
-| Request outside relay freshness window | replay risk |
+| Scenario                                                                                           | Reason                                                   |
+| -------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Missing `p` tag                                                                                    | no target                                                |
+| Multiple `p` tags                                                                                  | ambiguous target                                         |
+| Missing NIP-70 `-` tag                                                                             | unprotected administrative request                       |
+| Invalid event signature                                                                            | not a valid actor request                                |
+| `replaced-by` equals target                                                                        | nonsensical replacement                                  |
+| Non-admin actor archives someone else without valid NIP-OA owner proof                             | unauthorized                                             |
+| Owner-of-agent request where `auth` owner does not equal actor                                     | unauthorized                                             |
+| Owner-of-agent request where NIP-OA signature was made for a different agent pubkey                | unauthorized                                             |
+| Profile-attestation request where the target's latest `kind:0` carries no valid `auth` tag         | revoked or never declared; no fallback to older profiles |
+| Profile-attestation request where the owner in the latest `kind:0` `auth` tag does not equal actor | unauthorized                                             |
+| Self-unarchive from a pubkey currently banned by access-control policy                             | access-control policy wins                               |
+| Request outside relay freshness window                                                             | replay risk                                              |
 
 Clients MUST ignore each of the following relay events for archive-state purposes:
 
-| Scenario | Reason |
-|----------|--------|
-| `kind:8002`, `kind:8003`, or `kind:13535` not signed by relay NIP-11 `self` key | not relay state |
-| Relay event missing NIP-70 `-` tag | malformed protected event |
-| Delta missing `p` tag | no target |
-| Delta missing `consent` tag | unauditable decision |
-| Snapshot `p` tag with invalid pubkey | invalid entry; clients SHOULD ignore that entry |
+| Scenario                                                                        | Reason                                          |
+| ------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `kind:8002`, `kind:8003`, or `kind:13535` not signed by relay NIP-11 `self` key | not relay state                                 |
+| Relay event missing NIP-70 `-` tag                                              | malformed protected event                       |
+| Delta missing `p` tag                                                           | no target                                       |
+| Delta missing `consent` tag                                                     | unauditable decision                            |
+| Snapshot `p` tag with invalid pubkey                                            | invalid entry; clients SHOULD ignore that entry |
 
 ## Relation to Other NIPs
 

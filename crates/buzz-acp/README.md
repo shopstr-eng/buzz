@@ -95,16 +95,16 @@ All configuration is via environment variables (or CLI flags — every env var h
 
 ### Core
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `BUZZ_PRIVATE_KEY` | **yes** | — | Agent's Nostr private key (`nsec1...`). Used for relay auth and agent identity. |
-| `BUZZ_RELAY_URL` | no | `ws://localhost:3000` | Relay WebSocket URL. |
-| `BUZZ_ACP_AGENT_COMMAND` | no | `goose` | Agent binary to spawn. |
-| `BUZZ_ACP_AGENT_ARGS` | no | `acp` | Agent arguments (comma-separated). |
-| `BUZZ_ACP_MCP_COMMAND` | no | `""` (empty) | Path to an optional MCP server binary to provide to the agent subprocess. |
-| `BUZZ_ACP_IDLE_TIMEOUT` | no | `620` | Idle timeout: max seconds of silence before cancelling a turn. Resets on any agent stdout activity. |
-| `BUZZ_ACP_MAX_TURN_DURATION` | no | `7200` | Absolute wall-clock cap per turn (safety valve). |
-| `BUZZ_API_TOKEN` | no | — | API token (required if relay enforces token auth). |
+| Variable                     | Required | Default               | Description                                                                                         |
+| ---------------------------- | -------- | --------------------- | --------------------------------------------------------------------------------------------------- |
+| `BUZZ_PRIVATE_KEY`           | **yes**  | —                     | Agent's Nostr private key (`nsec1...`). Used for relay auth and agent identity.                     |
+| `BUZZ_RELAY_URL`             | no       | `ws://localhost:3000` | Relay WebSocket URL.                                                                                |
+| `BUZZ_ACP_AGENT_COMMAND`     | no       | `goose`               | Agent binary to spawn.                                                                              |
+| `BUZZ_ACP_AGENT_ARGS`        | no       | `acp`                 | Agent arguments (comma-separated).                                                                  |
+| `BUZZ_ACP_MCP_COMMAND`       | no       | `""` (empty)          | Path to an optional MCP server binary to provide to the agent subprocess.                           |
+| `BUZZ_ACP_IDLE_TIMEOUT`      | no       | `620`                 | Idle timeout: max seconds of silence before cancelling a turn. Resets on any agent stdout activity. |
+| `BUZZ_ACP_MAX_TURN_DURATION` | no       | `7200`                | Absolute wall-clock cap per turn (safety valve).                                                    |
+| `BUZZ_API_TOKEN`             | no       | —                     | API token (required if relay enforces token auth).                                                  |
 
 **Note:** `BUZZ_ACP_AGENT_ARGS` splits on commas. For args with values, use: `-c,key="value"`.
 
@@ -112,38 +112,38 @@ All configuration is via environment variables (or CLI flags — every env var h
 
 ### Parallel Agents & Heartbeat
 
-| Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
-| `--agents` | `BUZZ_ACP_AGENTS` | `1` | Number of agent subprocesses (1–32). |
-| `--heartbeat-interval` | `BUZZ_ACP_HEARTBEAT_INTERVAL` | `0` | Seconds between heartbeat prompts. `0` = disabled. Must be `0` or ≥10 when enabled. |
-| `--heartbeat-prompt` | `BUZZ_ACP_HEARTBEAT_PROMPT` | (built-in) | Custom heartbeat prompt text. Conflicts with `--heartbeat-prompt-file`. |
-| `--heartbeat-prompt-file` | `BUZZ_ACP_HEARTBEAT_PROMPT_FILE` | — | Read heartbeat prompt from a file. Conflicts with `--heartbeat-prompt`. |
+| Flag                      | Env Var                          | Default    | Description                                                                         |
+| ------------------------- | -------------------------------- | ---------- | ----------------------------------------------------------------------------------- |
+| `--agents`                | `BUZZ_ACP_AGENTS`                | `1`        | Number of agent subprocesses (1–32).                                                |
+| `--heartbeat-interval`    | `BUZZ_ACP_HEARTBEAT_INTERVAL`    | `0`        | Seconds between heartbeat prompts. `0` = disabled. Must be `0` or ≥10 when enabled. |
+| `--heartbeat-prompt`      | `BUZZ_ACP_HEARTBEAT_PROMPT`      | (built-in) | Custom heartbeat prompt text. Conflicts with `--heartbeat-prompt-file`.             |
+| `--heartbeat-prompt-file` | `BUZZ_ACP_HEARTBEAT_PROMPT_FILE` | —          | Read heartbeat prompt from a file. Conflicts with `--heartbeat-prompt`.             |
 
 ### Inbound Author Gate
 
 Controls which authors' events the harness forwards to the agent. Events from disallowed authors are silently dropped before reaching subscription rules.
 
-| Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
-| `--respond-to` | `BUZZ_ACP_RESPOND_TO` | `owner-only` | Author gate mode: `owner-only`, `allowlist`, `anyone`, `nobody`. |
-| `--respond-to-allowlist` | `BUZZ_ACP_RESPOND_TO_ALLOWLIST` | — | Comma-separated 64-char hex pubkeys (required when mode is `allowlist`). Owner is always implicitly included. |
+| Flag                     | Env Var                         | Default      | Description                                                                                                   |
+| ------------------------ | ------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------- |
+| `--respond-to`           | `BUZZ_ACP_RESPOND_TO`           | `owner-only` | Author gate mode: `owner-only`, `allowlist`, `anyone`, `nobody`.                                              |
+| `--respond-to-allowlist` | `BUZZ_ACP_RESPOND_TO_ALLOWLIST` | —            | Comma-separated 64-char hex pubkeys (required when mode is `allowlist`). Owner is always implicitly included. |
 
 **Modes:**
 
-| Mode | Behavior |
-|------|----------|
+| Mode         | Behavior                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | `owner-only` | Forward only events from the agent's registered owner. If no owner is set, all events are dropped until the owner is resolved. |
-| `allowlist` | Forward events from the listed pubkeys plus the owner. |
-| `anyone` | Forward all events (no author filtering). |
-| `nobody` | Drop all inbound events. Agent only acts on heartbeat prompts. |
+| `allowlist`  | Forward events from the listed pubkeys plus the owner.                                                                         |
+| `anyone`     | Forward all events (no author filtering).                                                                                      |
+| `nobody`     | Drop all inbound events. Agent only acts on heartbeat prompts.                                                                 |
 
 The gate applies to **all** inbound events — @mentions, DMs, thread replies, and any event delivered by the relay. Owner control commands are checked **before** the gate, so the owner can still manage the harness regardless of mode:
 
-| Command | Effect |
-|---------|--------|
-| `!shutdown` | Gracefully exits the harness. |
-| `!cancel` | Cancels the current in-flight turn for that channel, if any. |
-| `!rotate` | Rotates the ACP session for that channel. If a turn is in-flight, it is cancelled and the channel session is invalidated when the task returns; otherwise the cached idle session is invalidated immediately. The next queued/received event starts a fresh session. |
+| Command     | Effect                                                                                                                                                                                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `!shutdown` | Gracefully exits the harness.                                                                                                                                                                                                                                        |
+| `!cancel`   | Cancels the current in-flight turn for that channel, if any.                                                                                                                                                                                                         |
+| `!rotate`   | Rotates the ACP session for that channel. If a turn is in-flight, it is cancelled and the channel session is invalidated when the task returns; otherwise the cached idle session is invalidated immediately. The next queued/received event starts a fresh session. |
 
 Use `!cancel` to stop only the current turn; it is a no-op when the channel is idle. Use `!rotate` when you want the next turn in the channel to start from a fresh ACP session, even if the channel is currently idle.
 
@@ -171,21 +171,25 @@ buzz-acp --respond-to nobody --heartbeat-interval 300
 ### Configuration Examples
 
 **Single agent, no heartbeat (default):**
+
 ```bash
 buzz-acp
 ```
 
 **Four agents, no heartbeat (high-throughput event processing):**
+
 ```bash
 buzz-acp --agents 4
 ```
 
 **Two agents with 5-minute heartbeat:**
+
 ```bash
 buzz-acp --agents 2 --heartbeat-interval 300
 ```
 
 **Custom heartbeat prompt:**
+
 ```bash
 buzz-acp --agents 2 --heartbeat-interval 300 \
   --heartbeat-prompt "Check get_feed_actions() for pending approvals, then get_feed_mentions() for unanswered mentions. If nothing actionable, end your turn immediately."
@@ -215,16 +219,19 @@ Start with **N=2** for most deployments. Increase if queue depth grows under loa
 By default, the ACP harness subscribes to stream message kinds (9, 46010, 40007). To receive forum events, opt in with `--kinds` and disable the mention filter (forum posts don't @mention agents):
 
 **CLI flags:**
+
 ```bash
 buzz-acp --kinds 9,46010,40007,45001,45002,45003 --no-mention-filter
 ```
 
 **Or with `--subscribe all`:**
+
 ```bash
 buzz-acp --subscribe all --kinds 9,46010,40007,45001,45002,45003
 ```
 
 **Per-channel config:**
+
 ```toml
 [channel.CHANNEL_UUID]
 kinds = [9, 46010, 40007, 45001, 45002, 45003]
@@ -232,6 +239,7 @@ require_mention = false
 ```
 
 Forum event kinds:
+
 - **45001** — Forum post (thread root)
 - **45002** — Vote on a post or comment
 - **45003** — Comment reply on a forum post

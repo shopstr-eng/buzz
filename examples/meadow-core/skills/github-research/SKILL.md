@@ -45,14 +45,17 @@ gh pr view 456 --repo owner/repo --json number,title,body,reviews,files
 ## Research: [Topic]
 
 ### Summary
+
 - Key finding 1 [#123]
 - Key finding 2 [PR #456]
 
 ### Findings
+
 1. **#123: [Title]** — [summary]. URL: https://...
 2. **PR #456: [Title]** — [what it changed]. URL: https://...
 
 ### Gaps
+
 - [What you looked for but didn't find]
 ```
 

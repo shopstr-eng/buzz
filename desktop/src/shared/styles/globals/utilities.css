@@ -51,10 +51,10 @@
     border: 1px solid
       hsl(
         var(
-          --huddle-control-chevron-hover-surface,
-          var(--huddle-control-chevron-surface, 0 0% 22%)
-        ) /
-        0.72
+            --huddle-control-chevron-hover-surface,
+            var(--huddle-control-chevron-surface, 0 0% 22%)
+          ) /
+          0.72
       );
     box-shadow: 0 10px 22px rgb(0 0 0 / 35%);
     color: hsl(var(--primary-foreground));

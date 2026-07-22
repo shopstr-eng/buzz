@@ -3,11 +3,11 @@
 Buzz has three independent release lanes, each driven by a release PR — no human
 ever pushes a git tag:
 
-| Lane | Recipe | Artifact |
-|------|--------|----------|
-| Desktop | `just release-desktop` | Signed desktop app (macOS/Linux) |
-| Relay | `just release-relay` | `ghcr.io/block/buzz` container image |
-| Mobile | `just release-mobile` | Buzz mobile app (tag is the `sprout_ref` for the internal build) |
+| Lane    | Recipe                 | Artifact                                                         |
+| ------- | ---------------------- | ---------------------------------------------------------------- |
+| Desktop | `just release-desktop` | Signed desktop app (macOS/Linux)                                 |
+| Relay   | `just release-relay`   | `ghcr.io/block/buzz` container image                             |
+| Mobile  | `just release-mobile`  | Buzz mobile app (tag is the `sprout_ref` for the internal build) |
 
 The three lanes version independently: the desktop version lives in
 `desktop/package.json`, the relay version in `crates/buzz-relay/Cargo.toml`, and
@@ -119,12 +119,12 @@ relay release only — it does not move on main pushes or prereleases.
 The argument forms below apply to `release-desktop`, `release-relay`, and
 `release-mobile`:
 
-| Command | Version | Example |
-|---------|---------|---------|
-| `just release-desktop` | Next patch | `0.3.0` → `0.3.1` |
-| `just release-desktop patch` | Next patch | `0.3.0` → `0.3.1` |
+| Command                      | Version        | Example           |
+| ---------------------------- | -------------- | ----------------- |
+| `just release-desktop`       | Next patch     | `0.3.0` → `0.3.1` |
+| `just release-desktop patch` | Next patch     | `0.3.0` → `0.3.1` |
 | `just release-desktop 0.4.0` | Explicit minor | `0.3.1` → `0.4.0` |
-| `just release-desktop 1.0.0` | Explicit | `1.0.0` |
+| `just release-desktop 1.0.0` | Explicit       | `1.0.0`           |
 
 ---
 
@@ -132,11 +132,11 @@ The argument forms below apply to `release-desktop`, `release-relay`, and
 
 `just bump-desktop-version <version>` (desktop lane) updates these files:
 
-| File | Field |
-|------|-------|
-| `desktop/package.json` | `"version"` |
-| `desktop/src-tauri/tauri.conf.json` | `"version"` |
-| `desktop/src-tauri/Cargo.toml` | `version` (under `[package]`) |
+| File                                | Field                         |
+| ----------------------------------- | ----------------------------- |
+| `desktop/package.json`              | `"version"`                   |
+| `desktop/src-tauri/tauri.conf.json` | `"version"`                   |
+| `desktop/src-tauri/Cargo.toml`      | `version` (under `[package]`) |
 
 It also regenerates `pnpm-lock.yaml` and `desktop/src-tauri/Cargo.lock`.
 
@@ -208,29 +208,34 @@ host's Wayland/GStreamer/graphics stack and requires GLib >= 2.72
 - **`gh` CLI** authenticated (`gh auth status`)
 - The following **GitHub Actions secrets** must be configured:
 
-  | Secret | Purpose |
-  |--------|---------|
-  | `BUZZ_UPDATER_PUBLIC_KEY` | Tauri updater public key (minisign) |
-  | `TAURI_SIGNING_PRIVATE_KEY` | Tauri updater private key |
-  | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the private key |
+  | Secret                               | Purpose                             |
+  | ------------------------------------ | ----------------------------------- |
+  | `BUZZ_UPDATER_PUBLIC_KEY`            | Tauri updater public key (minisign) |
+  | `TAURI_SIGNING_PRIVATE_KEY`          | Tauri updater private key           |
+  | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the private key        |
 
 ---
 
 ## Troubleshooting
 
 ### `just release-desktop` fails with "must be on main branch"
+
 Switch to `main` and pull latest before running the release recipe.
 
 ### `just release-desktop` fails with "working tree is dirty"
+
 Commit or stash your changes before running the release recipe.
 
 ### New commits merged after creating the release PR
+
 Re-run the release recipe (`just release-desktop`, `just release-relay`, or `just release-mobile`) from an up-to-date `main`. It resets the branch to current `main`, regenerates the changelog and PR body to include the new commits, and force-pushes the updated branch.
 
 ### Build fails at "Validate version"
+
 The version string must be valid semver: `MAJOR.MINOR.PATCH` with an optional pre-release suffix. Do not include a `v` prefix.
 
 ### Auto-updater reports "no update available"
+
 Verify that the `buzz-desktop-latest` release exists and contains a
 valid `latest.json`. The manifest covers all four platform keys
 (`darwin-aarch64`, `darwin-x86_64`, `linux-x86_64`,

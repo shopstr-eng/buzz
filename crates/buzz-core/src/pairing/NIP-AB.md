@@ -1,8 +1,6 @@
-NIP-AB
-======
+# NIP-AB
 
-Device Pairing
---------------
+## Device Pairing
 
 `draft` `optional`
 
@@ -12,9 +10,9 @@ This NIP is versioned to allow future algorithm upgrades without breaking existi
 
 Currently defined versions:
 
-| Version | Status | Description |
-|---------|--------|-------------|
-| `1` | Active | secp256k1 ECDH, HKDF-SHA256, SAS-6digit, NIP-44 v2 encryption |
+| Version | Status | Description                                                   |
+| ------- | ------ | ------------------------------------------------------------- |
+| `1`     | Active | secp256k1 ECDH, HKDF-SHA256, SAS-6digit, NIP-44 v2 encryption |
 
 The version is communicated in two places:
 
@@ -27,7 +25,7 @@ The version is communicated in two places:
    {
      "type": "offer",
      "version": 1,
-     "session_id": "<hex, 32 bytes>"
+     "session_id": "<hex, 32 bytes>",
    }
    ```
    _source_ MUST reject offers with a `version` it does not support.
@@ -44,7 +42,7 @@ Users need their Nostr identity on multiple devices. Today the options are:
 - Use [NIP-46](46.md) remote signing — requires the signer device to be online for every operation
 - Enter a [NIP-06](06.md) mnemonic — manual, error-prone, not all clients support it
 
-NIP-46 solves *ongoing delegation*: the key stays on one device and signs remotely. This NIP solves *one-time transfer*: the key moves to the new device, which then operates independently. They are complementary — this NIP can even bootstrap a NIP-46 session as one of its payload types.
+NIP-46 solves _ongoing delegation_: the key stays on one device and signs remotely. This NIP solves _one-time transfer_: the key moves to the new device, which then operates independently. They are complementary — this NIP can even bootstrap a NIP-46 session as one of its payload types.
 
 This NIP provides a secure, authenticated channel between two devices that can carry any secret payload — a private key, a [NIP-46](46.md) session bootstrap, or application-specific data — without trusting the relay.
 
@@ -103,6 +101,7 @@ nostrpair://<source_ephemeral_pubkey_hex>?secret=<session_secret_hex>&relay=<wss
 The total URI length MUST NOT exceed 2048 characters. Reject any URI that exceeds this limit (prevents DoS via QR scanning).
 
 Implementations MUST validate the QR URI before processing:
+
 - `source_ephemeral_pubkey_hex` MUST be exactly 64 lowercase hex characters (32 bytes). Reject if not.
 - `session_secret_hex` MUST be exactly 64 lowercase hex characters (32 bytes). Reject if not.
 - `relay` MUST be a valid WebSocket URL beginning with `wss://` or `ws://`. Reject if not.
@@ -174,14 +173,14 @@ Before processing any `kind:24134` event, implementations MUST:
 
    The valid `type` for each state is:
 
-   | State | Role | Expected `type` |
-   |-------|------|-----------------|
-   | `Waiting` | Source | `offer` |
-   | `Confirming` | Source | *(awaiting user; no inbound expected)* |
-   | `Confirming` | Target | `sas-confirm` |
-   | `AwaitingConfirmation` | Target | `payload` *(buffer until user confirms SAS; do not process until state advances to `Transferring`)* |
-   | `Transferring` | Target | `payload` |
-   | `PayloadExchanged` | Source | `complete` |
+   | State                  | Role   | Expected `type`                                                                                     |
+   | ---------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+   | `Waiting`              | Source | `offer`                                                                                             |
+   | `Confirming`           | Source | _(awaiting user; no inbound expected)_                                                              |
+   | `Confirming`           | Target | `sas-confirm`                                                                                       |
+   | `AwaitingConfirmation` | Target | `payload` _(buffer until user confirms SAS; do not process until state advances to `Transferring`)_ |
+   | `Transferring`         | Target | `payload`                                                                                           |
+   | `PayloadExchanged`     | Source | `complete`                                                                                          |
 
    `abort` is valid in any non-terminal state from a known peer (see §Abort). All other combinations are out-of-order and MUST be discarded.
 
@@ -204,7 +203,7 @@ A duplicate `offer` event (same `id`) received after the source has already acce
 After displaying the QR code, _source_ subscribes to the pairing relay for events tagged to its ephemeral public key:
 
 ```json
-["REQ", "<sub_id>", {"kinds": [24134], "#p": ["<source_ephemeral_pubkey>"]}]
+["REQ", "<sub_id>", { "kinds": [24134], "#p": ["<source_ephemeral_pubkey>"] }]
 ```
 
 ### Step 2: Target Sends Offer
@@ -228,7 +227,7 @@ Encrypted plaintext:
 {
   "type": "offer",
   "version": 1,
-  "session_id": "<hex, 32 bytes>"
+  "session_id": "<hex, 32 bytes>",
 }
 ```
 
@@ -274,7 +273,7 @@ Where `be_u32(bytes)` interprets the first 4 bytes of `sas_input` as a big-endia
 
 Both devices display the `sas_code` as a zero-padded 6-digit decimal string (e.g., `"047291"`). The user MUST visually confirm the codes match on both screens before proceeding.
 
-**UX requirement**: The confirmation prompt MUST clearly state what is being authorized. Example: *"You are about to transfer your Nostr identity to another device. Does your other device show: **047291**?"* with prominent Confirm and Deny buttons. If the user denies the SAS on either device, that device MUST immediately send `abort` with reason `"user_denied"`, discard all session state, and terminate the session. SAS denial is the primary MITM defense — implementations MUST NOT allow the protocol to continue after a denial.
+**UX requirement**: The confirmation prompt MUST clearly state what is being authorized. Example: _"You are about to transfer your Nostr identity to another device. Does your other device show: **047291**?"_ with prominent Confirm and Deny buttons. If the user denies the SAS on either device, that device MUST immediately send `abort` with reason `"user_denied"`, discard all session state, and terminate the session. SAS denial is the primary MITM defense — implementations MUST NOT allow the protocol to continue after a denial.
 
 After the user confirms on the _source_ device, _source_ publishes a `sas-confirm` event:
 
@@ -293,7 +292,7 @@ Encrypted plaintext:
 ```jsonc
 {
   "type": "sas-confirm",
-  "transcript_hash": "<hex, 32 bytes>"
+  "transcript_hash": "<hex, 32 bytes>",
 }
 ```
 
@@ -313,7 +312,7 @@ transcript_hash = HKDF-SHA256(
 )
 ```
 
-_target_ MUST compute the same `transcript_hash` and verify it matches before proceeding. Implementations MUST use constant-time comparison when checking `transcript_hash` to prevent timing side-channels. A mismatch indicates session inconsistency or parameter tampering; _target_ MUST send `abort` with reason `"sas_mismatch"`, discard any payload received in this session, and terminate. Note: because _source_ sends the payload immediately after `sas-confirm` (without waiting for an acknowledgment), the payload may already be in transit or delivered when the mismatch is detected. The transcript hash is a **detection** mechanism, not a prevention gate — MITM prevention relies on the user's visual SAS comparison on the _source_ device *before* the source confirms and sends the payload.
+_target_ MUST compute the same `transcript_hash` and verify it matches before proceeding. Implementations MUST use constant-time comparison when checking `transcript_hash` to prevent timing side-channels. A mismatch indicates session inconsistency or parameter tampering; _target_ MUST send `abort` with reason `"sas_mismatch"`, discard any payload received in this session, and terminate. Note: because _source_ sends the payload immediately after `sas-confirm` (without waiting for an acknowledgment), the payload may already be in transit or delivered when the mismatch is detected. The transcript hash is a **detection** mechanism, not a prevention gate — MITM prevention relies on the user's visual SAS comparison on the _source_ device _before_ the source confirms and sends the payload.
 
 After verifying the transcript hash, _target_ enters the `AwaitingConfirmation` state. _target_ transitions to `Transferring` when the user confirms the SAS on the target device. _target_ MUST NOT import, process, or act on the secret material within any received `payload` event until **both** the transcript hash has been verified **and** the user has confirmed the SAS on the target device. (Implementations may NIP-44-decrypt the event content to validate the message `type` for state-machine routing. However, implementations MUST NOT deserialize, extract, log, persist, or act on the `payload` field within a `payload`-type message until both conditions are met. If early decryption is used, the decrypted content MUST be treated as opaque for all purposes other than `type` classification, and MUST be zeroized if the session is aborted before dual consent. The safest implementation strategy — and the one closest to the formal proof — is to buffer the raw NIP-44 ciphertext and defer all decryption until after dual consent.)
 
@@ -327,18 +326,18 @@ Encrypted plaintext:
 {
   "type": "payload",
   "payload_type": "<string>",
-  "payload": "<string>"
+  "payload": "<string>",
 }
 ```
 
 Defined payload types:
 
-| `payload_type` | Description | `payload` format |
-|----------------|-------------|------------------|
-| `nsec` | Private key transfer | [NIP-49](49.md) `ncryptsec1...` string (recommended) or `nsec1...` bech32 |
-| `bunker` | NIP-46 signer-initiated session | `bunker://...` URI as defined in [NIP-46](46.md) |
-| `connect` | NIP-46 client-initiated session | `nostrconnect://...` URI as defined in [NIP-46](46.md) |
-| `custom` | Application-specific data | String (see §Custom Payloads) |
+| `payload_type` | Description                     | `payload` format                                                          |
+| -------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| `nsec`         | Private key transfer            | [NIP-49](49.md) `ncryptsec1...` string (recommended) or `nsec1...` bech32 |
+| `bunker`       | NIP-46 signer-initiated session | `bunker://...` URI as defined in [NIP-46](46.md)                          |
+| `connect`      | NIP-46 client-initiated session | `nostrconnect://...` URI as defined in [NIP-46](46.md)                    |
+| `custom`       | Application-specific data       | String (see §Custom Payloads)                                             |
 
 **Payload size limits**: The total serialized JSON plaintext of a `kind:24134` event's decrypted content MUST NOT exceed 65,535 bytes (the NIP-44 v2 plaintext limit). For `payload` messages, this means the `payload` field plus JSON envelope overhead (typically 50–80 bytes depending on `payload_type` and JSON escaping) must fit within this limit. In practice, `payload` values up to 65,400 bytes are safe. Implementations MUST reject (silently discard) `payload` events where the decrypted plaintext JSON exceeds 65,535 bytes.
 
@@ -356,7 +355,7 @@ To prevent cross-application misinterpretation, applications using `custom` payl
 {
   "type": "payload",
   "payload_type": "custom",
-  "payload": "{\"app\":\"com.example.myapp\",\"version\":1,\"data\":\"...\"}"
+  "payload": "{\"app\":\"com.example.myapp\",\"version\":1,\"data\":\"...\"}",
 }
 ```
 
@@ -462,17 +461,17 @@ Encrypted plaintext:
 ```jsonc
 {
   "type": "abort",
-  "reason": "<string>"
+  "reason": "<string>",
 }
 ```
 
 Defined reason strings:
 
-| `reason` | Meaning |
-|----------|---------|
-| `"sas_mismatch"` | SAS codes did not match, or transcript hash verification failed |
-| `"user_denied"` | User explicitly denied the pairing |
-| `"timeout"` | Session timed out |
+| `reason`           | Meaning                                                                                                                                                                                                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `"sas_mismatch"`   | SAS codes did not match, or transcript hash verification failed                                                                                                                                                                          |
+| `"user_denied"`    | User explicitly denied the pairing                                                                                                                                                                                                       |
+| `"timeout"`        | Session timed out                                                                                                                                                                                                                        |
 | `"protocol_error"` | Local fatal condition (e.g., internal state corruption, unrecoverable implementation error). MUST NOT be sent in response to a peer's out-of-order or validation-failing event — those MUST be silently discarded per §Event Validation. |
 
 Upon receiving an `abort`, the other device MUST terminate the session, discard ephemeral keys, and inform the user. Implementations MAY define additional reason strings; unknown reasons SHOULD be treated as `"protocol_error"`.
@@ -531,11 +530,13 @@ Clients MUST display an unambiguous confirmation prompt. The prompt MUST explici
 ### Relay Compromise
 
 A compromised relay can:
+
 - **Drop events** (denial of service) — mitigated by session timeout and retry with alternate relays
 - **Delay events** — mitigated by session timeout
 - **Attempt MITM** — defeated by SAS verification (relay does not possess ephemeral private keys)
 
 A compromised relay **cannot**:
+
 - Read the payload (NIP-44 encrypted with ECDH keys the relay does not possess)
 - Forge events (events are signed by ephemeral keys; signatures are validated before processing)
 - Correlate pairing sessions with real user identities (ephemeral keys are unlinked to real identities)
@@ -629,24 +630,24 @@ Under those assumptions, the proved lemmas are:
 
 **Core security invariants:**
 
-- **`executable_core_flow`** *(executability)*: the happy-path protocol completes — both sides reach `complete` with the same session and payload.
-- **`payload_requires_successful_sas_match`** *(SAS gate)*: an honest source can only send `payload` after a successful SAS match.
-- **`payload_secrecy_without_endpoint_compromise`** *(payload secrecy)*: the payload remains unknown to the attacker unless one endpoint session is compromised. QR-code exposure alone does not break secrecy, because the SAS gate pins delivery to an honest target-role execution in the model. (This assumes correct SAS verification — the model treats SAS comparison as perfect; the ~20-bit collision bound is a separate computational argument, see §Design Rationale.)
-- **`target_completion_agrees_on_source_payload`** *(target agreement)*: under no-compromise assumptions, if the target completes, then the source previously sent that exact payload in the same session.
-- **`source_completion_implies_prior_target_completion_without_compromise`** *(source completion soundness)*: under the same no-compromise assumptions, if the source accepts `complete`, the target previously sent `complete` for the same session. (The model abstracts away `success:true/false` semantics — this proves the `complete` event is authentic, not that import succeeded.)
+- **`executable_core_flow`** _(executability)_: the happy-path protocol completes — both sides reach `complete` with the same session and payload.
+- **`payload_requires_successful_sas_match`** _(SAS gate)_: an honest source can only send `payload` after a successful SAS match.
+- **`payload_secrecy_without_endpoint_compromise`** _(payload secrecy)_: the payload remains unknown to the attacker unless one endpoint session is compromised. QR-code exposure alone does not break secrecy, because the SAS gate pins delivery to an honest target-role execution in the model. (This assumes correct SAS verification — the model treats SAS comparison as perfect; the ~20-bit collision bound is a separate computational argument, see §Design Rationale.)
+- **`target_completion_agrees_on_source_payload`** _(target agreement)_: under no-compromise assumptions, if the target completes, then the source previously sent that exact payload in the same session.
+- **`source_completion_implies_prior_target_completion_without_compromise`** _(source completion soundness)_: under the same no-compromise assumptions, if the source accepts `complete`, the target previously sent `complete` for the same session. (The model abstracts away `success:true/false` semantics — this proves the `complete` event is authentic, not that import succeeded.)
 
-- **`injective_target_source_agreement`** *(injective agreement, target → source)*: each target completion corresponds to a unique prior source payload send with the same `(sid, pkS, pkT, payload)`, and that send is itself unique. This is a one-directional injective mapping; the reverse (every send leads to a completion) is a liveness property not provable under Dolev-Yao scheduling.
+- **`injective_target_source_agreement`** _(injective agreement, target → source)_: each target completion corresponds to a unique prior source payload send with the same `(sid, pkS, pkT, payload)`, and that send is itself unique. This is a one-directional injective mapping; the reverse (every send leads to a completion) is a liveness property not provable under Dolev-Yao scheduling.
 
 **MITM resistance:**
 
 - **`sas_match_implies_genuine_target`**: every SAS match is bound to a `pkT` that an honest target-role instance in the model actually generated (i.e., from `Target_Scan_QR_And_Send_Offer` with a fresh ephemeral). A network adversary that substitutes the offer's ephemeral key with an attacker-chosen value cannot cause the SAS-match rule to fire. This proves resistance to network key-substitution, not physical-device authenticity — the latter relies on the user's physical verification of the SAS code and is outside the symbolic model's scope.
-- **`payload_delivery_requires_genuine_target`** *(composition)*: no payload is ever sent under a `pkT` that lacks a prior honest target-role execution. Follows from the SAS gate combined with the genuine-target lemma.
+- **`payload_delivery_requires_genuine_target`** _(composition)_: no payload is ever sent under a `pkT` that lacks a prior honest target-role execution. Follows from the SAS gate combined with the genuine-target lemma.
 
 **Dual consent and payload buffering:**
 
 - **`target_decrypts_payload_only_after_dual_consent`**: the target never decrypts the payload without **both** transcript verification **and** an explicit user-approval step. The model proves a stronger abstraction than the spec requires: payload plaintext is not made available to protocol logic before both conditions are met. (The spec permits implementations to NIP-44-decrypt the event content early for message-type classification, but the model conservatively defers all decryption — this is strictly stronger. Early type-field decryption on the target is a local operation that does not emit network-observable messages or alter protocol flow; since the Dolev-Yao attacker already possesses the ciphertext, local decryption reveals nothing new to the adversary, and all proved properties (secrecy, agreement, MITM resistance) hold a fortiori for the spec's more permissive buffering model.)
 - **`decryption_requires_prior_buffering`**: every decryption is preceded by buffering — the intended two-phase flow (buffer ciphertext, then decrypt after approval) is explicit in the proof surface.
-- **`executable_payload_buffered_before_approval`** *(sanity)*: the payload **can** arrive and be buffered before the target user approves, proving the buffering path is reachable and the dual-consent gate is not vacuously enforced by message ordering alone.
+- **`executable_payload_buffered_before_approval`** _(sanity)_: the payload **can** arrive and be buffered before the target user approves, proving the buffering path is reachable and the dual-consent gate is not vacuously enforced by message ordering alone.
 
 **Reachability and anti-vacuousness:**
 
@@ -700,15 +701,15 @@ Private keys MUST be validated as scalars in range `[1, secp256k1_order - 1]`. P
 
 ### Constants
 
-| Name | Value | Description |
-|------|-------|-------------|
-| `SESSION_TIMEOUT` | 120 seconds | Maximum time from QR display to session completion |
-| `STEP_TIMEOUT` | 30 seconds | Maximum time to wait for each protocol step |
-| `SAS_DIGITS` | 6 | Number of decimal digits in SAS code |
-| `SAS_MODULUS` | 1,000,000 | `10^SAS_DIGITS` |
-| `SESSION_SECRET_LEN` | 32 bytes | Length of session secret |
-| `MAX_URI_LEN` | 2048 characters | Maximum total length of the `nostrpair://` URI |
-| `MAX_PAYLOAD_LEN` | 65,400 bytes | Safe practical maximum for the `payload` field (65,535-byte NIP-44 limit minus JSON envelope overhead) |
+| Name                 | Value           | Description                                                                                            |
+| -------------------- | --------------- | ------------------------------------------------------------------------------------------------------ |
+| `SESSION_TIMEOUT`    | 120 seconds     | Maximum time from QR display to session completion                                                     |
+| `STEP_TIMEOUT`       | 30 seconds      | Maximum time to wait for each protocol step                                                            |
+| `SAS_DIGITS`         | 6               | Number of decimal digits in SAS code                                                                   |
+| `SAS_MODULUS`        | 1,000,000       | `10^SAS_DIGITS`                                                                                        |
+| `SESSION_SECRET_LEN` | 32 bytes        | Length of session secret                                                                               |
+| `MAX_URI_LEN`        | 2048 characters | Maximum total length of the `nostrpair://` URI                                                         |
+| `MAX_PAYLOAD_LEN`    | 65,400 bytes    | Safe practical maximum for the `payload` field (65,535-byte NIP-44 limit minus JSON envelope overhead) |
 
 ## Test Vectors
 
@@ -766,6 +767,7 @@ Implementations MUST also test rejection of invalid inputs. Examples of what to 
 ### Choosing a Pairing Relay
 
 The _source_ encodes the relay URL in the QR code. Implementations MAY:
+
 - Use the user's preferred relay from [NIP-65](65.md)
 - Use a hardcoded default relay
 - Allow the user to choose
@@ -779,6 +781,7 @@ Implementations MUST display the SAS code as a zero-padded 6-digit decimal numbe
 ### Secure Storage
 
 After importing a key, clients MUST store it in platform-secure storage:
+
 - **iOS**: Keychain Services with `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
 - **Android**: Android Keystore or EncryptedSharedPreferences
 - **Desktop**: OS credential manager or encrypted keyring

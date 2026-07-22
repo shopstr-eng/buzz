@@ -6,19 +6,30 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ApiFailure, request } from "./api";
+import { ApiFailure, post, request } from "./api";
 import type { FeedbackDetail, FeedbackSummary, Report } from "./types";
 import { useResource } from "./useResource";
 
+// Detect whether the SPA is mounted under a path prefix (e.g. /admin when
+// served path-based on Replit) or at the root (when served host-based via
+// BUZZ_ADMIN_HOST).  We check once at startup: if the current path starts
+// with /admin we are in path-based mode and need to prepend that prefix to
+// every navigation and link href.
+const BASE = location.pathname.startsWith("/admin") ? "/admin" : "";
+
+function stripBase(pathname: string): string {
+  return BASE ? pathname.slice(BASE.length) || "/" : pathname;
+}
+
 function usePath() {
-  const [path, setPath] = useState(location.pathname);
+  const [path, setPath] = useState(() => stripBase(location.pathname));
   useEffect(() => {
-    const update = () => setPath(location.pathname);
+    const update = () => setPath(stripBase(location.pathname));
     addEventListener("popstate", update);
     return () => removeEventListener("popstate", update);
   }, []);
   const navigate = useCallback((url: string) => {
-    history.pushState(null, "", url);
+    history.pushState(null, "", BASE + url);
     dispatchEvent(new PopStateEvent("popstate"));
   }, []);
   return { path, navigate };
@@ -40,7 +51,7 @@ function Link({
     path === href || (activeWhenNested && path.startsWith(`${href}/`));
   return (
     <a
-      href={href}
+      href={BASE + href}
       className={className}
       aria-current={active ? "page" : undefined}
       onClick={(event) => {
@@ -774,7 +785,11 @@ function InviteIcon() {
 
 function CopyIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ display: "inline", verticalAlign: "middle" }}>
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      style={{ display: "inline", verticalAlign: "middle" }}
+    >
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
@@ -800,17 +815,8 @@ function Invites() {
     setInvite(null);
     setCopied(false);
     try {
-      const response = await fetch("/api/admin/v1/invites", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ ttlSecs: ttlDays * 86400 }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error?.message ?? `Request failed (${response.status})`);
-      }
-      setInvite(data as InviteResult);
+      const data = await post<InviteResult>("/invites", { ttlSecs: ttlDays * 86400 });
+      setInvite(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -842,7 +848,9 @@ function Invites() {
             <span>Link valid for</span>
             <select
               value={ttlDays}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => setTtlDays(Number(e.target.value))}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                setTtlDays(Number(e.target.value))
+              }
               disabled={loading}
             >
               <option value={1}>1 day</option>
@@ -878,8 +886,8 @@ function Invites() {
               </button>
             </div>
             <p className="invite-hint">
-              Share this link with new members. The link can be used multiple times
-              until it expires.
+              Share this link with new members. The link can be used multiple
+              times until it expires.
             </p>
           </div>
         )}

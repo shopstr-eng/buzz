@@ -254,6 +254,13 @@ pub struct Config {
     /// Whether the configured web bundle serves Git browser routes in addition
     /// to the public invite landing page. Defaults to false.
     pub serve_git_web_gui: bool,
+    /// Optional path to the admin UI `dist/` directory for path-based serving.
+    /// When set (and `BUZZ_ADMIN_HOST` is not configured), the relay serves the
+    /// admin SPA under `/admin/` on the main domain instead of a separate host.
+    /// The admin API is gated by NIP-98 auth (kind:27235) signed by the relay
+    /// owner's private key (`RELAY_OWNER_PUBKEY`).
+    /// Ignored when host-based admin is active (`admin` field is `Some`).
+    pub admin_path_web_dir: Option<std::path::PathBuf>,
 }
 
 fn parse_bind_addr(raw: &str) -> Result<SocketAddr, ConfigError> {
@@ -847,6 +854,33 @@ impl Config {
             tracing::info!("BUZZ_WEB_DIR={} — serving web UI from relay", dir.display());
         }
 
+        // Path-based admin serving: only active when BUZZ_ADMIN_HOST is not set.
+        // When set, the admin SPA is served at /admin/ on the main domain and
+        // the admin API is gated by NIP-98 auth signed by RELAY_OWNER_PUBKEY.
+        let admin_path_web_dir = if admin.is_none() {
+            std::env::var("BUZZ_ADMIN_WEB_DIR")
+                .ok()
+                .map(|value| std::path::PathBuf::from(value.trim()))
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .and_then(|dir| {
+                    if dir.join("index.html").is_file() {
+                        tracing::info!(
+                            "BUZZ_ADMIN_WEB_DIR={} — serving admin UI at /admin/ (path-based)",
+                            dir.display()
+                        );
+                        Some(dir)
+                    } else {
+                        tracing::warn!(
+                            "BUZZ_ADMIN_WEB_DIR={} does not contain index.html — path-based admin disabled",
+                            dir.display()
+                        );
+                        None
+                    }
+                })
+        } else {
+            None
+        };
+
         // Reject explicitly-configured secrets that are too short.
         // The auto-generated fallback is always 64 hex chars (32 bytes), so this
         // only fires when someone sets BUZZ_GIT_HOOK_HMAC_SECRET to a weak value.
@@ -908,6 +942,7 @@ impl Config {
             admin,
             web_dir,
             serve_git_web_gui,
+            admin_path_web_dir,
         })
     }
 }

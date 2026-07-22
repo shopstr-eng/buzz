@@ -30,7 +30,7 @@ Wire in `Cargo.toml` workspace:
 tokio-websockets = { path = "vendor/tokio-websockets" }
 ```
 
-**Revert when:** Replit upgrades to Rust 1.89+; then remove the `[patch.crates-io]` entry and delete `vendor/tokio-websockets/`.
+**Revert when:** Replit upgrades to Rust 1.89+; remove the `[patch.crates-io]` entry and delete `vendor/tokio-websockets/`.
 
 ## Required env vars for relay startup
 

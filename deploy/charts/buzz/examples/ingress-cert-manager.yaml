@@ -42,14 +42,14 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
   hosts:
-    - host: buzz.example.com         # replace; must match relayUrl host
+    - host: buzz.example.com # replace; must match relayUrl host
       paths:
         - path: /
           pathType: Prefix
   tls:
     - hosts:
-        - buzz.example.com           # replace
-      secretName: buzz-tls           # cert-manager creates this Secret
+        - buzz.example.com # replace
+      secretName: buzz-tls # cert-manager creates this Secret
 
 ---
 # ── ClusterIssuer (kubectl apply, NOT consumed by Helm) ──────────────────────
@@ -60,10 +60,10 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: ops@example.com           # replace
+    email: ops@example.com # replace
     privateKeySecretRef:
       name: letsencrypt-prod-account-key
     solvers:
       - http01:
           ingress:
-            class: nginx             # match your ingress controller's ingressClass
+            class: nginx # match your ingress controller's ingressClass

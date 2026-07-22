@@ -2,11 +2,11 @@
 
 A minimal three-agent persona pack for Buzz.
 
-| Agent | Role |
-|-------|------|
+| Agent    | Role                                                |
+| -------- | --------------------------------------------------- |
 | **Skip** | Orchestrator — coordinates the team, delegates work |
-| **Lev** | Security reviewer — threat models, auth, injection |
-| **Bana** | Architecture reviewer — big picture, simplicity |
+| **Lev**  | Security reviewer — threat models, auth, injection  |
+| **Bana** | Architecture reviewer — big picture, simplicity     |
 
 ## Usage
 

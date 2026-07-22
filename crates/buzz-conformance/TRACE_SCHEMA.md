@@ -23,24 +23,26 @@ reducer.
 ```jsonc
 {
   "schema": 1,
-  "action": { /* TraceAction — see below */ },
+  "action": {
+    /* TraceAction — see below */
+  },
   "state": {
-    "resolved_community": "<uuid>",      // from TenantContext::community()
-    "bound_host":         "<host str>",  // from TenantContext::host()
-    "actor":              "<16 hex>"     // first 16 hex of authed pubkey
-  }
+    "resolved_community": "<uuid>", // from TenantContext::community()
+    "bound_host": "<host str>", // from TenantContext::host()
+    "actor": "<16 hex>", // first 16 hex of authed pubkey
+  },
 }
 ```
 
-`state` is *projected* state, not raw state. Concretely:
+`state` is _projected_ state, not raw state. Concretely:
 
-| Field | What it carries | What it does NOT carry |
-|-------|-----------------|------------------------|
-| `resolved_community` | server-resolved community UUID | client-claimed `h` tag, event id, payload |
-| `bound_host` | opaque host string from the resolver | raw `Host` header bytes |
-| `actor` | first 16 hex chars of the authed pubkey | private key, NIP-98 token, signature |
+| Field                | What it carries                         | What it does NOT carry                    |
+| -------------------- | --------------------------------------- | ----------------------------------------- |
+| `resolved_community` | server-resolved community UUID          | client-claimed `h` tag, event id, payload |
+| `bound_host`         | opaque host string from the resolver    | raw `Host` header bytes                   |
+| `actor`              | first 16 hex chars of the authed pubkey | private key, NIP-98 token, signature      |
 
-The `actor` prefix is a *hash already* from the client's POV (Schnorr
+The `actor` prefix is a _hash already_ from the client's POV (Schnorr
 X-only) — so the prefix discloses nothing the relay's existing logs
 don't already. This avoids dragging a hash dep into observability code.
 
@@ -95,7 +97,7 @@ exact spec line it grounds in.
 ### Error seam
 
 - **`sanitized_error { reason }`** where `reason ∈ { restricted,
-  invalid, server_error }`. spec: `Inv_SanitizedErrors`, M6 mutation
+invalid, server_error }`. spec: `Inv_SanitizedErrors`, M6 mutation
   (line 778). The alphabet is **closed**: if `IngestError` ever grows a
   fourth variant, `sanitized_reason_for` (in
   `crates/buzz-relay/src/conformance/mod.rs`) goes non-exhaustive and
@@ -111,7 +113,7 @@ exact spec line it grounds in.
 ## Three projection rules that are load-bearing
 
 These are the places a buggy relay could emit an in-spec trace if you
-normalized away the violation. The checker assumes you *did not*.
+normalized away the violation. The checker assumes you _did not_.
 
 1. **`claimed_community` is recorded separately from
    `resolved_community`.** If they ever disagree, the spec says
@@ -129,20 +131,20 @@ normalized away the violation. The checker assumes you *did not*.
 
 ## Where the emitter lives
 
-| File | What it emits |
-|------|---------------|
-| `crates/buzz-relay/src/conformance/mod.rs` | helpers + `EmitGuard` + `sanitized_reason_for` |
-| `crates/buzz-relay/src/conformance/tracers.rs` | `NoopTracer` (prod default), `JsonlTracer` |
-| `crates/buzz-relay/src/handlers/ingest.rs` | `AuthCheck`, `WriteInsert`, `WriteInsertGlobal`, `WriteDuplicate`, outer-wrapper `SanitizedError` |
-| `crates/buzz-relay/src/handlers/req.rs` | **held back** — additive patch for integration onto Max's req.rs work |
+| File                                           | What it emits                                                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `crates/buzz-relay/src/conformance/mod.rs`     | helpers + `EmitGuard` + `sanitized_reason_for`                                                    |
+| `crates/buzz-relay/src/conformance/tracers.rs` | `NoopTracer` (prod default), `JsonlTracer`                                                        |
+| `crates/buzz-relay/src/handlers/ingest.rs`     | `AuthCheck`, `WriteInsert`, `WriteInsertGlobal`, `WriteDuplicate`, outer-wrapper `SanitizedError` |
+| `crates/buzz-relay/src/handlers/req.rs`        | **held back** — additive patch for integration onto Max's req.rs work                             |
 
 ## Where the checker lives
 
-| File | What it does |
-|------|--------------|
-| `crates/buzz-conformance/src/lib.rs` | schema + `Tracer` trait |
-| `crates/buzz-conformance/src/transitions.rs` | spec `Next` re-implementation |
-| `crates/buzz-conformance/src/checker.rs` | replay engine: `IllegalTransition` / `StateMismatch` / `NonInterference` / `CoverageBreach` |
+| File                                         | What it does                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `crates/buzz-conformance/src/lib.rs`         | schema + `Tracer` trait                                                                     |
+| `crates/buzz-conformance/src/transitions.rs` | spec `Next` re-implementation                                                               |
+| `crates/buzz-conformance/src/checker.rs`     | replay engine: `IllegalTransition` / `StateMismatch` / `NonInterference` / `CoverageBreach` |
 
 ## Failure modes — what makes the gate bite
 

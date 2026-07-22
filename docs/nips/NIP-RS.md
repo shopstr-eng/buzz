@@ -1,8 +1,6 @@
-NIP-RS
-======
+# NIP-RS
 
-Cross-Device Read State Sync
------------------------------
+## Cross-Device Read State Sync
 
 `draft` `optional`
 
@@ -335,7 +333,11 @@ Before publishing, a client MUST:
 The client fetches its own blob using its known `d` tag value:
 
 ```json
-{"kinds": [30078], "authors": ["<user-pubkey>"], "#d": ["read-state:<own-slot-id>"]}
+{
+  "kinds": [30078],
+  "authors": ["<user-pubkey>"],
+  "#d": ["read-state:<own-slot-id>"]
+}
 ```
 
 2. Decrypt and merge the fetched blob with local state using `max()` per context.
@@ -352,7 +354,7 @@ The `created_at` monotonicity rule applies relative to the maximum `created_at` 
 Clients SHOULD subscribe to `kind:30078` events for their own pubkey with `#t: ["read-state"]` for live updates:
 
 ```json
-{"kinds": [30078], "authors": ["<user-pubkey>"], "#t": ["read-state"]}
+{ "kinds": [30078], "authors": ["<user-pubkey>"], "#t": ["read-state"] }
 ```
 
 When a blob from another client instance arrives (i.e., its decrypted `client_id` does not match the client's own `client_id`):
@@ -389,6 +391,7 @@ Clients MAY delete blobs from decommissioned client instances by publishing a `k
 A user runs two clients: a desktop app and a mobile app. Each has a random `<slot-id>` with no relationship to its `client_id`.
 
 Desktop blob (`d` tag: `read-state:a3f8c2e1d4b7906f5e2a1c8d3b6e9f04`), decrypted content:
+
 ```json
 {
   "v": 1,
@@ -401,6 +404,7 @@ Desktop blob (`d` tag: `read-state:a3f8c2e1d4b7906f5e2a1c8d3b6e9f04`), decrypted
 ```
 
 Mobile blob (`d` tag: `read-state:7b1d5a3e9c2f804d6e1b3a7c5d8f2e06`), decrypted content:
+
 ```json
 {
   "v": 1,
@@ -415,6 +419,7 @@ Mobile blob (`d` tag: `read-state:7b1d5a3e9c2f804d6e1b3a7c5d8f2e06`), decrypted 
 The `d` tag slot IDs are random and reveal nothing about the client identity. The `client_id` values inside the encrypted content identify which device owns each blob.
 
 Merged effective state:
+
 ```json
 {
   "ctx:AAA": 1700000200,
@@ -435,12 +440,13 @@ The following vectors show plaintext content only. Actual events would carry NIP
   "client_id": "client-aabbccdd",
   "contexts": {
     "group:general": 1700001000,
-    "group:dev":     1700000500
+    "group:dev": 1700000500
   }
 }
 ```
 
 Event tags:
+
 ```json
 [
   ["d", "read-state:1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d"],
@@ -456,12 +462,13 @@ Event tags:
   "client_id": "client-11223344",
   "contexts": {
     "group:general": 1700001200,
-    "group:random":  1700000800
+    "group:random": 1700000800
   }
 }
 ```
 
 Event tags:
+
 ```json
 [
   ["d", "read-state:f0e1d2c3b4a5968778695a4b3c2d1e0f"],
@@ -474,8 +481,8 @@ Event tags:
 ```json
 {
   "group:general": 1700001200,
-  "group:dev":     1700000500,
-  "group:random":  1700000800
+  "group:dev": 1700000500,
+  "group:random": 1700000800
 }
 ```
 
@@ -491,11 +498,17 @@ public_key  = 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
 ```
 
 Plaintext:
+
 ```json
-{"v":1,"client_id":"test-vector-client","contexts":{"group:general":1700001000,"group:dev":1700000500}}
+{
+  "v": 1,
+  "client_id": "test-vector-client",
+  "contexts": { "group:general": 1700001000, "group:dev": 1700000500 }
+}
 ```
 
 Ciphertext (NIP-44 v2, base64):
+
 ```text
 Akt10yui5aDIjfH+xED2Dr1NJ/SGWp85SC/r/bloiLRtj8K59rJrYhcfsNQMoMhpLlvhKqrN0HIGb9/V9BcYKxWV8HT/jjDdvfHLUVfo688I6WpapcX41GzL4VnGGDdFyUom53odJncjHszS3dpTrG1OKp2x9dtdG+924/+Ne49KN4nztd1pikqYeqQuxflKCmh+VcCFbDclQ8a9NUpqWkPpeoweISVVuZDnP9WFoKG5X6YcpXBWH6wjc69xK4cs6KkJ
 ```
@@ -511,6 +524,7 @@ Device A MUST NOT publish to `read-state:aaa111`. Device A MUST generate a new r
 ### Clock Skew Vector
 
 Device A fetches its own blob from two relays:
+
 - Relay 1 returns the blob with `created_at` = 1700001000
 - Relay 2 returns the blob with `created_at` = 1700001500
 
@@ -551,8 +565,8 @@ that expose read activity to other users MUST require explicit user consent.
 
 ## Kind Usage
 
-| Kind | Usage |
-|------|-------|
+| Kind    | Usage                                                                   |
+| ------- | ----------------------------------------------------------------------- |
 | `30078` | Per-client read state blob (parameterized replaceable, [NIP-78](78.md)) |
 
 ## Backwards Compatibility

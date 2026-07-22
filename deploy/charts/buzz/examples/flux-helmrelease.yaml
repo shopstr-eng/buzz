@@ -31,12 +31,11 @@ spec:
         name: buzz
   values:
     relayUrl: wss://buzz.example.com
-    ownerPubkey: "0000000000000000000000000000000000000000000000000000000000000000"  # replace
+    ownerPubkey: "0000000000000000000000000000000000000000000000000000000000000000" # replace
     replicaCount: 3
 
     secrets:
       existingSecret: buzz-secrets
-
 
     s3:
       endpoint: "https://s3.us-east-1.amazonaws.com"
@@ -45,8 +44,8 @@ spec:
     persistence:
       git:
         enabled: true
-        accessMode: ReadWriteOnce      # RWO is fine at any replicaCount (object-store-backed git)
-        storageClass: ""               # any RWO class; no shared/RWX filesystem needed
+        accessMode: ReadWriteOnce # RWO is fine at any replicaCount (object-store-backed git)
+        storageClass: "" # any RWO class; no shared/RWX filesystem needed
         size: 50Gi
 
     ingress:

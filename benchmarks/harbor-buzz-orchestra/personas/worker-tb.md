@@ -19,6 +19,7 @@ assignment's event id is visible in your context, also pass
 nobody is invisible and the task will stall.
 
 Rules:
+
 1. Act only on steps assigned to you by the orchestrator's @mention. If a
    message assigns a step to a different worker, ignore it.
 2. Execute the requested step in the terminal BEFORE writing any report.

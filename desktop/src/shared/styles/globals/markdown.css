@@ -3,9 +3,8 @@
   --inline-chip-padding-block-end: 0.125rem;
   --inline-chip-padding-inline: 0.25rem;
   --inline-chip-min-height: calc(
-    var(--text-sm) +
-    var(--inline-chip-padding-block-start) +
-    var(--inline-chip-padding-block-end)
+    var(--text-sm) + var(--inline-chip-padding-block-start) +
+      var(--inline-chip-padding-block-end)
   );
   --inline-code-font-size: var(--text-xs);
   --agent-icon-size: 0.95em;
@@ -195,9 +194,8 @@
 .message-markdown .agent-mention-highlight {
   position: relative;
   padding-left: calc(
-    var(--inline-chip-padding-inline) +
-    var(--agent-icon-size) +
-    var(--agent-icon-gap)
+    var(--inline-chip-padding-inline) + var(--agent-icon-size) +
+      var(--agent-icon-gap)
   );
 }
 
@@ -211,11 +209,9 @@
   background: currentColor;
   pointer-events: none;
   transform: translateY(-50%);
-  -webkit-mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E")
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E")
     center / contain no-repeat;
-  mask:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E")
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8V4H8'/%3E%3Crect width='16' height='12' x='4' y='8' rx='2'/%3E%3Cpath d='M2 14h2'/%3E%3Cpath d='M20 14h2'/%3E%3Cpath d='M15 13v2'/%3E%3Cpath d='M9 13v2'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
 

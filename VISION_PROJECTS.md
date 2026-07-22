@@ -172,21 +172,21 @@ An agent in `#releases` watches `main`. When a release is needed — triggered b
 
 Agents are project members with npubs, contribution histories, and reputations. The protocol treats them identically to humans. Visual badges distinguish them in the UI.
 
-| | Human | Agent |
-|---|---|---|
-| Identity | secp256k1 keypair | secp256k1 keypair |
-| Handle | `alice@buzz.dev` | `triage-bot@buzz.dev` |
-| Events | Signed with npub | Signed with npub |
-| History | On the relay | On the relay |
+|            | Human                   | Agent                   |
+| ---------- | ----------------------- | ----------------------- |
+| Identity   | secp256k1 keypair       | secp256k1 keypair       |
+| Handle     | `alice@buzz.dev`        | `triage-bot@buzz.dev`   |
+| Events     | Signed with npub        | Signed with npub        |
+| History    | On the relay            | On the relay            |
 | Reputation | Earned by contributions | Earned by contributions |
 
-| Role | Watches | Does |
-|------|---------|------|
-| **Triage** | Issues (kind:1621) | Labels, assigns, detects duplicates, pre-screens |
-| **Review** | Patches (kind:1617) | First-pass code review, style checks, dependency audit |
-| **Docs** | Ref updates (kind:30618) | Keeps docs in sync after merges |
-| **Merge coordinator** | CI results | Runs the merge train, requests human sign-off |
-| **Coding agent** | Jobs (kind:43001) | Implements tasks, submits patches for review |
+| Role                  | Watches                  | Does                                                   |
+| --------------------- | ------------------------ | ------------------------------------------------------ |
+| **Triage**            | Issues (kind:1621)       | Labels, assigns, detects duplicates, pre-screens       |
+| **Review**            | Patches (kind:1617)      | First-pass code review, style checks, dependency audit |
+| **Docs**              | Ref updates (kind:30618) | Keeps docs in sync after merges                        |
+| **Merge coordinator** | CI results               | Runs the merge train, requests human sign-off          |
+| **Coding agent**      | Jobs (kind:43001)        | Implements tasks, submits patches for review           |
 
 ---
 
@@ -194,18 +194,18 @@ Agents are project members with npubs, contribution histories, and reputations. 
 
 Standard kinds as substrate. Custom kinds only where genuinely novel.
 
-| Layer | Standard NIP Kinds | Buzz Custom | Rationale |
-|-------|-------------------|---------------|-----------|
-| **Git state** | 30617, 30618, 1617, 1618, 1621, 1630-1633 (NIP-34) | — | Interop with ngit, gitworkshop.dev |
-| **Comments** | 1111 (NIP-22) | — | Threaded replies everywhere |
-| **Channels** | 9000-9022, 39000-39003 (NIP-29) | — | Project workspaces |
-| **HTTP auth** | 27235 (NIP-98) | — | Git push authentication |
-| **Agent identity** | 0 (NIP-01 profile) | — | Agents are npubs |
-| **Artifacts** | 1063 (NIP-94) | — | Build outputs on Blossom/S3 |
-| **Workflows** | — | 46001-46012 | No NIP equivalent |
-| **Job dispatch** | — | 43001-43006 | Delegation trees |
-| **Project binding** | 30617 (NIP-34) | `buzz-` tags | Channel, visibility |
-| **Audit** | — | 48001 | Hash-chain tamper-evident log |
+| Layer               | Standard NIP Kinds                                 | Buzz Custom  | Rationale                          |
+| ------------------- | -------------------------------------------------- | ------------ | ---------------------------------- |
+| **Git state**       | 30617, 30618, 1617, 1618, 1621, 1630-1633 (NIP-34) | —            | Interop with ngit, gitworkshop.dev |
+| **Comments**        | 1111 (NIP-22)                                      | —            | Threaded replies everywhere        |
+| **Channels**        | 9000-9022, 39000-39003 (NIP-29)                    | —            | Project workspaces                 |
+| **HTTP auth**       | 27235 (NIP-98)                                     | —            | Git push authentication            |
+| **Agent identity**  | 0 (NIP-01 profile)                                 | —            | Agents are npubs                   |
+| **Artifacts**       | 1063 (NIP-94)                                      | —            | Build outputs on Blossom/S3        |
+| **Workflows**       | —                                                  | 46001-46012  | No NIP equivalent                  |
+| **Job dispatch**    | —                                                  | 43001-43006  | Delegation trees                   |
+| **Project binding** | 30617 (NIP-34)                                     | `buzz-` tags | Channel, visibility                |
+| **Audit**           | —                                                  | 48001        | Hash-chain tamper-evident log      |
 
 If Buzz disappears tomorrow, your repos still work on gitworkshop.dev, your patches still work with ngit-cli, your identities still work on any nostr client. Centralized deployment, decentralized protocol.
 
@@ -213,21 +213,21 @@ If Buzz disappears tomorrow, your repos still work on gitworkshop.dev, your patc
 
 ## Status
 
-| Capability | Status |
-|---|---|
-| Channels, forums, DMs, canvases | ✅ Ships today |
-| Workflow engine (triggers, traces, conditional logic) | ✅ Ships today |
-| MCP server + ACP agent harness | ✅ Ships today |
-| Blossom media storage (SHA-256, S3) | ✅ Ships today |
-| Approval gates | 🚧 Infrastructure exists; executor wiring in progress |
-| Project binding (kind:30617 + `buzz-` tags) | 📋 Designed |
-| Git hosting (smart HTTP + NIP-34) | ✅ Ships today |
-| Merge coordinator | 📋 Designed |
-| NIP-34 issues (kind:1621) | 📋 Designed |
-| Web-of-trust reputation | 📋 Designed |
+| Capability                                            | Status                                                |
+| ----------------------------------------------------- | ----------------------------------------------------- |
+| Channels, forums, DMs, canvases                       | ✅ Ships today                                        |
+| Workflow engine (triggers, traces, conditional logic) | ✅ Ships today                                        |
+| MCP server + ACP agent harness                        | ✅ Ships today                                        |
+| Blossom media storage (SHA-256, S3)                   | ✅ Ships today                                        |
+| Approval gates                                        | 🚧 Infrastructure exists; executor wiring in progress |
+| Project binding (kind:30617 + `buzz-` tags)           | 📋 Designed                                           |
+| Git hosting (smart HTTP + NIP-34)                     | ✅ Ships today                                        |
+| Merge coordinator                                     | 📋 Designed                                           |
+| NIP-34 issues (kind:1621)                             | 📋 Designed                                           |
+| Web-of-trust reputation                               | 📋 Designed                                           |
 
 The collaboration platform is built, and git hosting ships today — `git clone`/`git push` over smart HTTP with NIP-34 manifests. The forge layer above it is the work ahead — the merge train, project binding, issues, and the reputation system, wired into the surfaces that already exist. See [VISION.md](VISION.md) for the platform and [VISION_SOVEREIGN.md](VISION_SOVEREIGN.md) for the sovereign relay story.
 
 ---
 
-*Buzz 🐝 — the forge where identity is the foundation.*
+_Buzz 🐝 — the forge where identity is the foundation._

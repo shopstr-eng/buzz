@@ -69,6 +69,7 @@ cargo run -p buzz-admin -- mint-token \
 ```
 
 This generates a keypair and prints:
+
 - **Private key (nsec)** — save for `BUZZ_PRIVATE_KEY` testing
 
 Export:
@@ -80,17 +81,17 @@ export BUZZ_PRIVATE_KEY="nsec1..."   # from the mint output
 
 ### Scope reference
 
-| Scope | Self-mintable | Needed for |
-|-------|:---:|------------|
-| `messages:read` | ✅ | `messages get`, `messages thread`, `messages search`, `feed get` |
-| `messages:write` | ✅ | `messages send`, `messages edit`, `messages delete`, `reactions`, `messages vote` |
-| `channels:read` | ✅ | `channels list`, `channels get`, `channels members` |
-| `channels:write` | ✅ | `channels create`, `channels update`, `channels join`, `channels leave`, `channels topic`, `channels purpose` |
-| `users:read` | ✅ | `users get`, `users presence` |
-| `users:write` | ✅ | `users set-profile`, `users set-presence` |
-| `files:read` | ✅ | — |
-| `files:write` | ✅ | — |
-| `admin:channels` | ❌ | `channels archive`, `channels unarchive`, `channels delete`, `channels add-member`, `channels remove-member` |
+| Scope            | Self-mintable | Needed for                                                                                                    |
+| ---------------- | :-----------: | ------------------------------------------------------------------------------------------------------------- |
+| `messages:read`  |      ✅       | `messages get`, `messages thread`, `messages search`, `feed get`                                              |
+| `messages:write` |      ✅       | `messages send`, `messages edit`, `messages delete`, `reactions`, `messages vote`                             |
+| `channels:read`  |      ✅       | `channels list`, `channels get`, `channels members`                                                           |
+| `channels:write` |      ✅       | `channels create`, `channels update`, `channels join`, `channels leave`, `channels topic`, `channels purpose` |
+| `users:read`     |      ✅       | `users get`, `users presence`                                                                                 |
+| `users:write`    |      ✅       | `users set-profile`, `users set-presence`                                                                     |
+| `files:read`     |      ✅       | —                                                                                                             |
+| `files:write`    |      ✅       | —                                                                                                             |
+| `admin:channels` |      ❌       | `channels archive`, `channels unarchive`, `channels delete`, `channels add-member`, `channels remove-member`  |
 
 ---
 
@@ -543,66 +544,66 @@ buzz channels delete --channel "$FORUM_ID" | jq .
 
 ## 10. Checklist
 
-| # | Command | Tested | Notes |
-|---|---------|:------:|-------|
-| 1 | `messages send` | ☐ | Basic, reply, broadcast, mentions, stdin |
-| 2 | `messages send-diff` | ☐ | Stdin, metadata, branch/PR |
-| 3 | `messages edit` | ☐ | |
-| 4 | `messages delete` | ☐ | |
-| 5 | `messages get` | ☐ | With limit |
-| 6 | `messages thread` | ☐ | |
-| 7 | `messages search` | ☐ | With limit |
-| 8 | `messages vote` | ☐ | Up and down |
-| 9 | `channels list` | ☐ | With visibility, member |
-| 10 | `channels get` | ☐ | |
-| 11 | `channels create` | ☐ | Stream and forum |
-| 12 | `channels update` | ☐ | |
-| 13 | `channels topic` | ☐ | |
-| 14 | `channels purpose` | ☐ | |
-| 15 | `channels join` | ☐ | |
-| 16 | `channels leave` | ☐ | |
-| 17 | `channels archive` | ☐ | Needs admin:channels |
-| 18 | `channels unarchive` | ☐ | Needs admin:channels |
-| 19 | `channels delete` | ☐ | Needs admin:channels |
-| 20 | `channels members` | ☐ | |
-| 21 | `channels add-member` | ☐ | Needs admin:channels |
-| 22 | `channels remove-member` | ☐ | Needs admin:channels |
-| 23 | `canvas get` | ☐ | |
-| 24 | `canvas set` | ☐ | Direct and stdin |
-| 25 | `reactions add` | ☐ | |
-| 26 | `reactions remove` | ☐ | |
-| 27 | `reactions get` | ☐ | |
-| 28 | `dms list` | ☐ | |
-| 29 | `dms open` | ☐ | |
-| 30 | `dms add-member` | ☐ | Needs messages:write |
-| 31 | `users get` | ☐ | Self, single, batch |
-| 32 | `users set-profile` | ☐ | |
-| 33 | `users presence` | ☐ | |
-| 34 | `users set-presence` | ☐ | online, away, offline |
-| 35 | `workflows list` | ☐ | |
-| 36 | `workflows create` | ☐ | |
-| 37 | `workflows update` | ☐ | |
-| 38 | `workflows delete` | ☐ | |
-| 39 | `workflows trigger` | ☐ | |
-| 40 | `workflows runs` | ☐ | |
-| 41 | `workflows get` | ☐ | |
-| 42 | `workflows approve` | ☐ | Validation only (needs approval gate); bare = approve, `--approved false` = deny |
-| 43 | `feed get` | ☐ | |
-| 44 | `social publish` | ☐ | |
-| 45 | `social set-contacts` | ☐ | |
-| 46 | `social event` | ☐ | |
-| 47 | `social notes` | ☐ | |
-| 48 | `social contacts` | ☐ | |
-| 49 | `repos create` | ☐ | |
-| 50 | `repos get` | ☐ | |
-| 51 | `repos list` | ☐ | |
-| 52 | `repos protect list` | ☐ | Empty/populated rules; unknown rules visible; malformed rule reported in validation_error |
-| 53 | `repos protect set` | ☐ | Create and replace complete exact-ref rule; verify metadata is preserved |
-| 54 | `repos protect remove` | ☐ | Remove exact ref; missing rule → NotFound |
-| 55 | `upload file` | ☐ | |
-| 56 | `pack validate` | ☐ | Local, no relay |
-| 57 | `pack inspect` | ☐ | Local, no relay |
-| 58 | `notes set` | ☐ | First publish, edit/carry, --clear-tags, ambiguity, empty-stdin guard |
-| 59 | `notes get` | ☐ | By name, by naddr, --content-only, cross-author, ambiguous → exit 1 |
-| 60 | `notes ls` | ☐ | Own, --author all, --tag, --limit |
-| 61 | `notes rm` | ☐ | Delete→get 404, double-delete idempotent, missing slug → NotFound |
+| #   | Command                  | Tested | Notes                                                                                     |
+| --- | ------------------------ | :----: | ----------------------------------------------------------------------------------------- |
+| 1   | `messages send`          |   ☐    | Basic, reply, broadcast, mentions, stdin                                                  |
+| 2   | `messages send-diff`     |   ☐    | Stdin, metadata, branch/PR                                                                |
+| 3   | `messages edit`          |   ☐    |                                                                                           |
+| 4   | `messages delete`        |   ☐    |                                                                                           |
+| 5   | `messages get`           |   ☐    | With limit                                                                                |
+| 6   | `messages thread`        |   ☐    |                                                                                           |
+| 7   | `messages search`        |   ☐    | With limit                                                                                |
+| 8   | `messages vote`          |   ☐    | Up and down                                                                               |
+| 9   | `channels list`          |   ☐    | With visibility, member                                                                   |
+| 10  | `channels get`           |   ☐    |                                                                                           |
+| 11  | `channels create`        |   ☐    | Stream and forum                                                                          |
+| 12  | `channels update`        |   ☐    |                                                                                           |
+| 13  | `channels topic`         |   ☐    |                                                                                           |
+| 14  | `channels purpose`       |   ☐    |                                                                                           |
+| 15  | `channels join`          |   ☐    |                                                                                           |
+| 16  | `channels leave`         |   ☐    |                                                                                           |
+| 17  | `channels archive`       |   ☐    | Needs admin:channels                                                                      |
+| 18  | `channels unarchive`     |   ☐    | Needs admin:channels                                                                      |
+| 19  | `channels delete`        |   ☐    | Needs admin:channels                                                                      |
+| 20  | `channels members`       |   ☐    |                                                                                           |
+| 21  | `channels add-member`    |   ☐    | Needs admin:channels                                                                      |
+| 22  | `channels remove-member` |   ☐    | Needs admin:channels                                                                      |
+| 23  | `canvas get`             |   ☐    |                                                                                           |
+| 24  | `canvas set`             |   ☐    | Direct and stdin                                                                          |
+| 25  | `reactions add`          |   ☐    |                                                                                           |
+| 26  | `reactions remove`       |   ☐    |                                                                                           |
+| 27  | `reactions get`          |   ☐    |                                                                                           |
+| 28  | `dms list`               |   ☐    |                                                                                           |
+| 29  | `dms open`               |   ☐    |                                                                                           |
+| 30  | `dms add-member`         |   ☐    | Needs messages:write                                                                      |
+| 31  | `users get`              |   ☐    | Self, single, batch                                                                       |
+| 32  | `users set-profile`      |   ☐    |                                                                                           |
+| 33  | `users presence`         |   ☐    |                                                                                           |
+| 34  | `users set-presence`     |   ☐    | online, away, offline                                                                     |
+| 35  | `workflows list`         |   ☐    |                                                                                           |
+| 36  | `workflows create`       |   ☐    |                                                                                           |
+| 37  | `workflows update`       |   ☐    |                                                                                           |
+| 38  | `workflows delete`       |   ☐    |                                                                                           |
+| 39  | `workflows trigger`      |   ☐    |                                                                                           |
+| 40  | `workflows runs`         |   ☐    |                                                                                           |
+| 41  | `workflows get`          |   ☐    |                                                                                           |
+| 42  | `workflows approve`      |   ☐    | Validation only (needs approval gate); bare = approve, `--approved false` = deny          |
+| 43  | `feed get`               |   ☐    |                                                                                           |
+| 44  | `social publish`         |   ☐    |                                                                                           |
+| 45  | `social set-contacts`    |   ☐    |                                                                                           |
+| 46  | `social event`           |   ☐    |                                                                                           |
+| 47  | `social notes`           |   ☐    |                                                                                           |
+| 48  | `social contacts`        |   ☐    |                                                                                           |
+| 49  | `repos create`           |   ☐    |                                                                                           |
+| 50  | `repos get`              |   ☐    |                                                                                           |
+| 51  | `repos list`             |   ☐    |                                                                                           |
+| 52  | `repos protect list`     |   ☐    | Empty/populated rules; unknown rules visible; malformed rule reported in validation_error |
+| 53  | `repos protect set`      |   ☐    | Create and replace complete exact-ref rule; verify metadata is preserved                  |
+| 54  | `repos protect remove`   |   ☐    | Remove exact ref; missing rule → NotFound                                                 |
+| 55  | `upload file`            |   ☐    |                                                                                           |
+| 56  | `pack validate`          |   ☐    | Local, no relay                                                                           |
+| 57  | `pack inspect`           |   ☐    | Local, no relay                                                                           |
+| 58  | `notes set`              |   ☐    | First publish, edit/carry, --clear-tags, ambiguity, empty-stdin guard                     |
+| 59  | `notes get`              |   ☐    | By name, by naddr, --content-only, cross-author, ambiguous → exit 1                       |
+| 60  | `notes ls`               |   ☐    | Own, --author all, --tag, --limit                                                         |
+| 61  | `notes rm`               |   ☐    | Delete→get 404, double-delete idempotent, missing slug → NotFound                         |

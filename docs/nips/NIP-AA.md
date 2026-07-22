@@ -1,8 +1,6 @@
-NIP-AA
-======
+# NIP-AA
 
-Agent Authentication
---------------------
+## Agent Authentication
 
 `draft` `optional` `relay`
 
@@ -29,7 +27,7 @@ This document uses MUST, MUST NOT, SHOULD, SHOULD NOT, MAY, and RECOMMENDED as d
 - **`auth` tag**: The NIP-OA credential tag `["auth", "<owner-pubkey-hex>", "<conditions>", "<sig-hex>"]`.
 - **NIP-42 AUTH event**: A `kind:22242` event sent by a client in response to a relay's `AUTH` challenge.
 - **virtual membership**: Connection access derived from owner membership, with no persistent membership record created for the agent.
-- **active member**: A pubkey is an *active member* if the relay's authoritative access-control state lists it as an unrevoked, current member with an explicit membership record. Virtual members (agents granted access via NIP-AA) are not active members. NIP-43 `kind:13534` events MAY advertise or reflect this state but are not themselves the authoritative source.
+- **active member**: A pubkey is an _active member_ if the relay's authoritative access-control state lists it as an unrevoked, current member with an explicit membership record. Virtual members (agents granted access via NIP-AA) are not active members. NIP-43 `kind:13534` events MAY advertise or reflect this state but are not themselves the authoritative source.
 
 ## Protocol Flow
 
@@ -212,29 +210,29 @@ The cryptographic verification of this tag (preimage, SHA256, and signature) is 
 
 Relays MUST reject each of the following:
 
-| Scenario | Failing Step |
-|----------|-------------|
-| `auth` tag signature is invalid (wrong owner key) | Step 4 |
-| `auth` tag `<owner-pubkey-hex>` equals `event.pubkey` | Step 4 |
-| `auth` tag has fewer or more than four elements | Step 4 |
-| `auth` tag `<conditions>` is malformed (e.g., `kind=01`) | Step 4 |
-| AUTH event `created_at` is `1713957001` with conditions `created_at<1713957000` | Step 4 |
-| AUTH event `created_at` is outside relay freshness window | Step 1 |
-| `owner_pubkey` is not an active relay member | Step 5 |
-| AUTH event has two `auth` tags | Step 3 |
-| AUTH event has no `auth` tag and `agent_pubkey` is not a member | Step 3 |
+| Scenario                                                                          | Failing Step                               |
+| --------------------------------------------------------------------------------- | ------------------------------------------ |
+| `auth` tag signature is invalid (wrong owner key)                                 | Step 4                                     |
+| `auth` tag `<owner-pubkey-hex>` equals `event.pubkey`                             | Step 4                                     |
+| `auth` tag has fewer or more than four elements                                   | Step 4                                     |
+| `auth` tag `<conditions>` is malformed (e.g., `kind=01`)                          | Step 4                                     |
+| AUTH event `created_at` is `1713957001` with conditions `created_at<1713957000`   | Step 4                                     |
+| AUTH event `created_at` is outside relay freshness window                         | Step 1                                     |
+| `owner_pubkey` is not an active relay member                                      | Step 5                                     |
+| AUTH event has two `auth` tags                                                    | Step 3                                     |
+| AUTH event has no `auth` tag and `agent_pubkey` is not a member                   | Step 3                                     |
 | Virtual member submits a relay membership admin command (e.g., add/remove member) | Virtual Member Privileges (post-admission) |
 
 ### Kind enforcement examples
 
 The following examples illustrate optional per-event `kind=` enforcement behavior. The credential used has conditions `kind=1&created_at<1713957000`.
 
-| Scenario | Enforcement enabled? | Result |
-|----------|---------------------|--------|
-| Virtual member publishes `kind:1` | No | Accepted |
-| Virtual member publishes `kind:7` | No | Accepted (connection-level access only) |
-| Virtual member publishes `kind:1` | Yes | Accepted (`kind=1` clause satisfied) |
-| Virtual member publishes `kind:7` | Yes | Rejected (`kind=7` not in credential) |
+| Scenario                          | Enforcement enabled? | Result                                  |
+| --------------------------------- | -------------------- | --------------------------------------- |
+| Virtual member publishes `kind:1` | No                   | Accepted                                |
+| Virtual member publishes `kind:7` | No                   | Accepted (connection-level access only) |
+| Virtual member publishes `kind:1` | Yes                  | Accepted (`kind=1` clause satisfied)    |
+| Virtual member publishes `kind:7` | Yes                  | Rejected (`kind=7` not in credential)   |
 
 ## Relation to Other NIPs
 

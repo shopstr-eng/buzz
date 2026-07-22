@@ -24,7 +24,7 @@ quickstart: false
 # ── Image ────────────────────────────────────────────────────────────────────
 image:
   repository: ghcr.io/block/buzz
-  tag: ""                        # empty → .Chart.AppVersion
+  tag: "" # empty → .Chart.AppVersion
   pullPolicy: IfNotPresent
   pullSecrets: []
 
@@ -180,7 +180,7 @@ relay:
     allowPrivilegeEscalation: false
     capabilities:
       drop: [ALL]
-    readOnlyRootFilesystem: false  # git writes need a writable repo path
+    readOnlyRootFilesystem: false # git writes need a writable repo path
   terminationGracePeriodSeconds: 60
 
   extraEnv: []
@@ -232,15 +232,15 @@ ingress:
   enabled: false
   className: ""
   annotations: {}
-  hosts: []                      # empty → derived from relayUrl
-  tls: []                        # [{hosts: [...], secretName: "..."}]
+  hosts: [] # empty → derived from relayUrl
+  tls: [] # [{hosts: [...], secretName: "..."}]
 
 # ── Gateway API (HTTPRoute) ──────────────────────────────────────────────────
 httproute:
   enabled: false
   parentRefs: []
   hostnames: []
-  rules: []                      # empty → default match-all → service
+  rules: [] # empty → default match-all → service
 
 # ── Git scratch volume ───────────────────────────────────────────────────────
 # Ephemeral working space only. No persistent git state lives here — reads/writes
@@ -261,7 +261,7 @@ persistence:
     mountPath: /var/lib/buzz/git
     storageClass: ""
     accessMode: ReadWriteOnce
-    size: 10Gi                    # PVC capacity or emptyDir sizeLimit
+    size: 10Gi # PVC capacity or emptyDir sizeLimit
     annotations: {}
     existingClaim: ""
 
@@ -281,7 +281,7 @@ postgresql:
     enabled: true
     size: 10Gi
 externalPostgresql:
-  url: ""                        # postgres://user:pass@host:5432/db — placeholder example, sadscan:disable np.postgres.1
+  url: "" # postgres://user:pass@host:5432/db — placeholder example, sadscan:disable np.postgres.1
 
 # ── Redis ────────────────────────────────────────────────────────────────────
 # Eval-only CloudPirates subchart (standalone). REDIS_URL is composed in the
@@ -296,7 +296,7 @@ redis:
     enabled: true
     size: 4Gi
 externalRedis:
-  url: ""                        # redis://:pass@host:6379
+  url: "" # redis://:pass@host:6379
 
 # ── S3 / object storage (media) ──────────────────────────────────────────────
 # Production: point endpoint/bucket at an external S3-compatible service and
@@ -313,7 +313,7 @@ s3:
 # In-cluster MinIO for the quickstart profile only. Production deploys leave
 # this disabled and use s3.* (or secrets.existingSecret) against managed S3.
 minio:
-  enabled: false                 # quickstart: set true for bundled in-cluster MinIO
+  enabled: false # quickstart: set true for bundled in-cluster MinIO
   image: minio/minio:RELEASE.2025-09-07T16-13-09Z
   mcImage: minio/mc:RELEASE.2025-08-13T08-35-41Z
   persistence:
@@ -322,11 +322,11 @@ minio:
 
 # ── Git server config ────────────────────────────────────────────────────────
 git:
-  maxPackBytes: 524288000        # 500 MiB
+  maxPackBytes: 524288000 # 500 MiB
   packCachePath: /var/cache/buzz/git-packs
-  packCacheMaxBytes: 5368709120  # 5 GiB
+  packCacheMaxBytes: 5368709120 # 5 GiB
   packCacheMaxConcurrentPopulations: 2
-  packCacheVolumeSize: 7Gi       # per-pod emptyDir; includes cold-population staging
+  packCacheVolumeSize: 7Gi # per-pod emptyDir; includes cold-population staging
   maxReposPerPubkey: 100
   maxConcurrentOps: 20
 

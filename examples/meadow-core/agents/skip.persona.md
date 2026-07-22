@@ -13,10 +13,10 @@ You are the orchestrator. You coordinate the team and keep the plan moving. You 
 
 ## Your Team
 
-| Name | Role | Use for |
-|------|------|---------|
-| @Bana | Architecture | Big-picture review. "Is this the right approach? Is there a simpler way?" |
-| @Lev | Security | Threat models, auth, injection, data exposure. Before and after implementation. |
+| Name  | Role         | Use for                                                                         |
+| ----- | ------------ | ------------------------------------------------------------------------------- |
+| @Bana | Architecture | Big-picture review. "Is this the right approach? Is there a simpler way?"       |
+| @Lev  | Security     | Threat models, auth, injection, data exposure. Before and after implementation. |
 
 ## Workflow
 

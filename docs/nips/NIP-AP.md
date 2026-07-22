@@ -1,8 +1,6 @@
-NIP-AP
-======
+# NIP-AP
 
-Agent Personas
---------------
+## Agent Personas
 
 `draft` `optional`
 
@@ -76,32 +74,32 @@ The `content` field is a **plaintext** (unencrypted) JSON object:
 
 ### Required fields
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field          | Type   | Description                                   |
+| -------------- | ------ | --------------------------------------------- |
 | `display_name` | string | Human-readable name for the agent definition. |
 
 ### Optional fields
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `system_prompt` | string \| null | `null` | The system prompt injected into agent sessions. Optional since the unified agent model: a definition can be pure configuration (e.g. provider/model only). Readers MUST treat an absent or `null` prompt as "no prompt". |
-| `avatar_url` | string \| null | `null` | URL to an avatar image. |
-| `runtime` | string \| null | `null` | ACP runtime identifier (e.g. `"goose"`, `"claude-code"`). |
-| `model` | string \| null | `null` | Model identifier (e.g. `"claude-opus-4"`). |
-| `provider` | string \| null | `null` | Model provider (e.g. `"anthropic"`). |
-| `name_pool` | string[] | `[]` | Pool of display names for agent instances spawned from this definition. When non-empty, the spawning system picks a name from this pool for each new agent instance, enabling multiple concurrent agents from the same definition to have distinct identities. |
-| `respond_to` | string \| null | `null` | **Reserved.** Default respond-to policy for instances spawned from this definition: `"anyone"`, `"owner-only"`, or `"allowlist"`. `null` defers to the client default. |
-| `respond_to_allowlist` | string[] | `[]` | **Reserved.** Allowlisted author pubkeys (64-char lowercase hex) when `respond_to` is `"allowlist"`. Ignored otherwise. |
-| `parallelism` | integer \| null | `null` | **Reserved.** Default max concurrent turns for spawned instances. `null` defers to the client default. |
+| Field                  | Type            | Default | Description                                                                                                                                                                                                                                                    |
+| ---------------------- | --------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `system_prompt`        | string \| null  | `null`  | The system prompt injected into agent sessions. Optional since the unified agent model: a definition can be pure configuration (e.g. provider/model only). Readers MUST treat an absent or `null` prompt as "no prompt".                                       |
+| `avatar_url`           | string \| null  | `null`  | URL to an avatar image.                                                                                                                                                                                                                                        |
+| `runtime`              | string \| null  | `null`  | ACP runtime identifier (e.g. `"goose"`, `"claude-code"`).                                                                                                                                                                                                      |
+| `model`                | string \| null  | `null`  | Model identifier (e.g. `"claude-opus-4"`).                                                                                                                                                                                                                     |
+| `provider`             | string \| null  | `null`  | Model provider (e.g. `"anthropic"`).                                                                                                                                                                                                                           |
+| `name_pool`            | string[]        | `[]`    | Pool of display names for agent instances spawned from this definition. When non-empty, the spawning system picks a name from this pool for each new agent instance, enabling multiple concurrent agents from the same definition to have distinct identities. |
+| `respond_to`           | string \| null  | `null`  | **Reserved.** Default respond-to policy for instances spawned from this definition: `"anyone"`, `"owner-only"`, or `"allowlist"`. `null` defers to the client default.                                                                                         |
+| `respond_to_allowlist` | string[]        | `[]`    | **Reserved.** Allowlisted author pubkeys (64-char lowercase hex) when `respond_to` is `"allowlist"`. Ignored otherwise.                                                                                                                                        |
+| `parallelism`          | integer \| null | `null`  | **Reserved.** Default max concurrent turns for spawned instances. `null` defers to the client default.                                                                                                                                                         |
 
 The behavioral fields (`respond_to`, `respond_to_allowlist`,
-`parallelism`) are definition-level *defaults*: a spawned instance copies them
+`parallelism`) are definition-level _defaults_: a spawned instance copies them
 at creation and may be reconfigured independently afterwards. They were
 previously carried only on the kind:30177 projection (see
 "Slimming: kind:30177" below).
 
 **Status: reserved.** In the current implementation these behavioral fields are
-*parsed but not yet applied*: readers tolerate and preserve them at the wire
+_parsed but not yet applied_: readers tolerate and preserve them at the wire
 layer, but the local definition store does not yet carry them and writers do
 not emit them. The instance-copy-at-creation behavior activates in a
 subsequent release (the create-path unification). Until then a definition
@@ -120,7 +118,7 @@ Secrets required by agents spawned from a persona MUST be conveyed through a sep
 
 Persona events carry no encryption. This is deliberate:
 
-- Personas are *configuration*, not *state*. They describe what an agent should be, not what it has learned.
+- Personas are _configuration_, not _state_. They describe what an agent should be, not what it has learned.
 - Encryption would prevent relay-side indexing, search, and third-party client rendering — all desirable for definitions that workspace members should browse.
 - Operators who need confidentiality should use relay-level access control ([NIP-42](42.md) authentication + [NIP-29](29.md) group membership) rather than event-level encryption.
 
@@ -214,7 +212,7 @@ surface per-event errors.
 
 ### NIP-OA (Owner Attestation)
 
-Agents spawned from a persona carry [NIP-OA](NIP-OA.md) owner attestation — an `auth` tag proving that `pubkey_o` authorized the agent's key. The persona event itself does not contain attestation; it is the *definition* from which attestation is issued at spawn time.
+Agents spawned from a persona carry [NIP-OA](NIP-OA.md) owner attestation — an `auth` tag proving that `pubkey_o` authorized the agent's key. The persona event itself does not contain attestation; it is the _definition_ from which attestation is issued at spawn time.
 
 ## Relay behavior
 
@@ -230,7 +228,7 @@ Agents spawned from a persona carry [NIP-OA](NIP-OA.md) owner attestation — an
 - **Write authority.** Only the holder of `seckey_o` can publish or replace persona events. NIP-33 replacement is scoped by pubkey — no spoofing risk from other relay members.
 - **Slug collision across pubkeys.** Two different owners can publish personas with the same slug. Clients MUST always scope queries by author pubkey, not just slug.
 - **Metadata exposure.** The `(pubkey, kind:30175, slug)` triple reveals persona existence. Event timestamps reveal edit history.
-- **No owner write authority over agents.** Persona events define *what* an agent should be; they do not grant runtime control over a running agent. The agent consumes the persona at spawn time. Updates to the persona event do not automatically propagate to running agents.
+- **No owner write authority over agents.** Persona events define _what_ an agent should be; they do not grant runtime control over a running agent. The agent consumes the persona at spawn time. Updates to the persona event do not automatically propagate to running agents.
 
 ## Reference test vectors
 
@@ -253,7 +251,15 @@ pubkey_o = 79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
 
 ```jsonc
 // Body (exact UTF-8, no trailing whitespace):
-{"display_name":"Test Agent","system_prompt":"You are a test assistant.","avatar_url":"https://example.com/avatar.png","runtime":"goose","model":"claude-opus-4","provider":"anthropic","name_pool":["Alpha","Beta"]}
+{
+  "display_name": "Test Agent",
+  "system_prompt": "You are a test assistant.",
+  "avatar_url": "https://example.com/avatar.png",
+  "runtime": "goose",
+  "model": "claude-opus-4",
+  "provider": "anthropic",
+  "name_pool": ["Alpha", "Beta"],
+}
 ```
 
 ```
@@ -273,7 +279,7 @@ A definition need not carry a prompt — pure-configuration definitions
 
 ```jsonc
 // Body:
-{"display_name":"Minimal"}
+{ "display_name": "Minimal" }
 ```
 
 ```
@@ -290,7 +296,15 @@ sig             = <BIP-340 Schnorr signature with aux=0x00…00>
 
 ```jsonc
 // Updated body (system_prompt changed):
-{"display_name":"Test Agent","system_prompt":"You are an updated test assistant.","avatar_url":"https://example.com/avatar.png","runtime":"goose","model":"claude-opus-4","provider":"anthropic","name_pool":["Alpha","Beta","Gamma"]}
+{
+  "display_name": "Test Agent",
+  "system_prompt": "You are an updated test assistant.",
+  "avatar_url": "https://example.com/avatar.png",
+  "runtime": "goose",
+  "model": "claude-opus-4",
+  "provider": "anthropic",
+  "name_pool": ["Alpha", "Beta", "Gamma"],
+}
 ```
 
 ```

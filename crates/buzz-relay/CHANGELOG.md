@@ -39,7 +39,6 @@
 - Add NIP-34 git pull request CLI support ([#1279](https://github.com/block/buzz/pull/1279)) ([`5fef9b727`](https://github.com/block/buzz/commit/5fef9b727fb8856d45840ccc97d8ec820a48f6e0))
 - chore: remove LLM-slop comments across the codebase ([#1277](https://github.com/block/buzz/pull/1277)) ([`73cc31cc5`](https://github.com/block/buzz/commit/73cc31cc528318debedd38e85d67b79d1feb55e8))
 
-
 ## relay-v0.1.1
 
 - Initial release

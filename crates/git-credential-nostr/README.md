@@ -59,11 +59,11 @@ git ──stdin──▶ git-credential-nostr ──stdout──▶ git
 
 ## Troubleshooting
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `no nostr key configured` | Neither `$NOSTR_PRIVATE_KEY` nor `nostr.keyfile` is set | Follow the Setup steps above |
-| `insecure permissions` | Key file is readable by group/others | `chmod 600 ~/.nostr/key` |
-| `method hint` | Server's `WWW-Authenticate` header is missing `method="..."` | Upgrade the Buzz server |
-| `useHttpPath` | `credential.useHttpPath` is not set | `git config --global credential.useHttpPath true` |
-| Empty output / no auth | git version is older than 2.46 | Upgrade git |
-| `clock skew` / auth rejected | System clock is off by more than 60 s | Sync your system clock (`ntpdate`, `timedatectl`) |
+| Error                        | Cause                                                        | Fix                                               |
+| ---------------------------- | ------------------------------------------------------------ | ------------------------------------------------- |
+| `no nostr key configured`    | Neither `$NOSTR_PRIVATE_KEY` nor `nostr.keyfile` is set      | Follow the Setup steps above                      |
+| `insecure permissions`       | Key file is readable by group/others                         | `chmod 600 ~/.nostr/key`                          |
+| `method hint`                | Server's `WWW-Authenticate` header is missing `method="..."` | Upgrade the Buzz server                           |
+| `useHttpPath`                | `credential.useHttpPath` is not set                          | `git config --global credential.useHttpPath true` |
+| Empty output / no auth       | git version is older than 2.46                               | Upgrade git                                       |
+| `clock skew` / auth rejected | System clock is off by more than 60 s                        | Sync your system clock (`ntpdate`, `timedatectl`) |

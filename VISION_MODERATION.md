@@ -12,7 +12,7 @@ Most of the nostr ecosystem treats moderation as **admission policy** — allow 
 
 Moderation splits the way it does on every serious platform:
 
-**Community moderation** — subjective, per-community rule enforcement. Your owners and admins decide what's spam in *your* community, what crosses *your* line, who gets a second chance. This layer belongs to the community and never reaches past it: an admin's authority ends at the community boundary, structurally, because every moderation decision is scoped to the tenant it was made in.
+**Community moderation** — subjective, per-community rule enforcement. Your owners and admins decide what's spam in _your_ community, what crosses _your_ line, who gets a second chance. This layer belongs to the community and never reaches past it: an admin's authority ends at the community boundary, structurally, because every moderation decision is scoped to the tenant it was made in.
 
 **Platform safety** — the severe class: illegal content, network-level abuse, legal reporting obligations. That is never delegated to community admins. A community owner or admin can **escalate** a report upward, and the escalation is recorded durably for the platform operator's safety process. The community layer is the front line; the platform layer is the backstop.
 
@@ -64,8 +64,8 @@ This document is about the first layer. The second has its own lane.
 
 ## The Point
 
-A community you can't moderate isn't yours — it just has your name on it. The relay is the workspace; moderation is what makes it *governable* by the people it belongs to. Judgment stays human. Enforcement is structural. Everyone affected hears the truth.
+A community you can't moderate isn't yours — it just has your name on it. The relay is the workspace; moderation is what makes it _governable_ by the people it belongs to. Judgment stays human. Enforcement is structural. Everyone affected hears the truth.
 
 ---
 
-*Buzz 🐝 — your community, your rules.*
+_Buzz 🐝 — your community, your rules._

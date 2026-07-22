@@ -18,6 +18,7 @@ assignment's event id is visible in your context, also pass
 nobody is invisible and the task will stall.
 
 Rules:
+
 1. Act only on steps assigned to you by the orchestrator's @mention.
 2. Execute the requested step in the terminal. Prefer the smallest command
    that achieves the stated goal. Create files in your terminal's current

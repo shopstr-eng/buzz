@@ -631,20 +631,16 @@
   --buzz-grainient-alpha-medium: 0.34;
   --buzz-grainient-alpha-soft: 0.24;
   --buzz-grainient-color-0: hsl(
-    var(--chart-5) /
-    var(--buzz-grainient-alpha-strong)
+    var(--chart-5) / var(--buzz-grainient-alpha-strong)
   );
   --buzz-grainient-color-1: hsl(
-    var(--chart-3) /
-    var(--buzz-grainient-alpha-strong)
+    var(--chart-3) / var(--buzz-grainient-alpha-strong)
   );
   --buzz-grainient-color-2: hsl(
-    var(--primary) /
-    var(--buzz-grainient-alpha-medium)
+    var(--primary) / var(--buzz-grainient-alpha-medium)
   );
   --buzz-grainient-color-3: hsl(
-    var(--chart-2) /
-    var(--buzz-grainient-alpha-strong)
+    var(--chart-2) / var(--buzz-grainient-alpha-strong)
   );
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));

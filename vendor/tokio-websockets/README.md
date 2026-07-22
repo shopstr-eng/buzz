@@ -57,19 +57,19 @@ The `client` feature requires enabling one random number generator:
 
 tokio-websockets makes use of SIMD to accelerate (un-)masking of messages and UTF-8 validation.
 
-| Architecture | Instructions | (Un-)masking   | UTF-8 validation |
-|--------------|--------------|----------------|------------------|
-| aarch64      | NEON         | ✅              | ✅                |
-| arm          | NEON         | ✅ (on nightly) | ✅ (on nightly)   |
-| loongarch64  | LSX          | ✅ (on nightly) | ❌                |
-| loongarch64  | LASX         | ✅ (on nightly) | ❌                |
-| powerpc      | AltiVec      | ✅ (on nightly) | ❌                |
-| powerpc64    | AltiVec      | ✅ (on nightly) | ❌                |
-| powerpc64le  | AltiVec      | ✅ (on nightly) | ❌                |
-| s390x        | z13 vectors  | ✅ (on nightly) | ❌                |
-| x86_64       | SSE2         | ✅              | ❌                |
-| x86_64       | AVX2         | ✅              | ✅                |
-| x86_64       | AVX512       | ✅              | ❌                |
+| Architecture | Instructions | (Un-)masking    | UTF-8 validation |
+| ------------ | ------------ | --------------- | ---------------- |
+| aarch64      | NEON         | ✅              | ✅               |
+| arm          | NEON         | ✅ (on nightly) | ✅ (on nightly)  |
+| loongarch64  | LSX          | ✅ (on nightly) | ❌               |
+| loongarch64  | LASX         | ✅ (on nightly) | ❌               |
+| powerpc      | AltiVec      | ✅ (on nightly) | ❌               |
+| powerpc64    | AltiVec      | ✅ (on nightly) | ❌               |
+| powerpc64le  | AltiVec      | ✅ (on nightly) | ❌               |
+| s390x        | z13 vectors  | ✅ (on nightly) | ❌               |
+| x86_64       | SSE2         | ✅              | ❌               |
+| x86_64       | AVX2         | ✅              | ✅               |
+| x86_64       | AVX512       | ✅              | ❌               |
 
 ## Examples
 

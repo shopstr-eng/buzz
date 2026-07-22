@@ -51,7 +51,8 @@ above).
 > prior session (or a staging config), `unset` them before continuing.
 > A stale `BUZZ_AUTH_TAG` fails the **local dev relay** with
 > `auth_error: signature verification failed` on the first CLI write —
-> it is *not* tolerated.
+> it is _not_ tolerated.
+>
 > ```bash
 > unset BUZZ_AUTH_TAG BUZZ_RELAY_URL BUZZ_PRIVATE_KEY
 > ```
@@ -99,6 +100,7 @@ vars table at the bottom if you need to lock it down.
 > vars in each:
 >
 > **In the relay terminal** (before launching `buzz-relay`):
+>
 > ```bash
 > export BUZZ_BIND_ADDR=0.0.0.0:3030
 > export BUZZ_HEALTH_PORT=8088
@@ -108,6 +110,7 @@ vars table at the bottom if you need to lock it down.
 > ```
 >
 > **In your working / CLI terminal** (for steps 4+ and the ACP harness):
+>
 > ```bash
 > export BUZZ_RELAY_URL=http://localhost:3030    # CLI target
 > # verify the relay on the overridden ports:
@@ -165,11 +168,11 @@ follow [`crates/buzz-cli/TESTING.md`](crates/buzz-cli/TESTING.md).
 The relay's HTTP bridge accepts three endpoints — useful if you're testing
 a client other than `buzz-cli`:
 
-| Endpoint        | Purpose                            |
-|-----------------|------------------------------------|
-| `POST /events`  | Submit a signed Nostr event        |
-| `POST /query`   | NIP-01 filter query (returns events) |
-| `POST /count`   | NIP-45 count query                 |
+| Endpoint       | Purpose                              |
+| -------------- | ------------------------------------ |
+| `POST /events` | Submit a signed Nostr event          |
+| `POST /query`  | NIP-01 filter query (returns events) |
+| `POST /count`  | NIP-45 count query                   |
 
 All three accept NIP-98 auth (recommended) or, in dev mode, an `X-Pubkey`
 header fallback. There is no REST API for fetching message threads — use
@@ -259,45 +262,45 @@ Replies are kind:9 in the same channel; `buzz messages thread --channel <id>
 The relay reads all configuration from environment variables. Defaults work
 out of the box with `just setup` or `just relay`. Common overrides:
 
-| Variable                          | Default                     | Notes |
-|-----------------------------------|-----------------------------|-------|
-| `BUZZ_BIND_ADDR`                | `0.0.0.0:3000`              | Main app port |
-| `BUZZ_HEALTH_PORT`              | `8080`                      | `/_liveness`, `/_readiness` |
-| `BUZZ_METRICS_PORT`             | `9102`                      | Prometheus `/metrics` |
-| `RELAY_URL`                       | `ws://localhost:3000`       | Advertised in NIP-11 / NIP-42 challenges. **Note: no `BUZZ_` prefix.** |
-| `DATABASE_URL`                    | `postgres://buzz:buzz_dev@localhost:5432/buzz` | |
-| `REDIS_URL`                       | `redis://localhost:6379`    | |
-| `BUZZ_REQUIRE_AUTH_TOKEN`       | `false`                     | When true, REST requires NIP-98 (no `X-Pubkey` fallback) |
-| `BUZZ_REQUIRE_RELAY_MEMBERSHIP` | `false`                     | When true, only pubkeys in `relay_members` can connect |
-| `BUZZ_REQUIRE_MEDIA_GET_AUTH`   | `false`                     | When true, `GET`/`HEAD /media/*` require Blossom kind 24242 `t=get` auth plus relay membership. |
-| `BUZZ_AUDIT_ENABLED`            | `true`                      | Tamper-evident event/media audit log. Set `false`/`0`/`off` to skip its DB pool and writes. Does not disable the separate moderation audit trail. |
-| `BUZZ_AUTO_MIGRATE`             | `false`                     | Opt in with `true`/`1`/`yes`/`on` to run embedded SQLx migrations on relay startup |
-| `RELAY_OWNER_PUBKEY`              | unset                       | Bootstrapped as `owner` in `relay_members` at first start |
-| `BUZZ_ALLOW_NIP_OA_AUTH`        | `false`                     | Enable NIP-OA owner attestation for membership |
-| `BUZZ_WEB_DIR`                  | unset (source), `/srv/buzz/web` (container) | Directory containing the invite landing bundle; the production container enables it so `/invite/{code}` always works |
-| `BUZZ_SERVE_GIT_WEB_GUI`        | `false`                     | Set to `true` or `1` to expose the bundled Git repository browser at `/` and `/repos/...`; invite routes do not depend on this flag |
+| Variable                        | Default                                        | Notes                                                                                                                                             |
+| ------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BUZZ_BIND_ADDR`                | `0.0.0.0:3000`                                 | Main app port                                                                                                                                     |
+| `BUZZ_HEALTH_PORT`              | `8080`                                         | `/_liveness`, `/_readiness`                                                                                                                       |
+| `BUZZ_METRICS_PORT`             | `9102`                                         | Prometheus `/metrics`                                                                                                                             |
+| `RELAY_URL`                     | `ws://localhost:3000`                          | Advertised in NIP-11 / NIP-42 challenges. **Note: no `BUZZ_` prefix.**                                                                            |
+| `DATABASE_URL`                  | `postgres://buzz:buzz_dev@localhost:5432/buzz` |                                                                                                                                                   |
+| `REDIS_URL`                     | `redis://localhost:6379`                       |                                                                                                                                                   |
+| `BUZZ_REQUIRE_AUTH_TOKEN`       | `false`                                        | When true, REST requires NIP-98 (no `X-Pubkey` fallback)                                                                                          |
+| `BUZZ_REQUIRE_RELAY_MEMBERSHIP` | `false`                                        | When true, only pubkeys in `relay_members` can connect                                                                                            |
+| `BUZZ_REQUIRE_MEDIA_GET_AUTH`   | `false`                                        | When true, `GET`/`HEAD /media/*` require Blossom kind 24242 `t=get` auth plus relay membership.                                                   |
+| `BUZZ_AUDIT_ENABLED`            | `true`                                         | Tamper-evident event/media audit log. Set `false`/`0`/`off` to skip its DB pool and writes. Does not disable the separate moderation audit trail. |
+| `BUZZ_AUTO_MIGRATE`             | `false`                                        | Opt in with `true`/`1`/`yes`/`on` to run embedded SQLx migrations on relay startup                                                                |
+| `RELAY_OWNER_PUBKEY`            | unset                                          | Bootstrapped as `owner` in `relay_members` at first start                                                                                         |
+| `BUZZ_ALLOW_NIP_OA_AUTH`        | `false`                                        | Enable NIP-OA owner attestation for membership                                                                                                    |
+| `BUZZ_WEB_DIR`                  | unset (source), `/srv/buzz/web` (container)    | Directory containing the invite landing bundle; the production container enables it so `/invite/{code}` always works                              |
+| `BUZZ_SERVE_GIT_WEB_GUI`        | `false`                                        | Set to `true` or `1` to expose the bundled Git repository browser at `/` and `/repos/...`; invite routes do not depend on this flag               |
 
 CLI-side, only two matter for testing:
 
-| Variable                | Default                  | Notes |
-|-------------------------|--------------------------|-------|
-| `BUZZ_RELAY_URL`      | `http://localhost:3000`  | CLI relay base; accepts `ws(s)://` and normalises |
-| `BUZZ_PRIVATE_KEY`    | — (**required**)         | `nsec1…` or 64-char hex |
-| `BUZZ_AUTH_TAG`       | unset                    | Optional NIP-OA owner attestation JSON |
+| Variable           | Default                 | Notes                                             |
+| ------------------ | ----------------------- | ------------------------------------------------- |
+| `BUZZ_RELAY_URL`   | `http://localhost:3000` | CLI relay base; accepts `ws(s)://` and normalises |
+| `BUZZ_PRIVATE_KEY` | — (**required**)        | `nsec1…` or 64-char hex                           |
+| `BUZZ_AUTH_TAG`    | unset                   | Optional NIP-OA owner attestation JSON            |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---------|-------|-----|
-| `relay error 500` or `400: restricted: not a channel member` after a code change | Stale binary | Rebuild and re-export `PATH`; or `cargo run` directly |
-| `Address already in use` on relay start (os error 48 on macOS, 98 on Linux) | Another relay (or stale process) holding `:3000` / `:8080` / `:9102` (or your override ports) | The panic line names the failing port — read it first. Then `lsof -iTCP:3000,8080,9102 -sTCP:LISTEN` (or your override equivalents). Kill the offender (`pkill -f buzz-relay`) or use the port-override block in step 3. If you already overrode and *still* collide, a prior reviewer left a relay running on the same alt ports — kill it or pick fresh ports |
-| `auth_error: BUZZ_PRIVATE_KEY is required` | Env not exported into the CLI's shell | `export BUZZ_PRIVATE_KEY=...` (or pass `--private-key`) |
-| `auth_error: BUZZ_AUTH_TAG verification failed … signature verification failed` | A stale `BUZZ_AUTH_TAG` inherited from a parent shell. The local dev relay rejects it. | `unset BUZZ_AUTH_TAG` (see the scrub block in step 1) |
-| `auth-required: verification failed` on a closed relay | NIP-OA attestation needed | Set `BUZZ_AUTH_TAG` to the owner-issued JSON, or relax `BUZZ_REQUIRE_RELAY_MEMBERSHIP` |
-| `channels list` empty after `channels create` | The CLI doesn't echo the channel UUID; use the filter shown in step 4 | Or `POST /query` with `{"kinds":[39002]}` |
-| ACP agent ignores all events | `BUZZ_ACP_RESPOND_TO=owner-only` (default) with no owner configured | Set `BUZZ_ACP_RESPOND_TO=anyone` for testing |
-| ACP logs `discovered 0 channel(s)` / `no channel subscriptions resolved` | Agent identity isn't a member of any channel | `buzz channels add-member --channel "$CHANNEL" --pubkey "$AGENT_PUBKEY" --role member` from another identity |
-| `GOOSE_MODE` warning, agent hangs | Not set | `export GOOSE_MODE=auto` |
-| Tests pass locally but CI fails | Forgot to run `just ci` | `just ci` runs the gate (fmt, clippy, unit tests, desktop/web builds) |
+| Symptom                                                                          | Cause                                                                                         | Fix                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `relay error 500` or `400: restricted: not a channel member` after a code change | Stale binary                                                                                  | Rebuild and re-export `PATH`; or `cargo run` directly                                                                                                                                                                                                                                                                                                           |
+| `Address already in use` on relay start (os error 48 on macOS, 98 on Linux)      | Another relay (or stale process) holding `:3000` / `:8080` / `:9102` (or your override ports) | The panic line names the failing port — read it first. Then `lsof -iTCP:3000,8080,9102 -sTCP:LISTEN` (or your override equivalents). Kill the offender (`pkill -f buzz-relay`) or use the port-override block in step 3. If you already overrode and _still_ collide, a prior reviewer left a relay running on the same alt ports — kill it or pick fresh ports |
+| `auth_error: BUZZ_PRIVATE_KEY is required`                                       | Env not exported into the CLI's shell                                                         | `export BUZZ_PRIVATE_KEY=...` (or pass `--private-key`)                                                                                                                                                                                                                                                                                                         |
+| `auth_error: BUZZ_AUTH_TAG verification failed … signature verification failed`  | A stale `BUZZ_AUTH_TAG` inherited from a parent shell. The local dev relay rejects it.        | `unset BUZZ_AUTH_TAG` (see the scrub block in step 1)                                                                                                                                                                                                                                                                                                           |
+| `auth-required: verification failed` on a closed relay                           | NIP-OA attestation needed                                                                     | Set `BUZZ_AUTH_TAG` to the owner-issued JSON, or relax `BUZZ_REQUIRE_RELAY_MEMBERSHIP`                                                                                                                                                                                                                                                                          |
+| `channels list` empty after `channels create`                                    | The CLI doesn't echo the channel UUID; use the filter shown in step 4                         | Or `POST /query` with `{"kinds":[39002]}`                                                                                                                                                                                                                                                                                                                       |
+| ACP agent ignores all events                                                     | `BUZZ_ACP_RESPOND_TO=owner-only` (default) with no owner configured                           | Set `BUZZ_ACP_RESPOND_TO=anyone` for testing                                                                                                                                                                                                                                                                                                                    |
+| ACP logs `discovered 0 channel(s)` / `no channel subscriptions resolved`         | Agent identity isn't a member of any channel                                                  | `buzz channels add-member --channel "$CHANNEL" --pubkey "$AGENT_PUBKEY" --role member` from another identity                                                                                                                                                                                                                                                    |
+| `GOOSE_MODE` warning, agent hangs                                                | Not set                                                                                       | `export GOOSE_MODE=auto`                                                                                                                                                                                                                                                                                                                                        |
+| Tests pass locally but CI fails                                                  | Forgot to run `just ci`                                                                       | `just ci` runs the gate (fmt, clippy, unit tests, desktop/web builds)                                                                                                                                                                                                                                                                                           |

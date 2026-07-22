@@ -1,8 +1,6 @@
-NIP-DV
-======
+# NIP-DV
 
-DM Visibility
--------------
+## DM Visibility
 
 `draft` `optional` `relay`
 
@@ -47,9 +45,9 @@ This document uses MUST, MUST NOT, SHOULD, SHOULD NOT, MAY, and RECOMMENDED as d
 
 ## Kinds
 
-| Kind | Name | Signer | Storage | Purpose |
-|------|------|--------|---------|---------|
-| `30622` | DM Visibility Snapshot | relay | parameterized-replaceable | Current per-viewer hidden-DM set |
+| Kind    | Name                   | Signer | Storage                   | Purpose                          |
+| ------- | ---------------------- | ------ | ------------------------- | -------------------------------- |
+| `30622` | DM Visibility Snapshot | relay  | parameterized-replaceable | Current per-viewer hidden-DM set |
 
 `kind:30622` is parameterized-replaceable per NIP-01 (`30000 <= n < 40000`), keyed by its `d` tag. The `d` tag is the viewer's pubkey, so there is exactly one current snapshot per viewer. Clients use the latest valid `kind:30622` signed by the relay identity, addressed by `d` = the viewer's pubkey, as current state.
 
@@ -70,8 +68,8 @@ A visibility snapshot is signed by the relay identity. It carries one `h` tag pe
     ["d", "<viewer-pubkey-hex>"],
     ["p", "<viewer-pubkey-hex>"],
     ["h", "<hidden-dm-channel-id>"],
-    ["h", "<hidden-dm-channel-id>"]
-  ]
+    ["h", "<hidden-dm-channel-id>"],
+  ],
 }
 ```
 

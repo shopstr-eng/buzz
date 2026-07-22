@@ -4,10 +4,10 @@
 
 This chart has two operating profiles selected by values:
 
-| Profile | When | What you get |
-|---|---|---|
-| **Production** (default) | Self-hosted multi-tenant, regulated, or GitOps-managed | External managed Postgres/Redis/S3, `secrets.existingSecret:`, no chart-side autogen, HA-capable (`replicaCount ≥ 2`) |
-| **Quickstart** (eval) | Eval, single-node, one-off demo | In-cluster Postgres + Redis + MinIO subcharts/Deployments, chart auto-generates relay + service secrets, single replica |
+| Profile                  | When                                                   | What you get                                                                                                            |
+| ------------------------ | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| **Production** (default) | Self-hosted multi-tenant, regulated, or GitOps-managed | External managed Postgres/Redis/S3, `secrets.existingSecret:`, no chart-side autogen, HA-capable (`replicaCount ≥ 2`)   |
+| **Quickstart** (eval)    | Eval, single-node, one-off demo                        | In-cluster Postgres + Redis + MinIO subcharts/Deployments, chart auto-generates relay + service secrets, single replica |
 
 ## Quickstart (eval only)
 
@@ -43,12 +43,12 @@ See:
 
 ## Required inputs
 
-| Key | What | When required |
-|---|---|---|
-| `relayUrl` | Public `wss://` URL clients connect to | Always |
-| `ownerPubkey` | 64-char lowercase hex Nostr pubkey of the relay operator | When `relay.requireRelayMembership=true` (default) |
-| `secrets.existingSecret` | Name of pre-created Secret | Production / GitOps |
-| `externalPostgresql.url` / `externalRedis.url` / `s3.endpoint` | External service URLs | Production — when the matching bundled service is disabled (the default) |
+| Key                                                            | What                                                     | When required                                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `relayUrl`                                                     | Public `wss://` URL clients connect to                   | Always                                                                   |
+| `ownerPubkey`                                                  | 64-char lowercase hex Nostr pubkey of the relay operator | When `relay.requireRelayMembership=true` (default)                       |
+| `secrets.existingSecret`                                       | Name of pre-created Secret                               | Production / GitOps                                                      |
+| `externalPostgresql.url` / `externalRedis.url` / `s3.endpoint` | External service URLs                                    | Production — when the matching bundled service is disabled (the default) |
 
 The chart fails at `helm install` / `helm template` time with a clear message if any of these are missing or malformed (see `templates/_validate.tpl`).
 

@@ -16,8 +16,8 @@ migration:
   # CONNECT plus DML on the six gateway tables in this dedicated database.
   runtimeDatabaseRole: buzz_push_gateway_runtime
   resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {cpu: 250m, memory: 128Mi}
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
 publicDeliveryUrl: https://push.buzz.xyz/v1/deliveries/apns
 maxGrantLifetimeSeconds: 2592000
 enabledProfiles: buzz-ios-production
@@ -39,8 +39,8 @@ httpRoute:
   parentRefs: []
   hostnames: [push.buzz.xyz]
 resources:
-  requests: {cpu: 100m, memory: 128Mi}
-  limits: {cpu: "1", memory: 512Mi}
+  requests: { cpu: 100m, memory: 128Mi }
+  limits: { cpu: "1", memory: 512Mi }
 podDisruptionBudget:
   enabled: true
   minAvailable: 1

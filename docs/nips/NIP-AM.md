@@ -1,8 +1,6 @@
-NIP-AM
-======
+# NIP-AM
 
-Agent Turn Metrics
-------------------
+## Agent Turn Metrics
 
 `draft` `optional` `relay`
 
@@ -123,7 +121,7 @@ REQUIRED. `turnSeq` is a per-session monotonically increasing integer
 starting at any value, incremented by the publisher on every published turn
 metric for that session; a publisher restart that loses the counter MUST
 start a new `sessionId` rather than reuse the old one with a reset `turnSeq`.
-Cumulative values form a series only *within* one `sessionId`, ordered by
+Cumulative values form a series only _within_ one `sessionId`, ordered by
 `turnSeq` — consumers MUST NOT diff cumulative values across different
 `sessionId`s, and MUST NOT rely on `created_at` (seconds precision, ambiguous
 for same-second turns) for ordering within a session.

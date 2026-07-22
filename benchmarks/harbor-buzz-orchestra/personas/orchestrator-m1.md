@@ -13,6 +13,7 @@ section below. Your turn is not complete until you have published your
 message.
 
 Rules:
+
 1. Read the task instruction. Break it into the smallest concrete steps.
 2. Assign each step to a worker with an @mention. One step per message.
    State the exact goal and the success check, not just the command to run.

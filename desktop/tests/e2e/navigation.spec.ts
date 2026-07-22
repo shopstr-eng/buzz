@@ -52,27 +52,28 @@ test("global back and forward move across channel routes", async ({ page }) => {
 // chrome drag region, which intercepts the click. Pre-existing breakage —
 // this spec file was never registered in playwright.config.ts until now.
 // The header-chrome rework (PR #941) covers this overlap class.
-test.fixme("direct forum thread links close back to the forum route", async ({
-  page,
-}) => {
-  await page.goto(
-    `/#/channels/${WATERCOLOR_CHANNEL_ID}/posts/${FORUM_POST_ID}`,
-  );
+test.fixme(
+  "direct forum thread links close back to the forum route",
+  async ({ page }) => {
+    await page.goto(
+      `/#/channels/${WATERCOLOR_CHANNEL_ID}/posts/${FORUM_POST_ID}`,
+    );
 
-  await expect(page.getByTestId("chat-title")).toHaveText("watercooler");
-  await expect(
-    page.getByRole("button", { name: "Back to posts" }),
-  ).toBeVisible();
+    await expect(page.getByTestId("chat-title")).toHaveText("watercooler");
+    await expect(
+      page.getByRole("button", { name: "Back to posts" }),
+    ).toBeVisible();
 
-  await page.getByRole("button", { name: "Back to posts" }).click();
+    await page.getByRole("button", { name: "Back to posts" }).click();
 
-  await expect(page).toHaveURL(
-    /#\/channels\/a27e1ee9-76a6-5bdf-a5d5-1d85610dad11$/,
-  );
-  await expect(
-    page.getByText("Release checklist: async feedback thread."),
-  ).toBeVisible();
-});
+    await expect(page).toHaveURL(
+      /#\/channels\/a27e1ee9-76a6-5bdf-a5d5-1d85610dad11$/,
+    );
+    await expect(
+      page.getByText("Release checklist: async feedback thread."),
+    ).toBeVisible();
+  },
+);
 
 test("direct workflow detail links close back to workflows", async ({
   page,

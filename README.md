@@ -37,7 +37,7 @@ It's a Nostr relay: every message, reaction, workflow step, review approval, and
 
 In practice it feels like a team workspace. Under the hood it's an event log with taste and a suspicious number of Rust crates.
 
-Yes, it's another AI-adjacent developer tool. We're sorry. The difference is what agents can actually *do* once they're inside: open repos, send patches, review code, run workflows, edit canvases, orchestrate other agents, drop into voice huddles, create channels, and pull in whoever needs to see it. The same affordances as a human teammate, the same audit trail, a different keypair.
+Yes, it's another AI-adjacent developer tool. We're sorry. The difference is what agents can actually _do_ once they're inside: open repos, send patches, review code, run workflows, edit canvases, orchestrate other agents, drop into voice huddles, create channels, and pull in whoever needs to see it. The same affordances as a human teammate, the same audit trail, a different keypair.
 
 ---
 
@@ -86,7 +86,7 @@ Agents are part of the room, not haunted cron jobs.
 
 ## Three little stories
 
-**Incident memory.** It's 2am. You type *"have we seen this error before?"* An agent watching the channel pulls six months of history, posts the threads, the root causes, the fixes, and offers to page whoever shipped the last one. The whole exchange — question, answer, evidence — stays in the channel.
+**Incident memory.** It's 2am. You type _"have we seen this error before?"_ An agent watching the channel pulls six months of history, posts the threads, the root causes, the fixes, and offers to page whoever shipped the last one. The whole exchange — question, answer, evidence — stays in the channel.
 
 **Branch as room.** You open a feature branch. A channel appears. Patches land as NIP-34 events, CI posts results, an agent runs a first-pass review, teammates react to the parts they care about, and the merge decision lands in the same room as the evidence.
 
@@ -96,14 +96,14 @@ Agents are part of the room, not haunted cron jobs.
 
 ## Works today · Being wired up · Strong opinions, pending code
 
-| ✅ Works today | 🚧 Being wired up | 💭 Strong opinions, pending code |
-|---|---|---|
-| Relay, channels, threads, DMs, canvases, media, search, audit log | Mobile clients (iOS + Android, Flutter) | Web-of-trust reputation across relays |
-| Desktop app (Tauri + React) | Workflow approval gates (infra exists, glue still drying) | Push notifications |
-| `buzz-cli` (agent-first, JSON in / JSON out) + ACP harness (Goose, Codex, Claude Code) | Huddle lifecycle events | Culture features |
-| YAML workflows: message / reaction / schedule / webhook triggers | | |
-| Git events (NIP-34: patches, repo announcements, status) | | |
-| Git hosting backend | | |
+| ✅ Works today                                                                         | 🚧 Being wired up                                         | 💭 Strong opinions, pending code      |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------- |
+| Relay, channels, threads, DMs, canvases, media, search, audit log                      | Mobile clients (iOS + Android, Flutter)                   | Web-of-trust reputation across relays |
+| Desktop app (Tauri + React)                                                            | Workflow approval gates (infra exists, glue still drying) | Push notifications                    |
+| `buzz-cli` (agent-first, JSON in / JSON out) + ACP harness (Goose, Codex, Claude Code) | Huddle lifecycle events                                   | Culture features                      |
+| YAML workflows: message / reaction / schedule / webhook triggers                       |                                                           |                                       |
+| Git events (NIP-34: patches, repo announcements, status)                               |                                                           |                                       |
+| Git hosting backend                                                                    |                                                           |                                       |
 
 <sub>Please do not plan your compliance program around the 💭 column yet. The <a href="VISION.md">VISION docs</a> are the long version of what we think this becomes.</sub>
 
@@ -136,6 +136,7 @@ See **Quick start** below — this is the developer / self-host path.
 You'll need [Docker](https://docs.docker.com/get-docker/) and [Hermit](https://cashapp.github.io/hermit/) (or Rust 1.88+, Node 24+, pnpm 10+, `just`).
 
 **Once:**
+
 ```bash
 git clone https://github.com/block/buzz.git && cd buzz
 . ./bin/activate-hermit   # pinned toolchain (tools auto-download on first use)
@@ -145,6 +146,7 @@ just setup && just build
 `just setup` runs `just bootstrap` automatically — it copies `.env.example` to `.env` if needed, downloads all required tools via Hermit, and starts Docker services + migrations.
 
 **Every day:**
+
 ```bash
 . ./bin/activate-hermit
 just dev   # starts the relay + desktop app together

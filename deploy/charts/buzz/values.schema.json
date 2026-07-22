@@ -15,10 +15,17 @@
       "properties": {
         "repository": { "type": "string", "minLength": 1 },
         "tag": { "type": "string" },
-        "pullPolicy": { "type": "string", "enum": ["Always", "IfNotPresent", "Never"] },
+        "pullPolicy": {
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"]
+        },
         "pullSecrets": {
           "type": "array",
-          "items": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } }
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string" } }
+          }
         }
       },
       "required": ["repository", "pullPolicy"]
@@ -46,7 +53,10 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "existingSecret": { "type": "string", "description": "Name of an externally managed Secret. Production / GitOps path." },
+        "existingSecret": {
+          "type": "string",
+          "description": "Name of an externally managed Secret. Production / GitOps path."
+        },
         "relayPrivateKey": { "type": "string" },
         "gitHookHmacSecret": { "type": "string" }
       }
@@ -79,7 +89,10 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "type": {
+          "type": "string",
+          "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+        },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "healthPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "metricsPort": { "type": "integer", "minimum": 1, "maximum": 65535 }
@@ -99,8 +112,12 @@
       "additionalProperties": false,
       "properties": {
         "enabled": { "type": "boolean" },
-        "minAvailable": { "oneOf": [{ "type": "integer" }, { "type": "string" }] },
-        "maxUnavailable": { "oneOf": [{ "type": "integer" }, { "type": "string" }] }
+        "minAvailable": {
+          "oneOf": [{ "type": "integer" }, { "type": "string" }]
+        },
+        "maxUnavailable": {
+          "oneOf": [{ "type": "integer" }, { "type": "string" }]
+        }
       }
     },
     "ingress": {
@@ -135,8 +152,19 @@
             "enabled": { "type": "boolean" },
             "mountPath": { "type": "string", "minLength": 1 },
             "storageClass": { "type": "string" },
-            "accessMode": { "type": "string", "enum": ["ReadWriteOnce", "ReadWriteMany", "ReadOnlyMany", "ReadWriteOncePod"] },
-            "size": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|K|Ei|Pi|Ti|Gi|Mi|Ki)?$" },
+            "accessMode": {
+              "type": "string",
+              "enum": [
+                "ReadWriteOnce",
+                "ReadWriteMany",
+                "ReadOnlyMany",
+                "ReadWriteOncePod"
+              ]
+            },
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|K|Ei|Pi|Ti|Gi|Mi|Ki)?$"
+            },
             "annotations": { "type": "object" },
             "existingClaim": { "type": "string" }
           }
@@ -189,7 +217,10 @@
           "additionalProperties": false,
           "properties": {
             "enabled": { "type": "boolean" },
-            "size": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|K|Ei|Pi|Ti|Gi|Mi|Ki)?$" }
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|K|Ei|Pi|Ti|Gi|Mi|Ki)?$"
+            }
           }
         }
       }
@@ -201,8 +232,14 @@
         "maxPackBytes": { "type": "integer", "minimum": 1 },
         "packCachePath": { "type": "string", "minLength": 1 },
         "packCacheMaxBytes": { "type": "integer", "minimum": 0 },
-        "packCacheMaxConcurrentPopulations": { "type": "integer", "minimum": 1 },
-        "packCacheVolumeSize": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|K|Ei|Pi|Ti|Gi|Mi|Ki)?$" },
+        "packCacheMaxConcurrentPopulations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "packCacheVolumeSize": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?(E|P|T|G|M|K|Ei|Pi|Ti|Gi|Mi|Ki)?$"
+        },
         "maxReposPerPubkey": { "type": "integer", "minimum": 1 },
         "maxConcurrentOps": { "type": "integer", "minimum": 1 }
       }
@@ -250,7 +287,10 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "type": { "type": "string", "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+            "type": {
+              "type": "string",
+              "enum": ["ClusterIP", "NodePort", "LoadBalancer"]
+            },
             "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
             "annotations": { "type": "object" }
           }

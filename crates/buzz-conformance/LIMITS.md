@@ -1,7 +1,7 @@
 # Limits of the runtime conformance gate
 
 The runtime conformance harness is **not a proof.** It says only this:
-*for the executions that actually ran with tracing on*, the relay's
+_for the executions that actually ran with tracing on_, the relay's
 ingest/read decisions matched a trace the spec accepts. Coverage is
 exactly the set of code paths exercised — no more, no less.
 
@@ -29,7 +29,7 @@ catch" below.
 The gate validates traces from executions you ran. If an unsafe code
 path never executes during a CI run, the gate is silent about it. This
 is why coverage breach is load-bearing: an entry to a critical seam
-that doesn't emit *any* action records `ImplBug`, which fails closed.
+that doesn't emit _any_ action records `ImplBug`, which fails closed.
 
 But coverage breach can only fire on **paths the harness was armed
 on**. If a new endpoint is added that bypasses `EmitGuard::arm`, the

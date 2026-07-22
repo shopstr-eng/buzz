@@ -1,8 +1,6 @@
-NIP-AO
-======
+# NIP-AO
 
-Agent Observability
--------------------
+## Agent Observability
 
 `draft` `optional`
 
@@ -27,9 +25,9 @@ It is strictly scoped to the agent↔owner relationship and carries no durable s
 
 ## Event Kinds
 
-| Kind  | Name                  | Direction         |
-|-------|-----------------------|-------------------|
-| 24200 | Agent Observer Frame  | agent↔owner (both)|
+| Kind  | Name                 | Direction           |
+| ----- | -------------------- | ------------------- |
+| 24200 | Agent Observer Frame | agent↔owner (both) |
 
 Kind 24200 falls in the ephemeral range (20000–29999) defined by NIP-01. Relays
 MUST NOT persist it.
@@ -104,12 +102,12 @@ Unknown `kind` values MUST be ignored.
 
 ### Frame Kinds
 
-| `kind`             | Description                                              |
-|--------------------|----------------------------------------------------------|
-| `acp_read`         | Inbound ACP protocol frame (model → harness)             |
-| `acp_write`        | Outbound ACP protocol frame (harness → model)            |
-| `turn_started`     | A new agent turn has begun                               |
-| `session_resolved` | Session completed or terminated                          |
+| `kind`             | Description                                   |
+| ------------------ | --------------------------------------------- |
+| `acp_read`         | Inbound ACP protocol frame (model → harness)  |
+| `acp_write`        | Outbound ACP protocol frame (harness → model) |
+| `turn_started`     | A new agent turn has begun                    |
+| `session_resolved` | Session completed or terminated               |
 
 ### Control (`frame=control`)
 
@@ -117,7 +115,7 @@ The `content` field decrypts to:
 
 ```json
 {
-  "type":      "cancel_turn",
+  "type": "cancel_turn",
   "channelId": "<channel_uuid>"
 }
 ```
@@ -138,11 +136,13 @@ events with unrecognized `type` values.
 ## Authorization
 
 **Telemetry** (agent → owner):
+
 - `event.pubkey` MUST equal the agent pubkey.
 - `p` tag MUST equal the owner pubkey.
 - Relay MUST verify `is_agent_owner(agent, owner)` via authenticated ownership lookup.
 
 **Control** (owner → agent):
+
 - `event.pubkey` MUST equal the owner pubkey.
 - `p` tag MUST equal the agent pubkey.
 - Relay MUST verify `is_agent_owner(agent, owner)` where agent is resolved from the
@@ -219,8 +219,8 @@ of decrypted payloads and MUST NOT log it at INFO level or above.
 - **NIP-44**: Required encryption algorithm for all `content` fields.
 - **NIP-29**: An `h` tag MAY be included when the agent session is scoped to a
   NIP-29 group.
-- **NIP-XX (PR #2226)**: NIP-XX defines the agent *output* plane; this NIP defines
-  the *observability* plane (internal agent activity). They are complementary and
+- **NIP-XX (PR #2226)**: NIP-XX defines the agent _output_ plane; this NIP defines
+  the _observability_ plane (internal agent activity). They are complementary and
   non-overlapping.
 
 ## Examples
@@ -231,13 +231,13 @@ of decrypted payloads and MUST NOT log it at INFO level or above.
 
 ```json
 {
-  "id":         "a1b2c3d4...",
-  "kind":       24200,
-  "pubkey":     "agent_pubkey_hex",
+  "id": "a1b2c3d4...",
+  "kind": 24200,
+  "pubkey": "agent_pubkey_hex",
   "created_at": 1777464041,
-  "content":    "<NIP-44 v2 ciphertext>",
+  "content": "<NIP-44 v2 ciphertext>",
   "tags": [
-    ["p",     "owner_pubkey_hex"],
+    ["p", "owner_pubkey_hex"],
     ["agent", "agent_pubkey_hex"],
     ["frame", "telemetry"]
   ],
@@ -249,17 +249,17 @@ of decrypted payloads and MUST NOT log it at INFO level or above.
 
 ```json
 {
-  "seq":        42,
-  "timestamp":  "2026-04-29T12:00:41.500Z",
-  "kind":       "acp_write",
+  "seq": 42,
+  "timestamp": "2026-04-29T12:00:41.500Z",
+  "kind": "acp_write",
   "agentIndex": 0,
-  "channelId":  "52a85618-0f8f-4542-94ec-599e6e1c6f2e",
-  "sessionId":  "a1b2c3d4",
-  "turnId":     "e5f6g7h8",
+  "channelId": "52a85618-0f8f-4542-94ec-599e6e1c6f2e",
+  "sessionId": "a1b2c3d4",
+  "turnId": "e5f6g7h8",
   "payload": {
     "jsonrpc": "2.0",
-    "method":  "tools/call",
-    "params":  { "name": "shell", "arguments": { "command": "ls -la" } }
+    "method": "tools/call",
+    "params": { "name": "shell", "arguments": { "command": "ls -la" } }
   }
 }
 ```
@@ -272,13 +272,13 @@ of decrypted payloads and MUST NOT log it at INFO level or above.
 
 ```json
 {
-  "id":         "e5f6a7b8...",
-  "kind":       24200,
-  "pubkey":     "owner_pubkey_hex",
+  "id": "e5f6a7b8...",
+  "kind": 24200,
+  "pubkey": "owner_pubkey_hex",
   "created_at": 1777464042,
-  "content":    "<NIP-44 v2 ciphertext>",
+  "content": "<NIP-44 v2 ciphertext>",
   "tags": [
-    ["p",     "agent_pubkey_hex"],
+    ["p", "agent_pubkey_hex"],
     ["agent", "agent_pubkey_hex"],
     ["frame", "control"]
   ],
@@ -290,7 +290,7 @@ of decrypted payloads and MUST NOT log it at INFO level or above.
 
 ```json
 {
-  "type":      "cancel_turn",
+  "type": "cancel_turn",
   "channelId": "52a85618-0f8f-4542-94ec-599e6e1c6f2e"
 }
 ```

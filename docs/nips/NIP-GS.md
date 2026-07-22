@@ -1,8 +1,6 @@
-NIP-GS
-======
+# NIP-GS
 
-Git Object Signing with Nostr Keys
------------------------------------
+## Git Object Signing with Nostr Keys
 
 `draft` `optional`
 
@@ -104,6 +102,7 @@ CRLF line endings MUST NOT be used.
 
 Verifiers MUST accept a trailing `\n` after the end marker (git may append one).
 Verifiers MUST reject signatures with:
+
 - Missing or malformed armor headers.
 - Multiple armor blocks.
 - Line-wrapped base64.
@@ -122,15 +121,16 @@ The base64 content decodes to a JSON object:
 }
 ```
 
-| Field | Type    | Required | Constraints | Description |
-|-------|---------|----------|-------------|-------------|
-| `v`   | integer | MUST     | MUST be `1` | Schema version. |
-| `pk`  | string  | MUST     | Exactly 64 lowercase hex characters. MUST be a valid BIP-340 x-only public key (i.e., the x-coordinate of a point on the secp256k1 curve). | Signer's public key. |
-| `sig` | string  | MUST     | Exactly 128 lowercase hex characters. | BIP-340 Schnorr signature over the git object. |
-| `t`   | integer | MUST     | MUST be in the range 0 to 4294967295. MUST NOT be negative, a float, or a string. | Claimed unix timestamp (seconds) of the signing event. See Security Considerations for implications of signer-controlled timestamps. |
-| `oa`  | array   | OPTIONAL | If present, MUST be a JSON array of exactly 3 strings. See Owner Attestation. | NIP-OA owner attestation proving the signer was authorized by an owner key. |
+| Field | Type    | Required | Constraints                                                                                                                                | Description                                                                                                                          |
+| ----- | ------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `v`   | integer | MUST     | MUST be `1`                                                                                                                                | Schema version.                                                                                                                      |
+| `pk`  | string  | MUST     | Exactly 64 lowercase hex characters. MUST be a valid BIP-340 x-only public key (i.e., the x-coordinate of a point on the secp256k1 curve). | Signer's public key.                                                                                                                 |
+| `sig` | string  | MUST     | Exactly 128 lowercase hex characters.                                                                                                      | BIP-340 Schnorr signature over the git object.                                                                                       |
+| `t`   | integer | MUST     | MUST be in the range 0 to 4294967295. MUST NOT be negative, a float, or a string.                                                          | Claimed unix timestamp (seconds) of the signing event. See Security Considerations for implications of signer-controlled timestamps. |
+| `oa`  | array   | OPTIONAL | If present, MUST be a JSON array of exactly 3 strings. See Owner Attestation.                                                              | NIP-OA owner attestation proving the signer was authorized by an owner key.                                                          |
 
 JSON parsing rules:
+
 - The base64-decoded bytes MUST be valid UTF-8. Verifiers MUST reject if the
   decoded bytes contain invalid UTF-8 sequences.
 - The content MUST be a single JSON object (not an array, string, or primitive).
@@ -164,6 +164,7 @@ hash = SHA-256( "nostr:git:v1:" || decimal(t) || ":" || oa_binding || payload_by
 ```
 
 Where:
+
 - `"nostr:git:v1:"` is the domain separator: exactly 13 bytes of UTF-8
   (`6e6f7374723a6769743a76313a`).
 - `decimal(t)` is the ASCII decimal encoding of `t` with no leading zeroes
@@ -184,6 +185,7 @@ or modifying the `oa` field invalidates the NIP-GS `sig`. This is intentional �
 the signature envelope is immutable once signed.
 
 The domain separator prevents cross-protocol signature reuse:
+
 - NIP-01 event signatures sign `SHA-256(serialized_event)` — different preimage.
 - NIP-98 HTTP auth signatures sign a kind:27235 event — different preimage.
 - NIP-OA attestations sign `SHA-256("nostr:agent-auth:" || ...)` — different
@@ -271,6 +273,7 @@ The domain separator prevents cross-protocol signature reuse:
     key" — it is NOT a global trust assertion. For verifying other people's
     commits, applications SHOULD implement an allowed-signers mechanism
     (outside the scope of this NIP) rather than relying on `TRUST_FULLY`.
+
 11. Write to the status fd:
     ```
     [GNUPG:] NEWSIG
@@ -287,35 +290,44 @@ Each status line is `[GNUPG:] ` (9 bytes, including trailing space) followed by
 the status keyword and space-separated fields, terminated by `\n`.
 
 **SIG_CREATED** (signing success):
+
 ```
 [GNUPG:] SIG_CREATED D 8 1 00 <t_decimal> <pk_hex_64>
 ```
 
 **GOODSIG** (verification success):
+
 ```
 [GNUPG:] GOODSIG <pk_hex_64> <pk_hex_64>
 ```
+
 First field: key ID. Second field: user ID. Both are the hex pubkey.
 
 **BADSIG** (signature cryptographically invalid):
+
 ```
 [GNUPG:] BADSIG <pk_hex_64> <pk_hex_64>
 ```
 
 **ERRSIG** (signature could not be processed — malformed, unknown version, etc.):
+
 ```
 [GNUPG:] ERRSIG <key_id> 0 0 00 0 9
 ```
+
 Where `<key_id>` is the `pk` field if parseable, or 16 zero bytes
 (`0000000000000000`) if `pk` could not be extracted. The trailing fields are
 fixed placeholders (algo, hash algo, class, timestamp, rc=9 meaning "no public
 key" / general error).
 
 **VALIDSIG** (fingerprint and timestamp — emitted after GOODSIG):
+
 ```
 [GNUPG:] VALIDSIG <fpr> <date> <t_decimal> 0 - - - - - <primary_fpr>
 ```
+
 Where:
+
 - `<fpr>` is the 64-character hex pubkey (fingerprint).
 - `<date>` is the signing date in `YYYY-MM-DD` format, derived from `t`
   interpreted as UTC. Implementations MUST use UTC for this conversion.
@@ -326,7 +338,8 @@ Where:
 - `<primary_fpr>` is the primary key fingerprint (same as `<fpr>` — Nostr keys
   have no subkey hierarchy).
 
-**TRUST_*** (trust level — emitted after VALIDSIG):
+**TRUST\_\*** (trust level — emitted after VALIDSIG):
+
 ```
 [GNUPG:] TRUST_FULLY 0 shell
 [GNUPG:] TRUST_UNDEFINED 0 shell
@@ -383,11 +396,11 @@ The `oa` field, when present, MUST be a JSON array of exactly 3 strings:
 "oa": ["<owner-pubkey-hex>", "<conditions>", "<owner-sig-hex>"]
 ```
 
-| Index | Type   | Constraints | Description |
-|-------|--------|-------------|-------------|
-| 0     | string | 64 lowercase hex characters. MUST be a valid BIP-340 x-only public key. MUST NOT equal `pk`. | Owner's public key. |
-| 1     | string | UTF-8 string. MAY be empty. If non-empty, clauses separated by `&` per NIP-OA. | NIP-OA conditions string. |
-| 2     | string | 128 lowercase hex characters. | BIP-340 Schnorr signature by the owner key. |
+| Index | Type   | Constraints                                                                                  | Description                                 |
+| ----- | ------ | -------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| 0     | string | 64 lowercase hex characters. MUST be a valid BIP-340 x-only public key. MUST NOT equal `pk`. | Owner's public key.                         |
+| 1     | string | UTF-8 string. MAY be empty. If non-empty, clauses separated by `&` per NIP-OA.               | NIP-OA conditions string.                   |
+| 2     | string | 128 lowercase hex characters.                                                                | BIP-340 Schnorr signature by the owner key. |
 
 This mirrors the NIP-OA `auth` tag format (elements 1–3; the `"auth"` label is
 omitted since the field name `oa` already identifies it).
@@ -405,9 +418,11 @@ To verify the owner attestation:
    not equal to `pk`. If invalid, reject (`ERRSIG`).
 
 3. Compute the NIP-OA signing preimage:
+
    ```
    preimage = "nostr:agent-auth:" || pk || ":" || conditions
    ```
+
    Where `pk` is the signer's pubkey from the `pk` field (the agent), and
    `conditions` is the string at index 1 (may be empty).
 
@@ -506,11 +521,11 @@ for any existing `GIT_CONFIG_*` variables they need to preserve.
 
 Implementations MUST accept the following argument patterns:
 
-| Pattern | Mode |
-|---------|------|
-| `--status-fd=<N>` or `--status-fd <N>` | File descriptor N for `[GNUPG:]` status output |
-| `-bsau <key>` | Signing mode. `<key>` is the signing key identifier from `user.signingkey`. |
-| `--verify <file> -` | Verification mode. `<file>` is the path to the detached signature file. |
+| Pattern                                | Mode                                                                        |
+| -------------------------------------- | --------------------------------------------------------------------------- |
+| `--status-fd=<N>` or `--status-fd <N>` | File descriptor N for `[GNUPG:]` status output                              |
+| `-bsau <key>`                          | Signing mode. `<key>` is the signing key identifier from `user.signingkey`. |
+| `--verify <file> -`                    | Verification mode. `<file>` is the path to the detached signature file.     |
 
 Implementations SHOULD silently ignore unrecognized arguments for forward
 compatibility with future git versions (e.g., `--keyid-format=long` from the
@@ -533,6 +548,7 @@ Public key (hex): f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036
 ### Test Payload
 
 A minimal git commit object (170 bytes, no trailing LF):
+
 ```
 tree 4b825dc642cb6eb9a060e54bf899d69f7cb46101
 author Test User <test@example.com> 1700000000 +0000
@@ -542,6 +558,7 @@ Initial commit
 ```
 
 Payload hex (170 bytes):
+
 ```
 7472656520346238323564633634326362366562396130363065353462663839
 39643639663763623436313031 0a 617574686f7220546573742055736572
@@ -586,16 +603,19 @@ c35062148d95b820068c18ab9cf69a8dd2322c606890366d084df7617570b96b
 ```
 
 JSON (compact, no whitespace):
+
 ```
 {"v":1,"pk":"f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9","sig":"c35062148d95b820068c18ab9cf69a8dd2322c606890366d084df7617570b96b7a1aca0a8fcabb2eb4032ebbdf5b43e6bf8633e0d85bcecce28a9e08705b875f","t":1700000000}
 ```
 
 Base64:
+
 ```
 eyJ2IjoxLCJwayI6ImY5MzA4YTAxOTI1OGMzMTA0OTM0NGY4NWY4OWQ1MjI5YjUzMWM4NDU4MzZmOTliMDg2MDFmMTEzYmNlMDM2ZjkiLCJzaWciOiJjMzUwNjIxNDhkOTViODIwMDY4YzE4YWI5Y2Y2OWE4ZGQyMzIyYzYwNjg5MDM2NmQwODRkZjc2MTc1NzBiOTZiN2ExYWNhMGE4ZmNhYmIyZWI0MDMyZWJiZGY1YjQzZTZiZjg2MzNlMGQ4NWJjZWNjZTI4YTllMDg3MDViODc1ZiIsInQiOjE3MDAwMDAwMDB9
 ```
 
 Full armored output:
+
 ```
 -----BEGIN SIGNED MESSAGE-----
 eyJ2IjoxLCJwayI6ImY5MzA4YTAxOTI1OGMzMTA0OTM0NGY4NWY4OWQ1MjI5YjUzMWM4NDU4MzZmOTliMDg2MDFmMTEzYmNlMDM2ZjkiLCJzaWciOiJjMzUwNjIxNDhkOTViODIwMDY4YzE4YWI5Y2Y2OWE4ZGQyMzIyYzYwNjg5MDM2NmQwODRkZjc2MTc1NzBiOTZiN2ExYWNhMGE4ZmNhYmIyZWI0MDMyZWJiZGY1YjQzZTZiZjg2MzNlMGQ4NWJjZWNjZTI4YTllMDg3MDViODc1ZiIsInQiOjE3MDAwMDAwMDB9
@@ -607,6 +627,7 @@ test key and payload above. Implementations using random auxiliary randomness
 will produce different (but equally valid) signatures.
 
 Expected signing status output:
+
 ```
 [GNUPG:] BEGIN_SIGNING
 [GNUPG:] SIG_CREATED D 8 1 00 1700000000 f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9
@@ -615,6 +636,7 @@ Expected signing status output:
 ### Verification Status Output
 
 For a valid signature where `pk` matches `user.signingkey`:
+
 ```
 [GNUPG:] NEWSIG
 [GNUPG:] GOODSIG f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9 f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9
@@ -623,6 +645,7 @@ For a valid signature where `pk` matches `user.signingkey`:
 ```
 
 For a valid signature where `pk` does NOT match `user.signingkey`:
+
 ```
 [GNUPG:] NEWSIG
 [GNUPG:] GOODSIG f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9 f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9
@@ -631,6 +654,7 @@ For a valid signature where `pk` does NOT match `user.signingkey`:
 ```
 
 For an invalid signature:
+
 ```
 [GNUPG:] NEWSIG
 [GNUPG:] BADSIG f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9 f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9
@@ -648,43 +672,61 @@ Conditions:    "" (empty — unconditional authorization)
 ```
 
 NIP-OA preimage:
+
 ```
 "nostr:agent-auth:f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9:"
 ```
 
 SHA-256 of preimage:
+
 ```
 05113b24677b87bedf6498a3addad720003e6af36820e859a26814f149f5a837
 ```
 
 Owner signature (deterministic, no aux randomness):
+
 ```
 54b97dfd2b7d61c1bc1b5facab9d12a991fe0ac3dcb9044b3176f63bebb6f673
 40eb0ad866f2d5568b78b58ba234ee9f490f8c41e64a949c200315801520ed25
 ```
 
 NIP-GS signing hash (with `oa` binding):
+
 ```
 Preimage: "nostr:git:v1:" || "1700000000" || ":" || oa[0] || ":" || oa[1] || ":" || oa[2] || ":" || payload
 SHA-256:  b61f1658836a4f63a2d2f5d621014a064435dde0765dd9c1dc79c9530fe879f0
 ```
 
 NIP-GS signature (deterministic, no aux randomness):
+
 ```
 15592857980b8656ff50303d86acaffcbda397b9c0bb40aebd2fb87a723e466f
 db1a74404d39f9eb7ac220b4f2e061f27523f1af24cbdf991cf42ff9b47034c0
 ```
 
 Full JSON with `oa` (compact):
+
 ```json
-{"v":1,"pk":"f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9","sig":"15592857980b8656ff50303d86acaffcbda397b9c0bb40aebd2fb87a723e466fdb1a74404d39f9eb7ac220b4f2e061f27523f1af24cbdf991cf42ff9b47034c0","t":1700000000,"oa":["79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798","","54b97dfd2b7d61c1bc1b5facab9d12a991fe0ac3dcb9044b3176f63bebb6f67340eb0ad866f2d5568b78b58ba234ee9f490f8c41e64a949c200315801520ed25"]}
+{
+  "v": 1,
+  "pk": "f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9",
+  "sig": "15592857980b8656ff50303d86acaffcbda397b9c0bb40aebd2fb87a723e466fdb1a74404d39f9eb7ac220b4f2e061f27523f1af24cbdf991cf42ff9b47034c0",
+  "t": 1700000000,
+  "oa": [
+    "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798",
+    "",
+    "54b97dfd2b7d61c1bc1b5facab9d12a991fe0ac3dcb9044b3176f63bebb6f67340eb0ad866f2d5568b78b58ba234ee9f490f8c41e64a949c200315801520ed25"
+  ]
+}
 ```
 
 Verification chain:
+
 1. Verify `sig` over `SHA-256("nostr:git:v1:1700000000:" || oa_binding || payload)` against `pk` → commit signed by agent, `oa` is bound ✅
 2. Verify `oa[2]` over `SHA-256("nostr:agent-auth:" || pk || ":" || oa[1])` against `oa[0]` → agent authorized by owner ✅
 
 For a malformed signature (unparseable JSON, unknown version, etc.):
+
 ```
 [GNUPG:] ERRSIG 0000000000000000 0 0 00 0 9
 ```
@@ -732,7 +774,7 @@ invalidates the signature.
 
 The timestamp `t` is set by the signer and included in the signed hash, so it
 cannot be altered by a third party. However, the signer can choose any value —
-including past or future timestamps. The `t` field represents a *claimed*
+including past or future timestamps. The `t` field represents a _claimed_
 signing time, not a verified one. Applications that require trusted timestamps
 SHOULD cross-reference `t` with the commit's `author` and `committer`
 timestamps, or with external timestamping services.
@@ -838,13 +880,13 @@ objects).
 
 ## Relationship to Other NIPs
 
-| NIP | Relationship |
-|-----|-------------|
-| NIP-01 | Nostr event signing uses the same secp256k1 keys but different hash preimages (domain separation). |
-| NIP-34 | Git repository metadata and patches. This NIP adds commit-level signatures to NIP-34 workflows. |
-| NIP-98 | HTTP auth for git transport. NIP-98 authenticates the pusher; this NIP authenticates the committer. They are complementary. |
+| NIP    | Relationship                                                                                                                                                                                                    |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NIP-01 | Nostr event signing uses the same secp256k1 keys but different hash preimages (domain separation).                                                                                                              |
+| NIP-34 | Git repository metadata and patches. This NIP adds commit-level signatures to NIP-34 workflows.                                                                                                                 |
+| NIP-98 | HTTP auth for git transport. NIP-98 authenticates the pusher; this NIP authenticates the committer. They are complementary.                                                                                     |
 | NIP-OA | Owner attestation. The optional `oa` field embeds a NIP-OA credential in the signature envelope, proving the agent was authorized by an owner. With empty conditions, this is pure key-to-key identity binding. |
-| NIP-46 | Remote signing. Future implementations MAY delegate signing to a NIP-46 bunker, keeping the secret key on a separate device. |
+| NIP-46 | Remote signing. Future implementations MAY delegate signing to a NIP-46 bunker, keeping the secret key on a separate device.                                                                                    |
 
 ## Kind Usage
 

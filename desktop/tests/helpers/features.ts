@@ -6,9 +6,7 @@
 // format matches `OVERRIDES_KEY` in `desktop/src/shared/features/store.ts`
 // — bumping `version` in `preview-features.json` updates production AND
 // every spec automatically.
-import featuresManifest from "../../../preview-features.json" with {
-  type: "json",
-};
+import featuresManifest from "../../../preview-features.json" with { type: "json" };
 
 interface FeatureDefinition {
   id: string;

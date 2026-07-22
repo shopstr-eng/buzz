@@ -31,8 +31,8 @@ with a TypeScript lookup table or an id comparison in a component.
 2. **Effort reads/writes go through the descriptor.** Use the effort
    descriptor's `currentPersistence` key — never a raw
    `BUZZ_AGENT_THINKING_EFFORT` literal in UI code. `currentPersistence` is
-   where the value lives *today*; `targetApplication` is how the harness
-   *should* receive it. They intentionally differ until PR 2.7 migrates
+   where the value lives _today_; `targetApplication` is how the harness
+   _should_ receive it. They intentionally differ until PR 2.7 migrates
    Goose/Claude — do not "fix" one to match the other without doing the
    migration work.
 3. **Field absence has a named reason, not a boolean.** Codex effort is
@@ -40,7 +40,7 @@ with a TypeScript lookup table or an id comparison in a component.
    New absences get new named reasons in `AgentConfigOmission` /
    `render` — never a `showX` prop.
 4. **The clearing policy is the named types.** `onContextChange:
-   "resetDependentValues"` (user changed harness/provider → dependent values
+"resetDependentValues"` (user changed harness/provider → dependent values
    reset everywhere) vs `onCatalogMismatch: "explainOnly" | "onboardingCleanup"`
    (an async catalog miss never silently erases saved state outside
    onboarding's named cleanup). Do not add mutation booleans like
@@ -53,7 +53,7 @@ with a TypeScript lookup table or an id comparison in a component.
 6. **One canonical behavior, disclosure presets for visibility.** Behavior
    flags were deliberately killed in #2148 (`CANONICAL_CONFIG_BEHAVIORS`).
    Surface differences are expressed via the `disclosure` preset, not new
-   boolean props.  **Exception:** `onboarding-essential` hides happy-path
+   boolean props. **Exception:** `onboarding-essential` hides happy-path
    helper copy (provider/model descriptions) but a non-null model-discovery
    status always bypasses the preset and renders the status line — enforced
    via `shouldShowModelStatusMessage()` (`AgentConfigFields.tsx`).

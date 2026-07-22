@@ -15,7 +15,7 @@ use serde_json::json;
 use tower::ServiceExt;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 use crate::api;
@@ -49,7 +49,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 
     let git_policy_router = api::git::git_policy_router(state.clone());
 
-    let admin_enabled = state.config.admin.is_some();
+    let admin_enabled = state.config.admin.is_some() || state.config.admin_path_web_dir.is_some();
     let admin_web_dir = state
         .config
         .admin
@@ -150,21 +150,35 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         let web_files = web_dir.map(ServeDir::new);
         let serve_git_web_gui = state.config.serve_git_web_gui;
         let fallback_state = state.clone();
-        let spa_fallback = tower::service_fn(move |req: axum::extract::Request| {
+        let spa_fallback = tower::service_fn(move |mut req: axum::extract::Request| {
             let admin_index = admin_index.clone();
             let admin_files = admin_files.clone();
             let web_index = web_index.clone();
             let web_files = web_files.clone();
             let state = fallback_state.clone();
             async move {
-                let path = req.uri().path();
+                // Clone path to owned String so we can later mutate req.uri_mut()
+                // without a borrow conflict when rewriting the URI for asset serving.
+                let path = req.uri().path().to_owned();
                 let admin_host = api::admin::is_admin_host(&state, req.headers());
                 if admin_host {
                     if let (Some(index), Some(files)) = (admin_index, admin_files) {
-                        if path.starts_with("/assets/") {
+                        // Admin assets may be at /admin/assets/* (built with
+                        // base="/admin/") or /assets/* (built with base="/").
+                        // Normalise: strip any /admin prefix so ServeDir, which
+                        // roots at admin-web/dist/, always sees /assets/*.
+                        let effective = if path.starts_with("/admin/") {
+                            path.trim_start_matches("/admin").to_owned()
+                        } else {
+                            path.clone()
+                        };
+                        if effective.starts_with("/assets/") || effective.starts_with("/favicon") {
+                            if let Ok(new_uri) = effective.parse::<axum::http::Uri>() {
+                                *req.uri_mut() = new_uri;
+                            }
                             return files.oneshot(req).await.map(IntoResponse::into_response);
                         }
-                        if is_admin_spa_path(path) {
+                        if is_admin_spa_path(&path) || is_admin_spa_path(&effective) {
                             return Ok(read_spa_index(&index).await);
                         }
                     }
@@ -175,7 +189,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                     if path.starts_with("/assets/") {
                         return files.oneshot(req).await.map(IntoResponse::into_response);
                     }
-                    if should_serve_spa(path, serve_git_web_gui) {
+                    if should_serve_spa(&path, serve_git_web_gui) {
                         return Ok(read_spa_index(&index).await);
                     }
                 }
@@ -183,6 +197,23 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             }
         });
         merged = merged.fallback_service(spa_fallback);
+    }
+
+    // Path-based admin serving at /admin/ — active when BUZZ_ADMIN_WEB_DIR is set
+    // but BUZZ_ADMIN_HOST is not. The admin bundle is built with base="/admin/" so
+    // all its assets are prefixed; nest_service strips "/admin" before passing to
+    // ServeDir, and the SPA fallback (ServeFile) covers client-side routes.
+    //
+    // Admin API requests (/api/admin/v1/*) are gated by NIP-98 (kind:27235) signed
+    // by RELAY_OWNER_PUBKEY — the browser extension (window.nostr) signs each
+    // request, proving the caller holds the relay owner's private key.
+    if let Some(ref admin_path_dir) = state.config.admin_path_web_dir {
+        let admin_index = admin_path_dir.join("index.html");
+        // nest_service correctly handles /admin, /admin/, and /admin/* (trailing
+        // slash handled by ServeDir's directory-append behaviour).
+        let admin_static = ServeDir::new(admin_path_dir)
+            .fallback(ServeFile::new(admin_index));
+        merged = merged.nest_service("/admin", admin_static);
     }
 
     merged

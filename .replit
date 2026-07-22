@@ -18,6 +18,7 @@ BUZZ_BIND_ADDR = "0.0.0.0:3000"
 BUZZ_GIT_CONFORMANCE_PROBE = "false"
 BUZZ_MEDIA_BASE_URL = "https://1c0b1ec3-3745-44bf-80d6-1143b67e10f0-00-1neui5hpbvv8a-mkvc5y5b.janeway.replit.dev/media"
 BUZZ_REQUIRE_RELAY_MEMBERSHIP = "true"
+BUZZ_SERVE_GIT_WEB_GUI = "true"
 BUZZ_ADMIN_WEB_DIR = "/home/runner/workspace/admin-web/dist"
 BUZZ_WEB_DIR = "/home/runner/workspace/web/dist"
 REDIS_URL = "redis://127.0.0.1:6379"
@@ -51,10 +52,6 @@ args = "bash scripts/start-replit.sh"
 [[ports]]
 localPort = 3000
 externalPort = 3001
-
-[[ports]]
-localPort = 6379
-externalPort = 80
 
 [[ports]]
 localPort = 8080

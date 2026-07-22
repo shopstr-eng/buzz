@@ -25,11 +25,7 @@
     },
     "httpRoute": {
       "type": "object",
-      "required": [
-        "enabled",
-        "parentRefs",
-        "hostnames"
-      ],
+      "required": ["enabled", "parentRefs", "hostnames"],
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -52,9 +48,7 @@
                 "const": true
               }
             },
-            "required": [
-              "enabled"
-            ]
+            "required": ["enabled"]
           },
           "then": {
             "properties": {
@@ -68,12 +62,7 @@
     },
     "networkPolicy": {
       "type": "object",
-      "required": [
-        "enabled",
-        "apnsEgressCidrs",
-        "postgresEgressCidrs",
-        "dns"
-      ],
+      "required": ["enabled", "apnsEgressCidrs", "postgresEgressCidrs", "dns"],
       "properties": {
         "enabled": {
           "const": true
@@ -88,18 +77,11 @@
         },
         "dns": {
           "type": "object",
-          "required": [
-            "namespaceSelector",
-            "podSelector"
-          ]
+          "required": ["namespaceSelector", "podSelector"]
         },
         "monitoring": {
           "type": "object",
-          "required": [
-            "enabled",
-            "namespaceSelector",
-            "podSelector"
-          ],
+          "required": ["enabled", "namespaceSelector", "podSelector"],
           "properties": {
             "enabled": {
               "type": "boolean"
@@ -119,9 +101,7 @@
                     "const": true
                   }
                 },
-                "required": [
-                  "enabled"
-                ]
+                "required": ["enabled"]
               },
               "then": {
                 "properties": {
@@ -140,9 +120,7 @@
     },
     "podMonitor": {
       "type": "object",
-      "required": [
-        "enabled"
-      ],
+      "required": ["enabled"],
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -151,9 +129,7 @@
     },
     "prometheusRule": {
       "type": "object",
-      "required": [
-        "enabled"
-      ],
+      "required": ["enabled"],
       "properties": {
         "enabled": {
           "type": "boolean"
@@ -171,9 +147,7 @@
     },
     "image": {
       "type": "object",
-      "required": [
-        "repository"
-      ],
+      "required": ["repository"],
       "properties": {
         "repository": {
           "type": "string",
@@ -253,14 +227,10 @@
                 "const": true
               }
             },
-            "required": [
-              "enabled"
-            ]
+            "required": ["enabled"]
           }
         },
-        "required": [
-          "podMonitor"
-        ]
+        "required": ["podMonitor"]
       },
       "then": {
         "properties": {
@@ -272,19 +242,13 @@
                     "const": true
                   }
                 },
-                "required": [
-                  "enabled"
-                ]
+                "required": ["enabled"]
               }
             },
-            "required": [
-              "monitoring"
-            ]
+            "required": ["monitoring"]
           }
         },
-        "required": [
-          "networkPolicy"
-        ]
+        "required": ["networkPolicy"]
       }
     },
     {
@@ -298,19 +262,13 @@
                     "const": true
                   }
                 },
-                "required": [
-                  "enabled"
-                ]
+                "required": ["enabled"]
               }
             },
-            "required": [
-              "monitoring"
-            ]
+            "required": ["monitoring"]
           }
         },
-        "required": [
-          "networkPolicy"
-        ]
+        "required": ["networkPolicy"]
       },
       "then": {
         "properties": {
@@ -320,14 +278,10 @@
                 "const": true
               }
             },
-            "required": [
-              "enabled"
-            ]
+            "required": ["enabled"]
           }
         },
-        "required": [
-          "podMonitor"
-        ]
+        "required": ["podMonitor"]
       }
     }
   ]

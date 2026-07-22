@@ -3,7 +3,7 @@
 A stock-Harbor custom agent that runs a manifest-defined team through the real
 Buzz stack. Harbor sees one `BuzzOrchestraAgent`; behind that adapter, one
 orchestrator and N workers coordinate over the production relay/Postgres.
-Each agent runs *inside* the Harbor task container as the same
+Each agent runs _inside_ the Harbor task container as the same
 `buzz-acp` → `buzz-agent` → `buzz-dev-mcp` process tree the desktop app
 launches: the production MCP toolset (shell, file tools, todo) with the
 `buzz` CLI on the shell's PATH. No Harbor fork or patch is required.
@@ -22,15 +22,15 @@ roster:
     role: lead
     count: 1
     endpoint: databricks/frontier
-    prompt: {path: personas/orchestrator.md, sha256: <sha256>}
-    generation: {max_output_tokens: 4096, context_window_tokens: 128000}
+    prompt: { path: personas/orchestrator.md, sha256: <sha256> }
+    generation: { max_output_tokens: 4096, context_window_tokens: 128000 }
   - id: worker
     kind: worker
     role: implementer
     count: 4
     endpoint: databricks/fast-worker
-    prompt: {path: personas/worker.md, sha256: <sha256>}
-    generation: {max_output_tokens: 4096, context_window_tokens: 128000}
+    prompt: { path: personas/worker.md, sha256: <sha256> }
+    generation: { max_output_tokens: 4096, context_window_tokens: 128000 }
 ```
 
 `endpoint_config` maps those endpoint names to providers, URLs, and API-key

@@ -81,11 +81,11 @@ This spawns source and target as PTY-driven subprocesses, feeds the QR URI betwe
 
 **Environment variables:**
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RELAY_URL` | `ws://localhost:3000` | Relay to test against |
-| `TEST_TIMEOUT` | `45` | Per-step timeout in seconds |
-| `SOURCE_CONFIRM_DELAY_MS` | `3000` | Delay after SAS display before confirming (lets relay register subscriptions) |
+| Variable                  | Default               | Description                                                                   |
+| ------------------------- | --------------------- | ----------------------------------------------------------------------------- |
+| `RELAY_URL`               | `ws://localhost:3000` | Relay to test against                                                         |
+| `TEST_TIMEOUT`            | `45`                  | Per-step timeout in seconds                                                   |
+| `SOURCE_CONFIRM_DELAY_MS` | `3000`                | Delay after SAS display before confirming (lets relay register subscriptions) |
 
 ### Manual two-terminal test
 
