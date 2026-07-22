@@ -169,3 +169,7 @@ strip = true
 # allowlist for the auth token). Revert to crates.io once #449 lands upstream.
 [patch.crates-io]
 aws-creds = { git = "https://github.com/tlongwell-block/rust-s3", rev = "c9fce3620dd434c1f810101d672cf384268dbb0f" }
+# tokio-websockets 0.13.2 uses #[target_feature(enable = "avx512f")] which is
+# unstable on Rust < 1.89. This local patch removes AVX-512 (AVX2/SSE2 used
+# instead) so the relay builds on Replit's Nix-pinned Rust 1.88.
+tokio-websockets = { path = "vendor/tokio-websockets" }

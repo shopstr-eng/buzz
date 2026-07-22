@@ -700,3 +700,108 @@ dd {
     margin-top: 0.9rem;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Invite panel
+   --------------------------------------------------------------------------- */
+
+.invite-panel {
+  max-width: 42rem;
+}
+
+.invite-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgb(35 30 30 / 10%);
+  border-radius: 1.25rem;
+  background: rgb(255 255 255 / 45%);
+  backdrop-filter: blur(12px);
+  margin-bottom: 1.25rem;
+}
+
+.invite-ttl-label {
+  display: grid;
+  gap: 0.45rem;
+  flex: 1;
+}
+
+.invite-ttl-label > span {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgb(35 30 30 / 55%);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.invite-ttl-label select {
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgb(35 30 30 / 18%);
+  border-radius: 0.7rem;
+  background: white;
+  color: #231e1e;
+  font-size: 0.95rem;
+}
+
+.invite-result {
+  padding: 1.25rem 1.5rem;
+  border: 1px solid rgb(35 30 30 / 10%);
+  border-radius: 1.25rem;
+  background: rgb(255 255 255 / 60%);
+  backdrop-filter: blur(12px);
+}
+
+.invite-expires {
+  margin: 0 0 0.85rem;
+  font-size: 0.85rem;
+  color: rgb(35 30 30 / 55%);
+  letter-spacing: -0.02em;
+}
+
+.invite-url-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+
+.invite-url {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.87rem;
+  padding: 0.55rem 0.75rem;
+  background: rgb(35 30 30 / 6%);
+  border-radius: 0.5rem;
+  letter-spacing: 0;
+}
+
+.copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 1rem;
+  font-size: 0.87rem;
+}
+
+.copy-btn svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.invite-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgb(35 30 30 / 50%);
+  line-height: 1.5;
+}

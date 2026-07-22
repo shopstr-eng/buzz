@@ -81,6 +81,12 @@ enum Command {
         #[command(subcommand)]
         command: ProductFeedbackCommand,
     },
+    /// Print the hex public key derived from BUZZ_RELAY_PRIVATE_KEY.
+    ///
+    /// Useful for bootstrapping: run this once to get the value to set as
+    /// RELAY_OWNER_PUBKEY, or call it from a startup script to derive it
+    /// automatically.
+    DerivePubkey,
     /// Emit kind:39000/39002 events for channels missing them.
     ///
     /// Channels created via direct SQL (seed scripts, pre-migration data) won't
@@ -134,6 +140,18 @@ async fn run(cli: Cli) -> Result<i32> {
             println!("Public key:  {}", keys.public_key().to_hex());
             println!("Secret key:  {}", keys.secret_key().display_secret());
             println!("\nSet BUZZ_PRIVATE_KEY to the secret key to use this identity.");
+            Ok(0)
+        }
+        Command::DerivePubkey => {
+            let hex = std::env::var("BUZZ_RELAY_PRIVATE_KEY").map_err(|_| {
+                anyhow::anyhow!(
+                    "BUZZ_RELAY_PRIVATE_KEY is not set.\n\
+                     Generate a keypair with `buzz-admin generate-key` and set the secret key."
+                )
+            })?;
+            let keys = Keys::parse(&hex)
+                .map_err(|e| anyhow::anyhow!("invalid BUZZ_RELAY_PRIVATE_KEY: {e}"))?;
+            println!("{}", keys.public_key().to_hex());
             Ok(0)
         }
         Command::Migrate => {

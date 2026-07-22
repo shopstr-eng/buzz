@@ -1,0 +1,1 @@
+- [Replit build quirks for Buzz relay](replit-build-quirks.md) — Rust 1.88 vs 1.95 toolchain, AVX-512 vendor patch, required env vars, startup order.

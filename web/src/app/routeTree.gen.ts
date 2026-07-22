@@ -5,30 +5,30 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from "./routes/root";
-import { Route as reposRouteImport } from "./routes/repos";
 import { Route as indexRouteImport } from "./routes/index";
-import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
+import { Route as reposRouteImport } from "./routes/repos";
 import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
+import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
 import { Route as reposDotrepoIdDotblobDotsplatRouteImport } from "./routes/repos.$repoId.blob.$";
 
-const reposRoute = reposRouteImport.update({
-  id: "/repos",
-  path: "/repos",
-  getParentRoute: () => rootRouteImport,
-} as any);
 const indexRoute = indexRouteImport.update({
   id: "/",
   path: "/",
   getParentRoute: () => rootRouteImport,
 } as any);
-const reposDotrepoIdRoute = reposDotrepoIdRouteImport.update({
-  id: "/repos/$repoId",
-  path: "/repos/$repoId",
+const reposRoute = reposRouteImport.update({
+  id: "/repos",
+  path: "/repos",
   getParentRoute: () => rootRouteImport,
 } as any);
 const inviteDotcodeRoute = inviteDotcodeRouteImport.update({
   id: "/invite/$code",
   path: "/invite/$code",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const reposDotrepoIdRoute = reposDotrepoIdRouteImport.update({
+  id: "/repos/$repoId",
+  path: "/repos/$repoId",
   getParentRoute: () => rootRouteImport,
 } as any);
 const reposDotrepoIdDotblobDotsplatRoute =
@@ -94,13 +94,6 @@ export interface RootRouteChildren {
 
 declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    "/repos": {
-      id: "/repos";
-      path: "/repos";
-      fullPath: "/repos";
-      preLoaderRoute: typeof reposRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
     "/": {
       id: "/";
       path: "/";
@@ -108,11 +101,11 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof indexRouteImport;
       parentRoute: typeof rootRouteImport;
     };
-    "/repos/$repoId": {
-      id: "/repos/$repoId";
-      path: "/repos/$repoId";
-      fullPath: "/repos/$repoId";
-      preLoaderRoute: typeof reposDotrepoIdRouteImport;
+    "/repos": {
+      id: "/repos";
+      path: "/repos";
+      fullPath: "/repos";
+      preLoaderRoute: typeof reposRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/invite/$code": {
@@ -120,6 +113,13 @@ declare module "@tanstack/react-router" {
       path: "/invite/$code";
       fullPath: "/invite/$code";
       preLoaderRoute: typeof inviteDotcodeRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/repos/$repoId": {
+      id: "/repos/$repoId";
+      path: "/repos/$repoId";
+      fullPath: "/repos/$repoId";
+      preLoaderRoute: typeof reposDotrepoIdRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/repos/$repoId/blob/$": {

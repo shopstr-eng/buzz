@@ -7,11 +7,12 @@ use std::sync::Arc;
 
 use auth::authorize;
 use axum::{
+    body::Bytes,
     extract::{Path, Query, State},
-    http::{header, HeaderMap, HeaderValue},
+    http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -24,7 +25,7 @@ pub(crate) fn is_admin_host(state: &crate::state::AppState, headers: &HeaderMap)
     auth::is_admin_host(state, headers)
 }
 
-/// Build the read-only deployment-admin routes.
+/// Build the deployment-admin routes.
 pub fn router(state: Arc<crate::state::AppState>) -> Router {
     Router::new()
         .route("/reports", get(reports))
@@ -35,8 +36,10 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
             "/feedback/{id}/attachments/{sha256}",
             get(feedback_attachment),
         )
+        // Invite management: admin-host-gated invite minting (no NIP-98 required).
+        .route("/invites", post(mint_invite_admin))
         .layer(middleware::from_fn(security_headers))
-        .layer(RequestBodyLimitLayer::new(1024))
+        .layer(RequestBodyLimitLayer::new(4096))
         .with_state(state)
 }
 
@@ -323,6 +326,94 @@ fn summarize_body(body: &str, tags: &serde_json::Value) -> String {
         summary.push('…');
     }
     summary
+}
+
+// ---------------------------------------------------------------------------
+// Invite minting — admin-host gated, no NIP-98 required.
+// ---------------------------------------------------------------------------
+
+/// Optional body for `POST /api/admin/v1/invites`.
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct AdminMintInviteRequest {
+    /// Lifetime in seconds. Clamped to the token module's maximum; defaults to
+    /// 72 h.
+    #[serde(default)]
+    ttl_secs: Option<u64>,
+}
+
+/// `POST /api/admin/v1/invites` — mint an invite link from the admin panel.
+///
+/// Gated by the admin host check (the same guard used by every other admin
+/// endpoint), so no NIP-98 keypair is required from the browser. The relay
+/// derives the community from `RELAY_URL` — this is intentionally
+/// single-community: a deployment that owns one workspace.
+async fn mint_invite_admin(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    // Verify the request comes from the admin host.
+    authorize(&state, &headers).map_err(|e| {
+        (
+            e.status,
+            Json(serde_json::json!({"error": {"code": e.code, "message": e.message}})),
+        )
+    })?;
+
+    // Resolve the community from RELAY_URL (single-community deployment).
+    let relay_host = crate::tenant::relay_url_authority(&state.config.relay_url);
+    let tenant = crate::tenant::bind_deployment_community(&state.db, &state.config.relay_url)
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": {
+                        "code": "community_not_found",
+                        "message": format!(
+                            "no community is seeded for host '{}'; run the setup script first",
+                            relay_host
+                        )
+                    }
+                })),
+            )
+        })?;
+
+    let request: AdminMintInviteRequest = if body.is_empty() {
+        AdminMintInviteRequest::default()
+    } else {
+        serde_json::from_slice(&body).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({"error": {"code": "bad_request", "message": e.to_string()}})),
+            )
+        })?
+    };
+
+    let key = crate::invite_token::derive_invite_key(&state.relay_keypair);
+    let ttl = request
+        .ttl_secs
+        .unwrap_or(crate::invite_token::DEFAULT_INVITE_TTL_SECS);
+    let (code, expires_at) = crate::invite_token::mint_invite(&key, tenant.community(), ttl);
+
+    let scheme = if state.config.relay_url.trim_start().starts_with("wss://") {
+        "https"
+    } else {
+        "http"
+    };
+
+    tracing::info!(
+        community = %tenant.community(),
+        expires_at,
+        "relay invite minted via admin panel"
+    );
+
+    Ok(Json(serde_json::json!({
+        "code": code,
+        "expires_at": expires_at,
+        "url": format!("{scheme}://{}/invite/{}", tenant.host(), code),
+    })))
 }
 
 #[cfg(test)]

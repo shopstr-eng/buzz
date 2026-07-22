@@ -763,6 +763,131 @@ function ArrowIcon() {
   );
 }
 
+function InviteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+    </svg>
+  );
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" style={{ display: "inline", verticalAlign: "middle" }}>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+interface InviteResult {
+  code: string;
+  expires_at: number;
+  url: string;
+}
+
+function Invites() {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [invite, setInvite] = useState<InviteResult | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [ttlDays, setTtlDays] = useState(3);
+
+  async function mintInvite() {
+    setLoading(true);
+    setError(null);
+    setInvite(null);
+    setCopied(false);
+    try {
+      const response = await fetch("/api/admin/v1/invites", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ ttlSecs: ttlDays * 86400 }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error?.message ?? `Request failed (${response.status})`);
+      }
+      setInvite(data as InviteResult);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function copyUrl() {
+    if (!invite) return;
+    navigator.clipboard.writeText(invite.url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  const expiresDate = invite
+    ? new Date(invite.expires_at * 1000).toLocaleString()
+    : null;
+
+  return (
+    <Page
+      eyebrow="Members"
+      title="Invite link"
+      description="Generate a time-limited invite link. Anyone with the link can join this workspace."
+    >
+      <div className="invite-panel">
+        <div className="invite-controls">
+          <label className="invite-ttl-label">
+            <span>Link valid for</span>
+            <select
+              value={ttlDays}
+              onChange={(e: ChangeEvent<HTMLSelectElement>) => setTtlDays(Number(e.target.value))}
+              disabled={loading}
+            >
+              <option value={1}>1 day</option>
+              <option value={3}>3 days</option>
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+            </select>
+          </label>
+          <button type="button" onClick={mintInvite} disabled={loading}>
+            {loading ? "Generating…" : "Generate invite link"}
+          </button>
+        </div>
+
+        {error && (
+          <div className="state error" role="alert">
+            <p>{error}</p>
+          </div>
+        )}
+
+        {invite && (
+          <div className="invite-result">
+            <p className="invite-expires">Expires {expiresDate}</p>
+            <div className="invite-url-row">
+              <code className="invite-url">{invite.url}</code>
+              <button
+                type="button"
+                className="copy-btn"
+                onClick={copyUrl}
+                title="Copy to clipboard"
+              >
+                <CopyIcon /> {copied ? "Copied!" : "Copy"}
+              </button>
+            </div>
+            <p className="invite-hint">
+              Share this link with new members. The link can be used multiple times
+              until it expires.
+            </p>
+          </div>
+        )}
+      </div>
+    </Page>
+  );
+}
+
 export function App() {
   const { path } = usePath();
   const report = path.match(/^\/reports\/([^/]+)$/);
@@ -773,6 +898,8 @@ export function App() {
     <FeedbackDetailView id={feedback[1]} />
   ) : path === "/feedback" ? (
     <FeedbackList />
+  ) : path === "/invites" ? (
+    <Invites />
   ) : (
     <Reports />
   );
@@ -788,6 +915,9 @@ export function App() {
           </span>
         </Link>
         <nav>
+          <Link href="/invites" className="nav-link" activeWhenNested>
+            <InviteIcon /> Invites
+          </Link>
           <Link href="/reports" className="nav-link" activeWhenNested>
             <ReportIcon /> Reports
           </Link>
