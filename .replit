@@ -16,16 +16,16 @@ timeoutMs = 180000
 BUZZ_AUTO_MIGRATE = "false"
 BUZZ_BIND_ADDR = "0.0.0.0:5000"
 BUZZ_GIT_CONFORMANCE_PROBE = "false"
-BUZZ_MEDIA_BASE_URL = "https://1c0b1ec3-3745-44bf-80d6-1143b67e10f0-00-1neui5hpbvv8a.janeway.replit.dev/media"
+BUZZ_REQUIRE_AUTH_TOKEN = "true"
 BUZZ_REQUIRE_RELAY_MEMBERSHIP = "true"
 BUZZ_SERVE_GIT_WEB_GUI = "true"
-BUZZ_ADMIN_WEB_DIR = "/home/runner/workspace/admin-web/dist"
-BUZZ_WEB_DIR = "/home/runner/workspace/web/dist"
 REDIS_URL = "redis://127.0.0.1:6379"
-RELAY_URL = "wss://1c0b1ec3-3745-44bf-80d6-1143b67e10f0-00-1neui5hpbvv8a.janeway.replit.dev"
 RELAY_OWNER_PUBKEY = "b67348f092c3821745acc619a353cc8d7ed16401d422e41204a78500ee04a2f7"
 RUST_LOG = "buzz_relay=info,buzz_db=info,tower_http=warn"
-BUZZ_REQUIRE_AUTH_TOKEN = "true"
+
+[deployment]
+deploymentTarget = "vm"
+run = ["bash", "scripts/start-replit.sh"]
 
 [workflows]
 runButton = "Project"

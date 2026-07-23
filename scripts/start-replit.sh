@@ -18,12 +18,18 @@ export PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/home/runner/workspac
 # Disable git object-store conformance probe (requires S3 which isn't configured).
 export BUZZ_GIT_CONFORMANCE_PROBE="${BUZZ_GIT_CONFORMANCE_PROBE:-false}"
 
-# Always derive RELAY_URL from the current REPLIT_DEV_DOMAIN so the community
-# row is seeded for the host the Replit proxy actually sends in the Host header.
-# This overrides any stale hardcoded value in the shared env vars.
+# Derive RELAY_URL from the current domain so the community row is seeded for
+# the host the Replit proxy actually sends in the Host header.
+# In dev: REPLIT_DEV_DOMAIN is set (*.janeway.replit.dev).
+# In prod: REPLIT_DOMAINS is set (*.replit.app or custom domain), REPLIT_DEV_DOMAIN is not.
 if [[ -n "${REPLIT_DEV_DOMAIN:-}" ]]; then
   export RELAY_URL="wss://${REPLIT_DEV_DOMAIN}"
   export BUZZ_MEDIA_BASE_URL="https://${REPLIT_DEV_DOMAIN}/media"
+elif [[ -n "${REPLIT_DOMAINS:-}" ]]; then
+  # REPLIT_DOMAINS may be comma-separated; take the first entry.
+  PRIMARY_DOMAIN="$(echo "${REPLIT_DOMAINS}" | cut -d',' -f1 | tr -d ' ')"
+  export RELAY_URL="wss://${PRIMARY_DOMAIN}"
+  export BUZZ_MEDIA_BASE_URL="https://${PRIMARY_DOMAIN}/media"
 fi
 
 # ---------------------------------------------------------------------------
