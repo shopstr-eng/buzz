@@ -7,6 +7,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use buzz_core::tenant::CommunityId;
+use uuid::Uuid;
 
 /// Errors from action sink operations.
 #[derive(Debug, thiserror::Error)]
@@ -66,4 +67,27 @@ pub trait ActionSink: Send + Sync {
         text: &str,
         author_pubkey: &str,
     ) -> Pin<Box<dyn Future<Output = Result<String, ActionSinkError>> + Send + '_>>;
+
+    /// Emit a workflow run-status event (e.g. kind:46001 triggered, 46005 completed, 46006 failed).
+    ///
+    /// Signed by the relay keypair and published into the workflow's channel so
+    /// live subscribers see run state transitions without polling the DB.
+    ///
+    /// - `community_id`: the community the workflow run belongs to
+    /// - `channel_id`: channel the workflow is bound to; `None` means no event is emitted
+    /// - `workflow_id`: the workflow UUID (carried in the `workflow` tag)
+    /// - `run_id`: the run UUID (carried in the `run` tag)
+    /// - `kind`: event kind (46001 = triggered, 46005 = completed, 46006 = failed)
+    /// - `content`: optional content (e.g. error message for 46006)
+    ///
+    /// Errors are logged internally; this method always resolves to `()`.
+    fn emit_run_status(
+        &self,
+        community_id: CommunityId,
+        channel_id: Option<Uuid>,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        kind: u32,
+        content: &str,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
 }

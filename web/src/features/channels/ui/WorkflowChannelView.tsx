@@ -6,11 +6,13 @@
  * status badges and Approve / Deny controls for approval-gated runs.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Play,
   Save,
   Plus,
+  Pencil,
+  Trash2,
   ChevronDown,
   ChevronUp,
   CheckCircle,
@@ -233,12 +235,22 @@ function ReferenceCard() {
 function WorkflowEditor({
   onSave,
   isSaving,
+  initialYaml,
+  existingId,
 }: {
   onSave: (name: string, yaml: string, existingId?: string) => Promise<void>;
   isSaving: boolean;
+  initialYaml?: string;
+  existingId?: string;
 }) {
-  const [yaml, setYaml] = useState(EXAMPLE_YAML);
+  const [yaml, setYaml] = useState(initialYaml ?? EXAMPLE_YAML);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset editor content whenever we switch to a different workflow (or clear to new).
+  useEffect(() => {
+    setYaml(initialYaml ?? EXAMPLE_YAML);
+    setError(null);
+  }, [initialYaml, existingId]);
 
   function extractName(y: string): string {
     const m = y.match(/^name:\s*['"]?(.+?)['"]?\s*$/m);
@@ -250,7 +262,7 @@ function WorkflowEditor({
     if (!yaml.trim()) { setError("Workflow YAML cannot be empty."); return; }
     try {
       setError(null);
-      await onSave(name, yaml);
+      await onSave(name, yaml, existingId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save workflow.");
     }
@@ -260,7 +272,7 @@ function WorkflowEditor({
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-black/60 dark:text-white/60">
-          Workflow YAML
+          {existingId ? "Edit workflow" : "New workflow"}
         </span>
         <button
           type="button"
@@ -304,6 +316,8 @@ function WorkflowList({
   isLoading,
   runs,
   onRun,
+  onEdit,
+  onDelete,
   onApprove,
   onDeny,
 }: {
@@ -311,11 +325,15 @@ function WorkflowList({
   isLoading: boolean;
   runs: WorkflowRun[];
   onRun: (workflowId: string) => void;
+  onEdit: (workflowId: string, yaml: string) => void;
+  onDelete: (workflowId: string) => void;
   /** Called with the approval token hash (not the run ID). */
   onApprove: (approvalToken: string) => void;
   onDeny: (approvalToken: string) => void;
 }) {
   const [expandedRuns, setExpandedRuns] = useState<string | null>(null);
+  /** workflowId currently pending delete confirmation, null if none. */
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -348,6 +366,9 @@ function WorkflowList({
         const wfRuns = runs.filter((r) => r.workflowId === wf.workflowId);
         const latestRun = wfRuns[0];
         const isExpanded = expandedRuns === wf.workflowId;
+        const hasActiveRun = wfRuns.some(
+          (r) => r.status === "triggered" || r.status === "running",
+        );
 
         return (
           <div
@@ -382,14 +403,76 @@ function WorkflowList({
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => onRun(wf.workflowId)}
-                className="flex shrink-0 items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-violet-700"
-              >
-                <Play className="h-3 w-3" />
-                Run
-              </button>
+              {confirmDeleteId === wf.workflowId ? (
+                /* ── Inline delete confirmation ── */
+                <>
+                  {hasActiveRun ? (
+                    <span className="shrink-0 text-[11px] text-amber-700 dark:text-amber-400">
+                      Run in progress — wait for it to finish.
+                    </span>
+                  ) : (
+                    <>
+                      <span className="shrink-0 text-[11px] text-black/60 dark:text-white/60">
+                        Delete?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!hasActiveRun) {
+                            onDelete(wf.workflowId);
+                          }
+                          setConfirmDeleteId(null);
+                        }}
+                        className="flex shrink-0 items-center gap-1 rounded-md bg-red-600 px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-red-700"
+                      >
+                        Yes, delete
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="flex shrink-0 items-center gap-1 rounded-md border border-black/15 px-2.5 py-1 text-[11px] text-black/60 transition-colors hover:bg-black/5 dark:border-white/15 dark:text-white/60 dark:hover:bg-white/5"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                /* ── Normal action buttons ── */
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(wf.workflowId)}
+                    disabled={hasActiveRun}
+                    className="flex shrink-0 items-center gap-1 rounded-md border border-black/15 px-2.5 py-1 text-[11px] text-black/60 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-black/15 disabled:hover:bg-transparent disabled:hover:text-black/60 dark:border-white/15 dark:text-white/60 dark:hover:border-red-700 dark:hover:bg-red-900/20 dark:hover:text-red-400 dark:disabled:hover:border-white/15 dark:disabled:hover:bg-transparent dark:disabled:hover:text-white/60"
+                    title={hasActiveRun ? "Cannot delete while a run is in progress" : "Delete workflow"}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onEdit(wf.workflowId, wf.yaml)}
+                    className="flex shrink-0 items-center gap-1 rounded-md border border-black/15 px-2.5 py-1 text-[11px] text-black/60 transition-colors hover:bg-black/5 dark:border-white/15 dark:text-white/60 dark:hover:bg-white/5"
+                    title="Edit workflow"
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onRun(wf.workflowId)}
+                    disabled={hasActiveRun}
+                    className="flex shrink-0 items-center gap-1 rounded-md bg-violet-600 px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-violet-600"
+                    title={hasActiveRun ? "A run is already in progress" : "Run workflow"}
+                  >
+                    <Play className="h-3 w-3" />
+                    Run
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Run log */}
@@ -421,20 +504,35 @@ function WorkflowList({
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function WorkflowChannelView({ channel }: { channel: Channel }) {
-  const { workflows, isLoading, publishWorkflow } = useWorkflows(channel.groupId);
+  const { workflows, isLoading, publishWorkflow, deleteWorkflow } = useWorkflows(channel.groupId);
   const { runs, triggerRun, approveRun, error: runError } = useWorkflowRuns(channel.groupId);
 
   const [isSaving, setIsSaving] = useState(false);
   const [tab, setTab] = useState<"editor" | "workflows">("workflows");
+  // When non-null, the editor is in "edit existing" mode.
+  const [editingWorkflow, setEditingWorkflow] = useState<{ id: string; yaml: string } | null>(null);
 
   async function handleSave(name: string, yaml: string, existingId?: string) {
     setIsSaving(true);
     try {
       await publishWorkflow(name, yaml, existingId);
+      // After saving, clear any editing context and return to the list.
+      setEditingWorkflow(null);
       setTab("workflows");
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function handleEdit(workflowId: string, yaml: string) {
+    setEditingWorkflow({ id: workflowId, yaml });
+    setTab("editor");
+  }
+
+  function handleNewWorkflow() {
+    // Clear editing context so the editor starts fresh with a new UUID.
+    setEditingWorkflow(null);
+    setTab("editor");
   }
 
   return (
@@ -474,7 +572,7 @@ export function WorkflowChannelView({ channel }: { channel: Channel }) {
         </button>
         <button
           type="button"
-          onClick={() => setTab("editor")}
+          onClick={handleNewWorkflow}
           className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
             tab === "editor"
               ? "border-b-2 border-black text-black dark:border-white dark:text-white"
@@ -495,13 +593,23 @@ export function WorkflowChannelView({ channel }: { channel: Channel }) {
         )}
 
         {tab === "editor" ? (
-          <WorkflowEditor onSave={handleSave} isSaving={isSaving} />
+          <WorkflowEditor
+            onSave={handleSave}
+            isSaving={isSaving}
+            initialYaml={editingWorkflow?.yaml}
+            existingId={editingWorkflow?.id}
+          />
         ) : (
           <WorkflowList
             workflows={workflows}
             isLoading={isLoading}
             runs={runs}
             onRun={triggerRun}
+            onEdit={handleEdit}
+            onDelete={(workflowId) => {
+              const wf = workflows.find((w) => w.workflowId === workflowId);
+              if (wf) deleteWorkflow(wf);
+            }}
             onApprove={(token) => approveRun(token, true)}
             onDeny={(token) => approveRun(token, false)}
           />

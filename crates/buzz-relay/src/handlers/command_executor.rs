@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use nostr::Event;
+use nostr::{Event, EventBuilder, Kind, Tag};
 use sha2::{Digest, Sha256};
 use tracing::warn;
 use uuid::Uuid;
@@ -23,6 +23,7 @@ use buzz_db::workflow::{ApprovalStatus, RunStatus};
 use buzz_db::DbError;
 use buzz_workflow::executor::TriggerContext;
 
+use crate::handlers::event::dispatch_persistent_event;
 use crate::state::AppState;
 use crate::webhook_secret;
 
@@ -31,6 +32,72 @@ use super::side_effects::{
     emit_group_discovery_events, emit_membership_notification, emit_system_message,
     publish_dm_visibility_snapshot,
 };
+
+/// Emit a workflow run-status event signed by the relay keypair.
+///
+/// Used for kind:46001 (triggered) on the manual-trigger path; completion/failure
+/// events (46005/46006) are emitted from `finalize_run` via the `ActionSink`.
+///
+/// Skips silently if `channel_id` is `None` — unbound workflows have no channel
+/// to publish into.
+async fn emit_run_status_event(
+    tenant: &TenantContext,
+    state: &Arc<AppState>,
+    channel_id: Option<Uuid>,
+    workflow_id: Uuid,
+    run_id: Uuid,
+    kind: u32,
+    content: &str,
+) {
+    let Some(channel_uuid) = channel_id else {
+        return;
+    };
+
+    let channel_str = channel_uuid.to_string();
+    let run_str = run_id.to_string();
+    let workflow_str = workflow_id.to_string();
+
+    let tags = match (|| -> anyhow::Result<Vec<Tag>> {
+        Ok(vec![
+            Tag::parse(["h", &channel_str])?,
+            Tag::parse(["run", &run_str])?,
+            Tag::parse(["workflow", &workflow_str])?,
+        ])
+    })() {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(run_id = %run_id, "emit_run_status_event: tag build failed: {e}");
+            return;
+        }
+    };
+
+    let event = match EventBuilder::new(Kind::Custom(kind as u16), content)
+        .tags(tags)
+        .sign_with_keys(&state.relay_keypair)
+    {
+        Ok(e) => e,
+        Err(e) => {
+            tracing::warn!(run_id = %run_id, "emit_run_status_event: signing failed: {e}");
+            return;
+        }
+    };
+
+    let relay_pubkey_hex = state.relay_keypair.public_key().to_hex();
+
+    match state
+        .db
+        .insert_event(tenant.community(), &event, Some(channel_uuid))
+        .await
+    {
+        Ok((stored, _)) => {
+            let _ = dispatch_persistent_event(tenant, state, &stored, kind, &relay_pubkey_hex, None)
+                .await;
+        }
+        Err(e) => {
+            tracing::warn!(run_id = %run_id, "emit_run_status_event: db insert failed: {e}");
+        }
+    }
+}
 
 /// Route a command-kind event to the appropriate handler.
 pub async fn handle_command(
@@ -896,11 +963,24 @@ async fn handle_workflow_trigger(
         .await
         .map_err(|e| IngestError::Internal(format!("error: commit transaction: {e}")))?;
 
+    // Emit kind:46001 (triggered) — best-effort, non-blocking.
+    emit_run_status_event(
+        tenant,
+        state,
+        workflow.channel_id,
+        workflow_id,
+        run_id,
+        KIND_WORKFLOW_TRIGGERED,
+        "",
+    )
+    .await;
+
     // 5. Spawn workflow execution
     let engine = Arc::clone(&state.workflow_engine);
     let db = state.db.clone();
     let def_value = workflow.definition.clone();
     let trigger_ctx_clone = trigger_ctx.clone();
+    let wf_channel_id = workflow.channel_id;
     tokio::spawn(async move {
         let def: buzz_workflow::WorkflowDef = match serde_json::from_value(def_value) {
             Ok(d) => d,
@@ -934,7 +1014,7 @@ async fn handle_workflow_trigger(
         )
         .await;
         engine
-            .finalize_run(community_id, run_id, result, None)
+            .finalize_run(community_id, wf_channel_id, workflow_id, run_id, result, None)
             .await;
     });
 
@@ -1322,6 +1402,6 @@ async fn resume_workflow_after_approval(
     )
     .await;
     engine
-        .finalize_run(community_id, run_id, result, existing_trace)
+        .finalize_run(community_id, workflow.channel_id, workflow_id, run_id, result, existing_trace)
         .await;
 }

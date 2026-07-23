@@ -9,7 +9,7 @@ use std::pin::Pin;
 use std::sync::{Arc, Weak};
 
 use buzz_core::kind::KIND_STREAM_MESSAGE;
-use buzz_core::tenant::CommunityId;
+use buzz_core::tenant::{CommunityId, TenantContext};
 use buzz_workflow::action_sink::{ActionSink, ActionSinkError};
 use chrono::Utc;
 use nostr::{EventBuilder, Kind, Tag};
@@ -360,6 +360,99 @@ impl ActionSink for RelayActionSink {
             }
 
             Ok(event_id_hex)
+        })
+    }
+
+    fn emit_run_status(
+        &self,
+        community_id: CommunityId,
+        channel_id: Option<Uuid>,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        kind: u32,
+        content: &str,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        let content = content.to_owned();
+
+        Box::pin(async move {
+            // Skip silently if no channel is bound — nothing to publish into.
+            let Some(channel_uuid) = channel_id else {
+                return;
+            };
+
+            // Upgrade weak reference — fails only during shutdown.
+            let Some(state) = self.state.upgrade() else {
+                return;
+            };
+
+            // Resolve community → host for TenantContext.
+            let host = match state.db.lookup_community_host(community_id).await {
+                Ok(Some(h)) => h,
+                Ok(None) => {
+                    tracing::warn!(
+                        run_id = %run_id,
+                        "emit_run_status: community {community_id} has no host mapping"
+                    );
+                    return;
+                }
+                Err(e) => {
+                    tracing::warn!(run_id = %run_id, "emit_run_status: host lookup failed: {e}");
+                    return;
+                }
+            };
+            let tenant = TenantContext::resolved(community_id, host);
+
+            let channel_str = channel_uuid.to_string();
+            let run_str = run_id.to_string();
+            let workflow_str = workflow_id.to_string();
+
+            let tags = match (|| -> anyhow::Result<Vec<Tag>> {
+                Ok(vec![
+                    Tag::parse(["h", &channel_str])?,
+                    Tag::parse(["run", &run_str])?,
+                    Tag::parse(["workflow", &workflow_str])?,
+                ])
+            })() {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!(run_id = %run_id, "emit_run_status: tag build failed: {e}");
+                    return;
+                }
+            };
+
+            let event = match EventBuilder::new(Kind::Custom(kind as u16), &content)
+                .tags(tags)
+                .sign_with_keys(&state.relay_keypair)
+            {
+                Ok(e) => e,
+                Err(e) => {
+                    tracing::warn!(run_id = %run_id, "emit_run_status: signing failed: {e}");
+                    return;
+                }
+            };
+
+            let relay_pubkey_hex = state.relay_keypair.public_key().to_hex();
+
+            match state
+                .db
+                .insert_event(community_id, &event, Some(channel_uuid))
+                .await
+            {
+                Ok((stored, _)) => {
+                    let _ = dispatch_persistent_event(
+                        &tenant,
+                        &state,
+                        &stored,
+                        kind,
+                        &relay_pubkey_hex,
+                        None,
+                    )
+                    .await;
+                }
+                Err(e) => {
+                    tracing::warn!(run_id = %run_id, "emit_run_status: db insert failed: {e}");
+                }
+            }
         })
     }
 }

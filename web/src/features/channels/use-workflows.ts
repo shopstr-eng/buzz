@@ -24,6 +24,8 @@ export interface WorkflowDef {
   yaml: string;
   pubkey: string;
   createdAt: number;
+  /** Nostr event ID of the latest definition event — used for NIP-09 deletion. */
+  eventId: string;
 }
 
 function eventToWorkflow(ev: NostrEvent): WorkflowDef | null {
@@ -39,6 +41,7 @@ function eventToWorkflow(ev: NostrEvent): WorkflowDef | null {
     yaml: ev.content,
     pubkey: ev.pubkey,
     createdAt: ev.created_at,
+    eventId: ev.id,
   };
 }
 
@@ -46,10 +49,12 @@ export function useWorkflows(groupId: string | null): {
   workflows: WorkflowDef[];
   isLoading: boolean;
   publishWorkflow: (name: string, yaml: string, existingId?: string) => Promise<string>;
+  deleteWorkflow: (workflow: WorkflowDef) => Promise<void>;
   error: string | null;
 } {
   const { connection, connectionState } = useRelay();
   const [workflows, setWorkflows] = useState<WorkflowDef[]>([]);
+  const [deletedIds, setDeletedIds] = useState<Set<string>>(new Set());
   const [eoseReceived, setEoseReceived] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,5 +117,39 @@ export function useWorkflows(groupId: string | null): {
     [connection, groupId],
   );
 
-  return { workflows, isLoading: !eoseReceived, publishWorkflow, error };
+  const deleteWorkflow = useCallback(
+    async (workflow: WorkflowDef): Promise<void> => {
+      if (!connection || !groupId) throw new Error("Not connected to relay.");
+      const signFn = getSignFn();
+      if (!signFn) throw new Error("No signing key available.");
+
+      // NIP-09 deletion event (kind:5) with:
+      //   - `e` tag pointing to the specific event ID
+      //   - `a` tag pointing to the NIP-33 coordinate so the relay can
+      //     mark the replaceable event deleted as well
+      const coordinate = `${KIND_WORKFLOW_DEF}:${workflow.pubkey}:${workflow.workflowId}`;
+      const signed = await signFn({
+        kind: 5,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ["e", workflow.eventId],
+          ["a", coordinate],
+          ["h", groupId],
+        ],
+        content: "deleted",
+      });
+
+      connection.publish(signed);
+
+      // Optimistically remove from local state immediately so the UI updates
+      // without waiting for a relay round-trip.
+      setDeletedIds((prev) => new Set([...prev, workflow.workflowId]));
+      setError(null);
+    },
+    [connection, groupId],
+  );
+
+  const visibleWorkflows = workflows.filter((w) => !deletedIds.has(w.workflowId));
+
+  return { workflows: visibleWorkflows, isLoading: !eoseReceived, publishWorkflow, deleteWorkflow, error };
 }

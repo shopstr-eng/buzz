@@ -172,14 +172,27 @@ impl WorkflowEngine {
     ///
     /// `existing_trace` is prepended to the executor's trace — used by the
     /// approval-resume path where pre-approval steps already have trace entries.
+    ///
+    /// After the DB update, emits a kind:46005 (completed) or kind:46006 (failed)
+    /// status event into the workflow's channel via the action sink so live UI
+    /// subscribers see the run outcome without polling.
     pub async fn finalize_run(
         &self,
         community_id: CommunityId,
+        channel_id: Option<Uuid>,
+        workflow_id: Uuid,
         run_id: uuid::Uuid,
         result: Result<ExecutionResult, (WorkflowError, PartialProgress)>,
         existing_trace: Option<Vec<serde_json::Value>>,
     ) {
+        use buzz_core::kind::{KIND_WORKFLOW_COMPLETED, KIND_WORKFLOW_FAILED};
+
         let prefix = existing_trace.unwrap_or_default();
+
+        // status_kind and error_content are set in each branch so we can emit
+        // the run-status event after the DB update.
+        let mut status_kind: u32 = KIND_WORKFLOW_FAILED;
+        let mut error_content = String::new();
 
         match result {
             Ok(result) => {
@@ -213,6 +226,7 @@ impl WorkflowEngine {
                             "Failed to update run to Failed (approval gate): {e}"
                         );
                     }
+                    error_content = "approval gates not yet implemented".to_string();
                 } else {
                     tracing::info!(run_id = %run_id, "Workflow run completed");
                     if let Err(e) = self
@@ -232,6 +246,7 @@ impl WorkflowEngine {
                             "Failed to update run to Completed: {e}"
                         );
                     }
+                    status_kind = KIND_WORKFLOW_COMPLETED;
                 }
             }
             Err((e, progress)) => {
@@ -256,7 +271,22 @@ impl WorkflowEngine {
                         "Failed to update run to Failed: {db_err}"
                     );
                 }
+                error_content = e.to_string();
             }
+        }
+
+        // Emit run-status event (46005 completed / 46006 failed) into the channel
+        // so live UI subscribers see the outcome without polling. Best-effort.
+        if let Ok(sink) = self.action_sink() {
+            sink.emit_run_status(
+                community_id,
+                channel_id,
+                workflow_id,
+                run_id,
+                status_kind,
+                &error_content,
+            )
+            .await;
         }
     }
 
@@ -367,13 +397,14 @@ impl WorkflowEngine {
             let engine = Arc::clone(self);
             let def_clone = def.clone();
             let ctx_clone = trigger_ctx.clone();
+            let workflow_id_for_run = workflow.id;
 
             tokio::spawn(async move {
                 let result =
                     executor::execute_run(&engine, community_id, run_id, &def_clone, &ctx_clone)
                         .await;
                 engine
-                    .finalize_run(community_id, run_id, result, None)
+                    .finalize_run(community_id, Some(channel_id), workflow_id_for_run, run_id, result, None)
                     .await;
             });
         }
@@ -646,6 +677,7 @@ impl WorkflowEngine {
                 let engine = Arc::clone(self);
                 let def_clone = def.clone();
                 let ctx_clone = trigger_ctx.clone();
+                let workflow_id_for_run = workflow.id;
                 tokio::spawn(async move {
                     let result = executor::execute_run(
                         &engine,
@@ -656,7 +688,7 @@ impl WorkflowEngine {
                     )
                     .await;
                     engine
-                        .finalize_run(community_id, run_id, result, None)
+                        .finalize_run(community_id, Some(channel_id), workflow_id_for_run, run_id, result, None)
                         .await;
                 });
             }

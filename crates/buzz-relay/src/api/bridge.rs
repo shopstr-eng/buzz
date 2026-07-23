@@ -1865,6 +1865,8 @@ pub async fn workflow_webhook(
     let db = state.db.clone();
     let def_value = workflow.definition.clone();
     let trigger_ctx_clone = trigger_ctx.clone();
+    let wf_channel_id = workflow.channel_id;
+    let wf_id = id;
     tokio::spawn(async move {
         let def: buzz_workflow::WorkflowDef = match serde_json::from_value(def_value) {
             Ok(d) => d,
@@ -1898,7 +1900,7 @@ pub async fn workflow_webhook(
         )
         .await;
         engine
-            .finalize_run(community_id, run_id, result, None)
+            .finalize_run(community_id, wf_channel_id, wf_id, run_id, result, None)
             .await;
     });
 

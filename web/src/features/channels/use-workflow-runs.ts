@@ -1,9 +1,10 @@
 /**
  * Subscribe to workflow run-status events (kinds 46001–46012) for a channel.
  *
- * NOTE: The relay currently stores run history in the DB and does not yet emit
- * these as Nostr events. The subscription is wired correctly and will populate
- * automatically once the relay adds event emission.
+ * The relay emits kind:46001 (triggered) when a workflow run starts and
+ * kind:46005 (completed) / kind:46006 (failed) when it finishes. These are
+ * stored in the channel's event store and fan-out to all live subscribers, so
+ * this hook's run log populates in real time without polling.
  *
  * Run state machine (per run ID):
  *   46001 triggered → 46002 step_started → 46003 step_completed

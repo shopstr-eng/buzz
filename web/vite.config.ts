@@ -27,4 +27,10 @@ export default defineConfig({
     port: parseInt(process.env.VITE_PORT || "5173", 10),
     strictPort: true,
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["./src/test-setup.ts"],
+    include: ["src/**/*.test.{ts,tsx}"],
+  },
 });

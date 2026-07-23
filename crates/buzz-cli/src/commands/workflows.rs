@@ -59,10 +59,10 @@ pub async fn cmd_get_workflow(client: &BuzzClient, workflow_id: &str) -> Result<
 
 /// Get workflow run history — query kinds [46001, 46002, 46003].
 ///
-/// NOTE: The relay does not currently emit workflow execution events (46001-46003).
-/// Run history is stored in the workflow_runs DB table, not as Nostr events.
-/// This command will return an empty array until the relay adds event emission
-/// or a dedicated REST endpoint for run history.
+/// NOTE: The relay emits kind:46001 (triggered), kind:46005 (completed), and
+/// kind:46006 (failed) events into the workflow's channel when runs change state.
+/// Run history in the workflow_runs DB table is the durable record; the Nostr
+/// events are the live signal for subscribers (including this CLI and the UI).
 pub async fn cmd_get_workflow_runs(
     client: &BuzzClient,
     workflow_id: &str,
