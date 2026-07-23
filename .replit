@@ -52,22 +52,9 @@ args = "bash scripts/start-replit.sh"
 waitForPort = 5000
 
 [[ports]]
-localPort = 3000
-externalPort = 3001
-
-[[ports]]
 localPort = 5000
-externalPort = 5000
-
-[[ports]]
-localPort = 6379
 externalPort = 80
-exposeLocalhost = true
 
 [[ports]]
 localPort = 8080
 externalPort = 8080
-
-[[ports]]
-localPort = 9102
-externalPort = 3000
