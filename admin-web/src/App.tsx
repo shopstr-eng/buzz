@@ -856,6 +856,7 @@ function Members() {
                   <tr>
                     <th>Pubkey</th>
                     <th>Role</th>
+                    <th>Invited by</th>
                     <th>Joined</th>
                     <th>
                       <span className="visually-hidden">Actions</span>
@@ -870,6 +871,13 @@ function Members() {
                       </td>
                       <td>
                         <span className="tag">{member.role}</span>
+                      </td>
+                      <td className="member-invited-by">
+                        {member.addedBy ? (
+                          <code title={member.addedBy}>{short(member.addedBy)}</code>
+                        ) : (
+                          <span className="member-system-label">self / system</span>
+                        )}
                       </td>
                       <td className="member-date">{date(member.createdAt)}</td>
                       <td className="member-action">
