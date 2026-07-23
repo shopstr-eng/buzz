@@ -25,13 +25,40 @@ build_ui "web" "web UI"
 build_ui "admin-web" "admin UI"
 
 # ---------------------------------------------------------------------------
-# 2. Strip target/ — keep only the pre-built release binaries
+# 2. Build Rust binaries (relay, admin, ACP harness, agent)
+# ---------------------------------------------------------------------------
+
+# Use the Nix-managed Rust toolchain (same guard as start-replit.sh).
+unset RUSTUP_TOOLCHAIN RUSTUP_HOME
+export PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/home/runner/workspace/bin' | paste -sd ':')
+
+build_rust_bin() {
+  local pkg="$1"
+  local bin="$2"
+  if [[ ! -x "target/release/${bin}" ]]; then
+    echo "==> Building ${bin} (${pkg})..."
+    cargo build -p "$pkg" --release --ignore-rust-version 2>&1
+    echo "==> ${bin} build complete."
+  else
+    echo "==> ${bin} already built, skipping."
+  fi
+}
+
+build_rust_bin buzz-relay  buzz-relay
+build_rust_bin buzz-admin  buzz-admin
+build_rust_bin buzz-acp    buzz-acp
+build_rust_bin buzz-agent  buzz-agent
+
+# ---------------------------------------------------------------------------
+# 3. Strip target/ — keep only the pre-built release binaries
 # ---------------------------------------------------------------------------
 echo "==> Trimming target/ — keeping release binaries only..."
 
 KEEP=(
   "target/release/buzz-relay"
   "target/release/buzz-admin"
+  "target/release/buzz-acp"
+  "target/release/buzz-agent"
 )
 
 TMP=$(mktemp -d)

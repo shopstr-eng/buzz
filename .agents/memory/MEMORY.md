@@ -1,1 +1,2 @@
 - [Replit build quirks for Buzz relay](replit-build-quirks.md) — Rust 1.88 vs 1.95 toolchain, AVX-512 vendor patch, required env vars, startup order.
+- [buzz-acp loopback auth quirks](buzz-acp-loopback-auth.md) — NIP-42/NIP-98 scheme mismatch when ACP connects via ws:// loopback to wss:// relay; _wait_for_relay bash fix.

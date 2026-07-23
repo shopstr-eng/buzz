@@ -57,6 +57,41 @@ const WS_SEND_TIMEOUT_SECS: u64 = 10;
 const STABLE_CONNECTION_SECS: u64 = 60;
 /// Seconds subtracted from `since` on resubscribe to tolerate clock skew.
 const SINCE_SKEW_SECS: u64 = 5;
+/// Return the HTTP base URL to use when building NIP-98 auth headers.
+///
+/// `BUZZ_ACP_NIP98_BASE_URL` lets operators override the base URL placed in
+/// NIP-98 signed events independently of the actual HTTP connection URL.
+/// This is needed when the relay's NIP-98 verifier expects `https://` (because
+/// `RELAY_URL` starts with `wss://`) but the ACP worker reaches the relay over
+/// plain `http://` on loopback — the string in the signed event must match the
+/// relay's expectation even though the actual TCP connection is unencrypted.
+///
+/// If the env var is unset or empty, the URL is derived from the WS relay URL
+/// using [`relay_ws_to_http`] (the normal path for non-loopback deployments).
+fn nip98_base_url(ws_url: &str) -> String {
+    std::env::var("BUZZ_ACP_NIP98_BASE_URL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| relay_ws_to_http(ws_url))
+}
+
+/// Return the relay URL to embed in NIP-42 AUTH events.
+///
+/// `BUZZ_ACP_NIP42_RELAY_URL` lets operators override the relay URL placed in the
+/// signed AUTH event independently of the WebSocket connection URL.  This is
+/// needed when the relay is reached via a plain `ws://` loopback address but the
+/// NIP-42 verifier expects the canonical `wss://host` form (because the relay's
+/// `RELAY_URL` config starts with `wss://`).
+///
+/// If the env var is unset or empty the connection URL is used unchanged (the
+/// common case for non-loopback deployments).
+fn nip42_auth_relay_url(connect_url: &str) -> String {
+    std::env::var("BUZZ_ACP_NIP42_RELAY_URL")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| connect_url.to_string())
+}
+
 /// Timeout for the NIP-42 auth handshake steps.
 ///
 /// Raised from 5s to 20s (≈2 RTTs at the observed 10s max round-trip on degraded
@@ -217,10 +252,21 @@ fn merge_discovered_channels(
 ///
 /// All reads go through `POST /query` with NIP-98 auth. Event submission goes
 /// through `POST /events` with NIP-98 auth.
+///
+/// Two base URLs are kept separately:
+/// - `nip98_base_url`: URL embedded in the NIP-98 signed event (what the relay
+///   verifies).  Must match the relay's expected scheme (`https://` when
+///   `RELAY_URL` is `wss://`) even when the actual connection is plain HTTP.
+/// - `connect_base_url`: URL actually used by `reqwest` for the TCP connection.
+///   Always derived from the WebSocket connection URL (`http://` on loopback).
 #[derive(Debug, Clone)]
 pub struct RestClient {
     pub http: reqwest::Client,
+    /// URL placed in NIP-98 signed events (must match what the relay verifies).
     pub base_url: String,
+    /// URL used for the actual HTTP connection (may differ from `base_url` on
+    /// loopback deployments where the relay TLS terminates at a proxy).
+    connect_base_url: String,
     pub keys: Keys,
     /// Optional NIP-OA auth tag JSON for `x-auth-tag` header (relay membership delegation).
     pub auth_tag_json: Option<String>,
@@ -358,18 +404,22 @@ impl RestClient {
         path: &str,
         body_bytes: &[u8],
     ) -> Result<reqwest::Response, RelayError> {
-        let url = format!("{}{}", self.base_url, path);
+        // `sign_url` is what goes in the NIP-98 event (must match relay's verifier).
+        // `connect_url` is the URL reqwest actually opens a TCP connection to
+        // (may differ on loopback deployments where TLS terminates at a proxy).
+        let sign_url = format!("{}{}", self.base_url, path);
+        let connect_url = format!("{}{}", self.connect_base_url, path);
         let body_owned = body_bytes.to_vec();
         let auth_tag_header = self.auth_tag_json.clone();
         self.request_with_retry("POST", path, || {
             // NIP-98 is re-signed each attempt (fresh created_at).
             // sign_nip98 is infallible in practice (key is always valid).
             let auth = self
-                .nip98_header("POST", &url, Some(&body_owned))
+                .nip98_header("POST", &sign_url, Some(&body_owned))
                 .unwrap_or_default();
             let mut req = self
                 .http
-                .post(&url)
+                .post(&connect_url)
                 .header("Authorization", auth)
                 .header("Content-Type", "application/json");
             if let Some(ref tag) = auth_tag_header {
@@ -707,7 +757,8 @@ impl HarnessRelay {
     pub fn rest_client(&self) -> RestClient {
         RestClient {
             http: self.http.clone(),
-            base_url: relay_ws_to_http(&self.relay_url),
+            base_url: nip98_base_url(&self.relay_url),
+            connect_base_url: relay_ws_to_http(&self.relay_url),
             keys: self.keys.clone(),
             auth_tag_json: self
                 .auth_tag
@@ -2332,8 +2383,9 @@ async fn handle_ws_message(
                 RelayMessage::Auth { challenge } => {
                     // AUTH send failure must trigger reconnect.
                     debug!("received mid-session AUTH challenge — re-authenticating");
+                    let auth_url = nip42_auth_relay_url(relay_url);
                     if let Err(e) =
-                        send_auth_response(ws, &challenge, relay_url, keys, auth_tag).await
+                        send_auth_response(ws, &challenge, &auth_url, keys, auth_tag).await
                     {
                         warn!("failed to respond to mid-session AUTH challenge: {e} — triggering reconnect");
                         return false;
@@ -3830,7 +3882,8 @@ async fn do_connect(
 
     let challenge = wait_for_auth_challenge(&mut ws, &mut buffer, AUTH_TIMEOUT).await?;
 
-    send_auth_response(&mut ws, &challenge, relay_url, keys, auth_tag).await?;
+    let auth_url = nip42_auth_relay_url(relay_url);
+    send_auth_response(&mut ws, &challenge, &auth_url, keys, auth_tag).await?;
 
     let event_id = {
         // We need the event_id that was just sent. Re-derive it by signing again

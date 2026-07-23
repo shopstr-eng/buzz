@@ -121,6 +121,21 @@ build_ui_if_stale() {
 build_ui_if_stale "web" "web UI"
 build_ui_if_stale "admin-web" "admin UI"
 
+# Build buzz-acp and buzz-agent if missing (they are pre-built in the
+# deployment image by prepare-deploy.sh; this path covers dev restarts).
+build_rust_bin_if_missing() {
+  local bin="$1"
+  local pkg="$2"
+  local binary_path="${REPO_ROOT}/target/release/${bin}"
+  if [[ ! -x "$binary_path" ]]; then
+    echo "==> Pre-built ${bin} not found — building now (this may take a few minutes)..."
+    cargo build -p "$pkg" --release --ignore-rust-version 2>&1
+    echo "==> ${bin} build complete."
+  fi
+}
+build_rust_bin_if_missing buzz-acp   buzz-acp
+build_rust_bin_if_missing buzz-agent buzz-agent
+
 # ---------------------------------------------------------------------------
 # 3. Run migrations (idempotent — safe to run on every restart)
 # ---------------------------------------------------------------------------
@@ -181,6 +196,50 @@ if [[ -z "${RELAY_OWNER_PUBKEY:-}" ]] && [[ -n "${BUZZ_RELAY_PRIVATE_KEY:-}" ]];
 fi
 
 # ---------------------------------------------------------------------------
+# 5b. Resolve the ACP worker keypair and pre-register it as a relay member.
+#
+#     Priority:
+#       1. BUZZ_ACP_PRIVATE_KEY secret (stable identity across restarts)
+#       2. Ephemeral key generated fresh each boot (functional but pubkey
+#          changes on every restart — fine for dev, use the secret in prod)
+# ---------------------------------------------------------------------------
+ACP_PRIVATE_KEY="${BUZZ_ACP_PRIVATE_KEY:-}"
+ACP_PUBKEY=""
+
+if [[ -z "$ACP_PRIVATE_KEY" ]]; then
+  echo "==> No BUZZ_ACP_PRIVATE_KEY set — generating ephemeral ACP keypair..."
+  _ACP_KEY_OUTPUT=$(run_bin buzz-admin buzz-admin generate-key 2>/dev/null || true)
+  ACP_PRIVATE_KEY=$(echo "$_ACP_KEY_OUTPUT" | awk '/^Secret key:/{print $3}')
+  if [[ -n "$ACP_PRIVATE_KEY" ]]; then
+    echo "==> Ephemeral ACP keypair generated."
+  else
+    echo "==> Warning: could not generate ACP keypair — ACP workers will not start." >&2
+  fi
+else
+  echo "==> Using BUZZ_ACP_PRIVATE_KEY for ACP worker."
+fi
+
+if [[ -n "$ACP_PRIVATE_KEY" ]]; then
+  # Derive the ACP pubkey by temporarily supplying the ACP key as BUZZ_RELAY_PRIVATE_KEY
+  # (buzz-admin derive-pubkey reads that env var).
+  ACP_PUBKEY=$(BUZZ_RELAY_PRIVATE_KEY="$ACP_PRIVATE_KEY" \
+               run_bin buzz-admin buzz-admin derive-pubkey 2>/dev/null || true)
+  if [[ -n "$ACP_PUBKEY" ]]; then
+    echo "==> ACP worker pubkey: ${ACP_PUBKEY}"
+    # Register in the localhost community (127.0.0.1:<port>) — this is the community
+    # the ACP worker authenticates against when connecting via ws://127.0.0.1:<port>.
+    # buzz-admin resolves community from RELAY_URL, so we override it to the localhost URL.
+    _BIND_PORT=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
+    RELAY_URL="ws://127.0.0.1:${_BIND_PORT}" \
+      run_bin buzz-admin buzz-admin add-member --pubkey "$ACP_PUBKEY" >/dev/null 2>&1 \
+      && echo "==> ACP worker registered as relay member (community: 127.0.0.1:${_BIND_PORT})." \
+      || echo "==> ACP worker member registration skipped (already exists or error)."
+  else
+    echo "==> Warning: could not derive ACP pubkey — skipping member registration." >&2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 6. Start the relay
 # ---------------------------------------------------------------------------
 export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:3000}"
@@ -232,17 +291,82 @@ fi
 #    (Replit stopping the workflow) propagates cleanly.
 # ---------------------------------------------------------------------------
 RELAY_BIN="${REPO_ROOT}/target/release/buzz-relay"
+ACP_BIN="${REPO_ROOT}/target/release/buzz-acp"
 RELAY_PID=""
+ACP_PID=""
 STOPPING=false
 
-# When the workflow is stopped, kill the watcher and relay cleanly.
+# When the workflow is stopped, kill the watcher, relay, and ACP worker cleanly.
 _cleanup() {
   STOPPING=true
   [[ -n "$RELAY_PID" ]] && kill -TERM "$RELAY_PID" 2>/dev/null || true
+  [[ -n "$ACP_PID"   ]] && kill -TERM "$ACP_PID"   2>/dev/null || true
   [[ -n "$WATCHER_PID" ]] && kill -TERM "$WATCHER_PID" 2>/dev/null || true
-  rm -f /tmp/buzz-relay.pid
+  rm -f /tmp/buzz-relay.pid /tmp/buzz-acp.pid
 }
 trap '_cleanup' SIGTERM SIGINT
+
+# ---------------------------------------------------------------------------
+# 9. Start the ACP worker in background (if we have a keypair).
+#    It connects to the local relay at ws://localhost:<port> and manages
+#    AI agent subprocesses (buzz-agent by default, or BUZZ_ACP_AGENT_COMMAND).
+#    The worker auto-reconnects when the relay restarts; no explicit retry loop
+#    needed here — buzz-acp has built-in reconnect logic.
+# ---------------------------------------------------------------------------
+_start_acp() {
+  [[ -z "$ACP_PRIVATE_KEY" ]] && return
+  [[ ! -x "$ACP_BIN" ]] && { echo "==> Warning: buzz-acp binary not found — ACP workers disabled." >&2; return; }
+
+  local bind_port
+  bind_port=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
+  local acp_relay_url="ws://127.0.0.1:${bind_port}"
+
+  echo "==> Starting ACP worker (relay=${acp_relay_url}, owner=${RELAY_OWNER_PUBKEY:-<none>})..."
+
+  # Pass the ACP key as BUZZ_PRIVATE_KEY (what buzz-acp reads).
+  # BUZZ_ACP_AGENT_COMMAND defaults to buzz-agent (the self-contained LLM agent).
+  # Operators can override via BUZZ_ACP_AGENT_COMMAND / BUZZ_ACP_AGENT_ARGS secrets.
+  # The relay expects the auth URL to use the same scheme as its own RELAY_URL
+  # (wss:// for production, ws:// for plain-text dev).  ACP connects via plain
+  # ws:// on loopback, so we tell it to sign auth events with the wss:// form.
+  local relay_scheme
+  relay_scheme=$(echo "${RELAY_URL:-ws://localhost:5000}" | cut -d: -f1)
+
+  # Derive the HTTP scheme the relay expects for NIP-98 (wss→https, ws→http).
+  local http_scheme
+  [[ "$relay_scheme" == "wss" ]] && http_scheme="https" || http_scheme="http"
+
+  BUZZ_PRIVATE_KEY="$ACP_PRIVATE_KEY" \
+  BUZZ_RELAY_URL="$acp_relay_url" \
+  BUZZ_ACP_NIP42_RELAY_URL="${relay_scheme}://127.0.0.1:${bind_port}" \
+  BUZZ_ACP_NIP98_BASE_URL="${http_scheme}://127.0.0.1:${bind_port}" \
+  BUZZ_ACP_AGENT_OWNER="${RELAY_OWNER_PUBKEY:-}" \
+  BUZZ_ACP_AGENT_COMMAND="${BUZZ_ACP_AGENT_COMMAND:-${REPO_ROOT}/target/release/buzz-agent}" \
+  BUZZ_ACP_AGENT_ARGS="${BUZZ_ACP_AGENT_ARGS:-acp}" \
+  BUZZ_ACP_SUBSCRIBE="${BUZZ_ACP_SUBSCRIBE:-mentions}" \
+  BUZZ_ACP_LAZY_POOL="${BUZZ_ACP_LAZY_POOL:-true}" \
+  "$ACP_BIN" >>/tmp/buzz-acp.log 2>&1 &
+
+  ACP_PID=$!
+  echo $ACP_PID > /tmp/buzz-acp.pid
+  echo "==> ACP worker started (PID ${ACP_PID})."
+}
+
+# Wait for the relay port to be ready before starting ACP.
+# Wait for the relay port to be ready before starting ACP.
+_wait_for_relay() {
+  local port
+  port=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
+  local tries=0
+  while true; do
+    bash -c "echo > /dev/tcp/127.0.0.1/${port}" 2>/dev/null
+    local rc=$?
+    [[ $rc -eq 0 ]] && return 0
+    sleep 0.5
+    tries=$((tries + 1))
+    [[ $tries -ge 60 ]] && { echo "==> Warning: relay did not open port ${port} in 30s." >&2; return 1; }
+  done
+}
 
 while true; do
   if [[ -x "$RELAY_BIN" ]]; then
@@ -255,6 +379,21 @@ while true; do
   fi
   RELAY_PID=$!
   echo $RELAY_PID > /tmp/buzz-relay.pid
+
+  # Kill any previous ACP worker before starting a fresh one.
+  if [[ -n "$ACP_PID" ]]; then
+    kill -TERM "$ACP_PID" 2>/dev/null || true
+    wait "$ACP_PID" 2>/dev/null || true
+    ACP_PID=""
+  fi
+
+  # Wait for the relay port inline so ACP_PID is set in this shell (not a subshell).
+  # _wait_for_relay has a 10-second cap so the loop is not blocked indefinitely.
+  # Wait for the relay port inline so ACP_PID is set in this shell (not a subshell).
+  # _wait_for_relay has a 30-second cap so the loop is not blocked indefinitely.
+  if _wait_for_relay; then
+    _start_acp
+  fi
 
   # Wait for the relay to exit (normal exit, crash, or SIGTERM from watcher)
   wait "$RELAY_PID" || true
@@ -270,5 +409,6 @@ while true; do
   RELAY_BIN="${REPO_ROOT}/target/release/buzz-relay"
 done
 
-# Clean up watcher if still running
-[[ -n "$WATCHER_PID" ]] && kill -TERM "$WATCHER_PID" 2>/dev/null || true
+# Clean up watcher and ACP if still running
+[[ -n "$WATCHER_PID"  ]] && kill -TERM "$WATCHER_PID"  2>/dev/null || true
+[[ -n "$ACP_PID"      ]] && kill -TERM "$ACP_PID"      2>/dev/null || true
