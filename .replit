@@ -23,6 +23,9 @@ REDIS_URL = "redis://127.0.0.1:6379"
 RELAY_OWNER_PUBKEY = "b67348f092c3821745acc619a353cc8d7ed16401d422e41204a78500ee04a2f7"
 RUST_LOG = "buzz_relay=info,buzz_db=info,tower_http=warn"
 
+[userenv.production]
+BUZZ_CUSTOM_DOMAINS = "buzz.shopstrmarkets.com"
+
 [deployment]
 deploymentTarget = "vm"
 run = ["bash", "scripts/start-replit.sh"]
