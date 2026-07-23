@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { ApiFailure, del, patch, post, request } from "./api";
@@ -823,6 +824,11 @@ export function Members() {
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
 
+  // Always reflects the latest member list so async callbacks can check
+  // whether a member is still present after an in-flight refresh.
+  const membersRef = useRef<RelayMember[] | undefined>(undefined);
+  membersRef.current = resource.data;
+
   // If the member whose removal is being confirmed disappears from the
   // refreshed list (removed by another admin, or the list re-fetched while
   // polling), clear the stale confirmation so the UI doesn't get stuck.
@@ -843,7 +849,15 @@ export function Members() {
       await del(`/members/${pubkey}`);
       resource.refetch();
     } catch (e) {
-      setRemoveError(e instanceof Error ? e.message : String(e));
+      // If a list refresh dropped the member while del() was in-flight, the
+      // row is already gone — surfacing an error banner here would be
+      // confusing and orphaned. Only show the error if the member is still
+      // present in the latest data.
+      const stillPresent =
+        membersRef.current?.some((m) => m.pubkey === pubkey) ?? true;
+      if (stillPresent) {
+        setRemoveError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setRemoving(null);
     }

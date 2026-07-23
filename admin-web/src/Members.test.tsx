@@ -35,6 +35,92 @@ function makeResource(members: RelayMember[]): Resource<RelayMember[]> {
   };
 }
 
+describe("Members – removing state with mid-delete refresh", () => {
+  it("leaves no stuck spinner or error banner when del() resolves after member drops from list", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolveDel!: () => void;
+    const delPromise = new Promise<void>((res) => {
+      resolveDel = res;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    let resource = makeResource([ALICE, BOB]);
+    mockUseResource.mockReturnValue(resource);
+
+    const { rerender } = render(<Members />);
+
+    // Open the remove confirmation for Alice
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+
+    // Confirm → del() is called and held pending
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // Simulate a list refresh that drops Alice while del() is still in-flight
+    resource = makeResource([BOB]);
+    mockUseResource.mockReturnValue(resource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Now resolve del() — Alice's row is already gone
+    await act(async () => {
+      resolveDel();
+      await delPromise;
+    });
+
+    // No stuck "Removing…" label
+    expect(screen.queryByText("Removing…")).not.toBeInTheDocument();
+    // No error banner
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // Bob's row still intact
+    expect(screen.getByTitle(`Remove ${BOB.pubkey}`)).toBeInTheDocument();
+  });
+
+  it("leaves no stuck spinner or orphaned error banner when del() rejects after member drops from list", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let rejectDel!: (e: Error) => void;
+    const delPromise = new Promise<void>((_, rej) => {
+      rejectDel = rej;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    let resource = makeResource([ALICE, BOB]);
+    mockUseResource.mockReturnValue(resource);
+
+    const { rerender } = render(<Members />);
+
+    // Open the remove confirmation for Alice
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+
+    // Confirm → del() is called and held pending
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // Simulate a list refresh that drops Alice while del() is still in-flight
+    resource = makeResource([BOB]);
+    mockUseResource.mockReturnValue(resource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Now reject del() — Alice's row is already gone
+    await act(async () => {
+      rejectDel(new Error("Network error"));
+      await delPromise.catch(() => {});
+    });
+
+    // No stuck "Removing…" label
+    expect(screen.queryByText("Removing…")).not.toBeInTheDocument();
+    // No orphaned error banner (member is already gone, error would be confusing)
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // Bob's row still intact
+    expect(screen.getByTitle(`Remove ${BOB.pubkey}`)).toBeInTheDocument();
+  });
+});
+
 describe("Members – confirmingRemove auto-clear", () => {
   it("clears the Remove? confirmation when the member disappears from a refreshed list", async () => {
     // Start: both Alice and Bob are present
