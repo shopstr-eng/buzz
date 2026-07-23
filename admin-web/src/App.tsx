@@ -812,7 +812,7 @@ interface InviteResult {
   url: string;
 }
 
-function Members() {
+export function Members() {
   const resource = useResource(
     () => request<RelayMember[]>("/members"),
     "members",
