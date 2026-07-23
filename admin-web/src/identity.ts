@@ -62,6 +62,16 @@ export function signWithStoredNsec(template: EventTemplate): string {
   return btoa(JSON.stringify(signed));
 }
 
+/** Returns the signed event object (not base64) — used for WebSocket publishing. */
+export function signEventObject(
+  template: EventTemplate,
+): Record<string, unknown> {
+  const hex = getStoredNsecHex();
+  if (!hex) throw new Error("No secret key stored.");
+  const key = hexToBytes(hex);
+  return finalizeEvent(template, key) as unknown as Record<string, unknown>;
+}
+
 // ── helpers ───────────────────────────────────────────────────────────────
 
 function hexToBytes(hex: string): Uint8Array {

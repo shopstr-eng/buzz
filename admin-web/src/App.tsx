@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { ApiFailure, del, patch, post, request } from "./api";
+import { Channels } from "./Channels";
 import { clearStoredNsec, hasStoredNsec, storeNsec } from "./identity";
 import type { FeedbackDetail, FeedbackSummary, RelayMember, Report } from "./types";
 
@@ -789,6 +790,14 @@ function ArrowIcon() {
   );
 }
 
+function ChannelsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function InviteIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1275,6 +1284,8 @@ export function App() {
     <Invites />
   ) : path === "/members" ? (
     <Members />
+  ) : path === "/channels" ? (
+    <Channels />
   ) : (
     <Reports />
   );
@@ -1290,6 +1301,9 @@ export function App() {
           </span>
         </Link>
         <nav>
+          <Link href="/channels" className="nav-link" activeWhenNested>
+            <ChannelsIcon /> Channels
+          </Link>
           <Link href="/members" className="nav-link" activeWhenNested>
             <MemberIcon /> Members
           </Link>

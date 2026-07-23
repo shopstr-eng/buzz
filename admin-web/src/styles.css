@@ -1159,3 +1159,233 @@ dd {
 }
 
 .admin-sign-out:hover { opacity: 1; }
+
+/* ── Channels page ────────────────────────────────────────────────────── */
+
+.ch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .875rem;
+}
+
+.ch-table th {
+  text-align: left;
+  padding: .5rem .75rem;
+  font-size: .75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: rgba(0,0,0,.45);
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.ch-table td {
+  padding: .65rem .75rem;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  vertical-align: middle;
+}
+
+.ch-table tr:last-child td { border-bottom: none; }
+.ch-table tbody tr:hover td { background: rgba(0,0,0,.02); }
+
+.ch-name { font-weight: 500; }
+
+.ch-about {
+  color: rgba(0,0,0,.55);
+  max-width: 26rem;
+}
+
+.ch-empty { color: rgba(0,0,0,.28); }
+
+.ch-actions {
+  white-space: nowrap;
+  text-align: right;
+  width: 5rem;
+}
+
+.ch-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: .2rem .3rem;
+  border-radius: .35rem;
+  opacity: .45;
+  transition: opacity .15s, background .15s;
+}
+
+.ch-action-btn:hover { opacity: 1; background: rgba(0,0,0,.06); }
+.ch-action-danger:hover { background: rgba(185,28,28,.08); }
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: .2rem .5rem;
+  border-radius: .35rem;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.badge-stream   { background: rgba(37,99,235,.1);  color: #1d4ed8; }
+.badge-forum    { background: rgba(124,58,237,.1);  color: #7c3aed; }
+.badge-workflow { background: rgba(5,150,105,.1);   color: #047857; }
+.badge-dm       { background: rgba(0,0,0,.06);      color: rgba(0,0,0,.5); }
+.badge-open     { background: rgba(5,150,105,.1);   color: #047857; }
+.badge-private  { background: rgba(245,158,11,.12); color: #b45309; }
+
+/* Channel modal */
+.ch-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 1rem;
+}
+
+.ch-modal {
+  background: #fff;
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,.14);
+  width: 100%;
+  max-width: 30rem;
+  overflow: hidden;
+}
+
+.ch-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem 0;
+}
+
+.ch-modal-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.ch-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: rgba(0,0,0,.4);
+  padding: .15rem .3rem;
+  border-radius: .3rem;
+}
+
+.ch-modal-close:hover { background: rgba(0,0,0,.07); color: #000; }
+
+/* Channel form */
+.ch-form {
+  padding: 1.25rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+
+.ch-field {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.ch-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+}
+
+.ch-label {
+  font-size: .75rem;
+  font-weight: 500;
+  color: rgba(0,0,0,.65);
+}
+
+.ch-optional {
+  font-weight: 400;
+  color: rgba(0,0,0,.4);
+}
+
+.ch-input,
+.ch-select,
+.ch-textarea {
+  padding: .45rem .6rem;
+  border: 1px solid rgba(0,0,0,.15);
+  border-radius: .5rem;
+  font-size: .875rem;
+  font-family: inherit;
+  background: transparent;
+  outline: none;
+  resize: vertical;
+}
+
+.ch-input:focus,
+.ch-select:focus,
+.ch-textarea:focus { border-color: rgba(0,0,0,.4); }
+
+.ch-error {
+  font-size: .8rem;
+  color: #b91c1c;
+  margin: 0;
+}
+
+.ch-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: .6rem;
+  margin-top: .25rem;
+}
+
+.ch-btn-primary {
+  padding: .5rem 1rem;
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: .5rem;
+  font-size: .875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.ch-btn-primary:hover:not(:disabled) { opacity: .82; }
+.ch-btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+
+.ch-btn-secondary {
+  padding: .5rem 1rem;
+  background: transparent;
+  color: #000;
+  border: 1px solid rgba(0,0,0,.15);
+  border-radius: .5rem;
+  font-size: .875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.ch-btn-secondary:hover:not(:disabled) { background: rgba(0,0,0,.05); }
+.ch-btn-secondary:disabled { opacity: .35; cursor: not-allowed; }
+
+.ch-btn-danger {
+  padding: .5rem 1rem;
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+  border-radius: .5rem;
+  font-size: .875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.ch-btn-danger:hover:not(:disabled) { opacity: .85; }
+.ch-btn-danger:disabled { opacity: .35; cursor: not-allowed; }
+
+.ch-delete-msg { margin: 0; font-size: .9rem; line-height: 1.5; }
