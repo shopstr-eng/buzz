@@ -26,6 +26,7 @@ RUST_LOG = "buzz_relay=info,buzz_db=info,tower_http=warn"
 [deployment]
 deploymentTarget = "vm"
 run = ["bash", "scripts/start-replit.sh"]
+build = ["bash", "scripts/prepare-deploy.sh"]
 
 [workflows]
 runButton = "Project"
