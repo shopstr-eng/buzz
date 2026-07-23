@@ -36,10 +36,27 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Helper: resolve a pre-built binary or fall back to cargo run
+# Usage: run_bin <binary-name> <cargo-package> [args...]
+# ---------------------------------------------------------------------------
+REPO_ROOT="$(pwd)"
+run_bin() {
+  local bin="$1"; shift
+  local pkg="$1"; shift
+  local binary_path="${REPO_ROOT}/target/release/${bin}"
+  if [[ -x "$binary_path" ]]; then
+    "$binary_path" "$@"
+  else
+    echo "==> Pre-built ${bin} not found; falling back to cargo run (slow)." >&2
+    cargo run -p "$pkg" --ignore-rust-version -- "$@"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # 2. Run migrations (idempotent — safe to run on every restart)
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
-cargo run -p buzz-admin --ignore-rust-version -- migrate
+run_bin buzz-admin buzz-admin migrate
 
 # ---------------------------------------------------------------------------
 # 3. Seed community row from RELAY_URL (idempotent)
@@ -60,7 +77,7 @@ fi
 # ---------------------------------------------------------------------------
 if [[ -z "${RELAY_OWNER_PUBKEY:-}" ]] && [[ -n "${BUZZ_RELAY_PRIVATE_KEY:-}" ]]; then
   echo "==> Deriving RELAY_OWNER_PUBKEY from BUZZ_RELAY_PRIVATE_KEY..."
-  RELAY_OWNER_PUBKEY=$(cargo run -p buzz-admin --ignore-rust-version -q -- derive-pubkey 2>/dev/null)
+  RELAY_OWNER_PUBKEY=$(run_bin buzz-admin buzz-admin derive-pubkey 2>/dev/null)
   if [[ -n "$RELAY_OWNER_PUBKEY" ]]; then
     export RELAY_OWNER_PUBKEY
     echo "==> RELAY_OWNER_PUBKEY=${RELAY_OWNER_PUBKEY}"
@@ -97,4 +114,13 @@ fi
 
 echo "==> Starting Buzz relay on ${BUZZ_BIND_ADDR}..."
 
-exec cargo run -p buzz-relay --release --ignore-rust-version
+# Use the pre-built binary for a fast start; fall back to cargo run if missing.
+RELAY_BIN="${REPO_ROOT}/target/release/buzz-relay"
+if [[ -x "$RELAY_BIN" ]]; then
+  echo "==> Using pre-built binary: ${RELAY_BIN}"
+  exec "$RELAY_BIN"
+else
+  echo "==> Pre-built buzz-relay not found; falling back to cargo run (slow)." >&2
+  echo "==> To pre-build: cargo build --ignore-rust-version -p buzz-relay --release" >&2
+  exec cargo run -p buzz-relay --release --ignore-rust-version
+fi
