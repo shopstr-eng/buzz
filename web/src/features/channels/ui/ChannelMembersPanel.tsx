@@ -3,8 +3,10 @@
  * Members come from kind:39002; agents are identified by kind:10100.
  */
 
-import { X, Bot, Crown, ShieldCheck, UserRound } from "lucide-react";
+import { useState } from "react";
+import { X, Bot, Crown, ShieldCheck, UserRound, Zap } from "lucide-react";
 import { useChannelMembers, type ChannelMember } from "../use-channel-members";
+import { ConnectAgentDialog } from "./ConnectAgentDialog";
 
 // Deterministic avatar colour from pubkey.
 const AVATAR_PALETTE = [
@@ -88,11 +90,13 @@ function SectionHeader({ label, count }: { label: string; count: number }) {
 
 interface Props {
   groupId: string;
+  channelName?: string;
   onClose: () => void;
 }
 
-export function ChannelMembersPanel({ groupId, onClose }: Props) {
+export function ChannelMembersPanel({ groupId, channelName: _channelName, onClose }: Props) {
   const { members, isLoading } = useChannelMembers(groupId);
+  const [showConnectAgent, setShowConnectAgent] = useState(false);
 
   const owners = members.filter((m) => m.role === "owner");
   const admins = members.filter((m) => m.role === "admin");
@@ -168,17 +172,32 @@ export function ChannelMembersPanel({ groupId, onClose }: Props) {
         )}
       </div>
 
-      {/* Footer hint */}
-      <div className="shrink-0 border-t border-black/10 px-3 py-2 dark:border-white/10">
+      {/* Footer */}
+      <div className="shrink-0 space-y-1.5 border-t border-black/10 px-3 py-2.5 dark:border-white/10">
+        <button
+          type="button"
+          onClick={() => setShowConnectAgent(true)}
+          className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-black/50 transition-colors hover:bg-black/5 hover:text-black/80 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white/70"
+        >
+          <Zap className="h-3 w-3 text-violet-500/70" />
+          Connect agent
+        </button>
         <a
           href="/admin/"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[11px] text-black/35 underline-offset-2 hover:text-black/60 hover:underline dark:text-white/35 dark:hover:text-white/60"
+          className="block text-[11px] text-black/35 underline-offset-2 hover:text-black/60 hover:underline dark:text-white/35 dark:hover:text-white/60"
         >
           Manage in admin panel ↗
         </a>
       </div>
+
+      {showConnectAgent && (
+        <ConnectAgentDialog
+          groupId={groupId}
+          onClose={() => setShowConnectAgent(false)}
+        />
+      )}
     </aside>
   );
 }

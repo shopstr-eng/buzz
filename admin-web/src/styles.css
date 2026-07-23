@@ -1389,3 +1389,104 @@ dd {
 .ch-btn-danger:disabled { opacity: .35; cursor: not-allowed; }
 
 .ch-delete-msg { margin: 0; font-size: .9rem; line-height: 1.5; }
+
+/* ── Agents page ─────────────────────────────────────────────────────────── */
+
+.page-eyebrow {
+  margin: 0 0 1rem;
+  color: rgb(35 30 30 / 55%);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ag-table-wrap {
+  overflow-x: auto;
+  border-radius: .75rem;
+  background: white;
+  box-shadow: 0 2px 12px rgba(0,0,0,.07);
+}
+
+.ag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .875rem;
+}
+
+.ag-table th {
+  padding: .75rem 1rem;
+  text-align: left;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(0,0,0,.45);
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  background: rgba(0,0,0,.02);
+}
+
+.ag-table td {
+  padding: .75rem 1rem;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+  vertical-align: middle;
+}
+
+.ag-table tr:last-child td { border-bottom: none; }
+.ag-table tr:hover td { background: rgba(0,0,0,.015); }
+
+.ag-pubkey {
+  font-size: .8rem;
+  color: rgba(0,0,0,.7);
+}
+
+.ag-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+
+.ag-channel-tag {
+  display: inline-block;
+  padding: .15rem .55rem;
+  border-radius: 999px;
+  background: rgba(0,0,0,.07);
+  font-size: .75rem;
+  color: rgba(0,0,0,.65);
+}
+
+.ag-empty {
+  font-size: .8rem;
+  color: rgba(0,0,0,.35);
+  font-style: italic;
+}
+
+.ag-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ag-add-btn {
+  padding: .3rem .75rem;
+  font-size: .78rem;
+  border-radius: .4rem;
+}
+
+.ag-badge-green   { background: rgba(5,150,105,.1);   color: #047857; }
+.ag-badge-amber   { background: rgba(245,158,11,.12); color: #b45309; }
+.ag-badge-red     { background: rgba(185,28,28,.1);   color: #b91c1c; }
+.ag-badge-neutral { background: rgba(0,0,0,.07);      color: rgba(0,0,0,.5); }
+
+.ag-success {
+  margin: 0;
+  font-size: .82rem;
+  color: #047857;
+  font-weight: 500;
+}
+
+.ag-agent-hint {
+  margin: 0;
+  font-size: .85rem;
+  color: rgba(0,0,0,.65);
+  line-height: 1.5;
+}

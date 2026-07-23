@@ -94,6 +94,7 @@ export function ChannelView({ channel }: Props) {
       {membersPanelOpen && (
         <ChannelMembersPanel
           groupId={channel.groupId}
+          channelName={channel.name}
           onClose={() => setMembersPanelOpen(false)}
         />
       )}

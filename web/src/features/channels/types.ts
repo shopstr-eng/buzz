@@ -37,6 +37,11 @@ export const KIND_STREAM_MSG_V2 = 40002;
 export const KIND_CREATE_GROUP = 9007;
 export const KIND_AGENT_PROFILE = 10100;
 
+/** NIP-29 group management kinds */
+export const KIND_ADD_MEMBER = 9000;
+export const KIND_REMOVE_MEMBER = 9001;
+export const KIND_EDIT_METADATA = 9002;
+
 /** A single credential field required to activate a model. */
 export interface CredentialField {
   /** Environment-variable-style key stored as an agent_config tag. */
