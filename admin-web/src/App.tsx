@@ -896,10 +896,12 @@ export function Members() {
   }, [resource.data, removalRefetchAnchor]);
 
   // Once the post-role-change refetch delivers a new data array, clear the
-  // role anchor so the selects are re-enabled.
+  // role anchor AND the optimistic role so the selects are re-enabled and
+  // the value prop falls back to the confirmed server value.
   useEffect(() => {
     if (roleRefetchAnchor && resource.data !== roleRefetchAnchor) {
       setRoleRefetchAnchor(undefined);
+      setOptimisticRole(null);
     }
   }, [resource.data, roleRefetchAnchor]);
 
@@ -942,8 +944,10 @@ export function Members() {
     // patch() settles.
     setOptimisticRole({ pubkey, role: newRole });
     setRoleError(null);
+    let succeeded = false;
     try {
       await patch(`/members/${pubkey}`, { role: newRole });
+      succeeded = true;
       // Anchor the current data array before triggering the refetch so we
       // know when the fresh data has actually arrived (the anchor is cleared
       // in the useEffect above when resource.data gets a new reference).
@@ -961,7 +965,14 @@ export function Members() {
       }
     } finally {
       setUpdatingRole(null);
-      setOptimisticRole(null);
+      // On success the optimistic role must persist through the post-patch
+      // refetch window so the select never shows the stale server value.
+      // The roleRefetchAnchor useEffect clears it once fresh data arrives.
+      // On failure we clear it immediately so the select reverts to the
+      // last confirmed server value.
+      if (!succeeded) {
+        setOptimisticRole(null);
+      }
     }
   }
 

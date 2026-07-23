@@ -547,6 +547,73 @@ describe("Members – changeRole state with mid-patch refresh", () => {
     });
   });
 
+  it("keeps showing the optimistic role after patch() resolves and before fresh data arrives (no stale-value flash)", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolvePatch!: () => void;
+    const patchPromise = new Promise<void>((res) => {
+      resolvePatch = res;
+    });
+    vi.mocked(patch as Mock).mockReturnValue(patchPromise);
+
+    // Use a stable array reference — the anchor comparison relies on identity
+    const initialMembers: RelayMember[] = [
+      { ...ALICE, role: "member" },
+      BOB,
+    ];
+    const resource = makeResource(initialMembers);
+    mockUseResource.mockReturnValue(resource);
+
+    const { rerender } = render(<Members />);
+
+    // Change Alice's role to "admin" — patch() is held pending
+    const aliceSelect = screen.getByRole("combobox", {
+      name: new RegExp(ALICE.pubkey.slice(0, 8), "i"),
+    });
+    fireEvent.change(aliceSelect, { target: { value: "admin" } });
+
+    // Resolve patch() — updatingRole is cleared but roleRefetchAnchor is set;
+    // optimisticRole must stay alive so the select value doesn't flash back
+    // to the stale server value ("member") before fresh data arrives.
+    await act(async () => {
+      resolvePatch();
+      await patchPromise;
+    });
+
+    // Simulate mid-refetch: same data array reference, only stale flag changes.
+    // resource.data is still initialMembers (Alice still "member" in server data)
+    // so the anchor comparison holds — the select must be disabled AND still
+    // show "admin", not revert to "member".
+    const staleResource = { ...resource, stale: true };
+    mockUseResource.mockReturnValue(staleResource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    const aliceSelectMid = screen.getByRole("combobox", {
+      name: new RegExp(ALICE.pubkey.slice(0, 8), "i"),
+    });
+    // Must show the optimistic value, not the stale server value
+    expect(aliceSelectMid).toHaveValue("admin");
+    // And still be disabled while the refetch is in-flight
+    expect(aliceSelectMid).toBeDisabled();
+
+    // Refetch completes — new array reference (Alice now "admin" from server)
+    const freshMembers: RelayMember[] = [{ ...ALICE, role: "admin" }, BOB];
+    const freshResource = makeResource(freshMembers);
+    mockUseResource.mockReturnValue(freshResource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Anchor cleared → select is re-enabled and shows the confirmed server value
+    const aliceSelectAfter = screen.getByRole("combobox", {
+      name: new RegExp(ALICE.pubkey.slice(0, 8), "i"),
+    });
+    expect(aliceSelectAfter).not.toBeDisabled();
+    expect(aliceSelectAfter).toHaveValue("admin");
+  });
+
   it("keeps the role-change select disabled during the post-patch refetch until fresh data arrives", async () => {
     const mockUseResource = vi.mocked(useResource as Mock);
 
