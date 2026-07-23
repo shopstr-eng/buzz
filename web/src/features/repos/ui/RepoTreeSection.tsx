@@ -5,31 +5,35 @@ import type { TreeEntry } from "../git-client";
 function TreeRow({
   entry,
   repoId,
+  currentPath,
   preview,
 }: {
   entry: TreeEntry;
   repoId: string;
+  currentPath: string;
   preview: boolean;
 }) {
+  const entryPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+
   if (entry.type === "tree") {
-    // Sub-tree navigation is deferred — show folders as visibly non-clickable
-    // so the affordance matches the behaviour.
     return (
-      <div
-        className="flex items-center gap-2 border-b border-black/10 px-3 py-2 text-sm text-black/60 last:border-b-0 dark:border-white/10 dark:text-white/60"
-        aria-disabled="true"
+      <Link
+        to="/repos/$repoId/tree/$"
+        params={{ repoId, _splat: entryPath }}
+        search={preview ? ({ preview: "repositories" } as Record<string, string>) : undefined}
+        className="flex items-center gap-2 border-b border-black/10 px-3 py-2 text-sm text-black last:border-b-0 hover:bg-black/5 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
       >
         <Folder className="h-4 w-4 shrink-0 text-black/50 dark:text-white/50" />
         <span className="font-medium">{entry.name}</span>
-      </div>
+      </Link>
     );
   }
 
   return (
     <Link
       to="/repos/$repoId/blob/$"
-      params={{ repoId, _splat: entry.name }}
-      search={preview ? { preview: "repositories" } : undefined}
+      params={{ repoId, _splat: entryPath }}
+      search={preview ? ({ preview: "repositories" } as Record<string, string>) : undefined}
       className="flex items-center gap-2 border-b border-black/10 px-3 py-2 text-sm text-black last:border-b-0 hover:bg-black/5 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
     >
       <File className="h-4 w-4 shrink-0 text-black/50 dark:text-white/50" />
@@ -42,11 +46,14 @@ export function RepoTreeSection({
   entries,
   isLoading,
   repoId,
+  currentPath = "",
   preview = false,
 }: {
   entries: TreeEntry[] | undefined;
   isLoading: boolean;
   repoId: string;
+  /** Current directory path relative to repo root (empty string = root). */
+  currentPath?: string;
   preview?: boolean;
 }) {
   if (isLoading) {
@@ -77,6 +84,7 @@ export function RepoTreeSection({
             key={entry.name}
             entry={entry}
             repoId={repoId}
+            currentPath={currentPath}
             preview={preview}
           />
         ))}

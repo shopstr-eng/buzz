@@ -417,6 +417,8 @@ pub async fn validate_admin_event(
                 "purpose",
                 "visibility",
                 "ttl",
+                "model",
+                "agent_config",
             ];
             let has_recognized = event
                 .tags
@@ -424,7 +426,7 @@ pub async fn validate_admin_event(
                 .any(|t| RECOGNIZED_TAGS.contains(&t.kind().to_string().as_str()));
             if !has_recognized {
                 return Err(anyhow::anyhow!(
-                    "kind:9002 must include at least one metadata tag (name, about, archived, topic, purpose, visibility, ttl)"
+                    "kind:9002 must include at least one metadata tag (name, about, archived, topic, purpose, visibility, ttl, model, agent_config)"
                 ));
             }
 
@@ -1006,6 +1008,12 @@ pub async fn emit_group_discovery_events(
         if let Some(ref deadline) = channel.ttl_deadline {
             tags.push(Tag::parse(["ttl_deadline", &deadline.to_rfc3339()])?);
         }
+        // Agent model preset — emitted so buzz-acp can apply it per-channel.
+        if let Some(ref model) = channel.model {
+            if !model.is_empty() {
+                tags.push(Tag::parse(["model", model])?);
+            }
+        }
         emit_addressable_discovery_event(
             tenant,
             state,
@@ -1351,6 +1359,19 @@ async fn handle_edit_metadata(
                             channel_id,
                             buzz_db::channel::ChannelUpdate {
                                 description: Some(val.to_string()),
+                                ..Default::default()
+                            },
+                        )
+                        .await?;
+                }
+                "model" => {
+                    state
+                        .db
+                        .update_channel(
+                            tenant.community(),
+                            channel_id,
+                            buzz_db::channel::ChannelUpdate {
+                                model: Some(val.to_string()),
                                 ..Default::default()
                             },
                         )

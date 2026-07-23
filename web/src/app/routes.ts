@@ -8,6 +8,7 @@ export const routes = rootRoute("root.tsx", [
     index("repos.index.tsx"),
     route("$repoId", "repos.$repoId.tsx"),
     route("$repoId/blob/$", "repos.$repoId.blob.$.tsx"),
+    route("$repoId/tree/$", "repos.$repoId.tree.$.tsx"),
   ]),
   route("/channels", "channels.tsx", [
     index("channels.index.tsx"),

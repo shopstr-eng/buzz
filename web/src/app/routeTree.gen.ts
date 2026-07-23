@@ -15,6 +15,7 @@ import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
 import { Route as reposDotindexRouteImport } from "./routes/repos.index";
 import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
 import { Route as reposDotrepoIdDotblobDotsplatRouteImport } from "./routes/repos.$repoId.blob.$";
+import { Route as reposDotrepoIdDottreeDotsplatRouteImport } from "./routes/repos.$repoId.tree.$";
 
 const indexRoute = indexRouteImport.update({
   id: "/",
@@ -67,6 +68,12 @@ const reposDotrepoIdDotblobDotsplatRoute =
     path: "/$repoId/blob/$",
     getParentRoute: () => reposRoute,
   } as any);
+const reposDotrepoIdDottreeDotsplatRoute =
+  reposDotrepoIdDottreeDotsplatRouteImport.update({
+    id: "/$repoId/tree/$",
+    path: "/$repoId/tree/$",
+    getParentRoute: () => reposRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof indexRoute;
@@ -79,6 +86,7 @@ export interface FileRoutesByFullPath {
   "/channels/": typeof channelsDotindexRoute;
   "/repos/": typeof reposDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
+  "/repos/$repoId/tree/$": typeof reposDotrepoIdDottreeDotsplatRoute;
 }
 export interface FileRoutesByTo {
   "/": typeof indexRoute;
@@ -89,6 +97,7 @@ export interface FileRoutesByTo {
   "/channels": typeof channelsDotindexRoute;
   "/repos": typeof reposDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
+  "/repos/$repoId/tree/$": typeof reposDotrepoIdDottreeDotsplatRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -102,6 +111,7 @@ export interface FileRoutesById {
   "/channels/": typeof channelsDotindexRoute;
   "/repos/": typeof reposDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
+  "/repos/$repoId/tree/$": typeof reposDotrepoIdDottreeDotsplatRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -115,7 +125,8 @@ export interface FileRouteTypes {
     | "/repos/$repoId"
     | "/channels/"
     | "/repos/"
-    | "/repos/$repoId/blob/$";
+    | "/repos/$repoId/blob/$"
+    | "/repos/$repoId/tree/$";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
@@ -125,7 +136,8 @@ export interface FileRouteTypes {
     | "/repos/$repoId"
     | "/channels"
     | "/repos"
-    | "/repos/$repoId/blob/$";
+    | "/repos/$repoId/blob/$"
+    | "/repos/$repoId/tree/$";
   id:
     | "__root__"
     | "/"
@@ -137,7 +149,8 @@ export interface FileRouteTypes {
     | "/repos/$repoId"
     | "/channels/"
     | "/repos/"
-    | "/repos/$repoId/blob/$";
+    | "/repos/$repoId/blob/$"
+    | "/repos/$repoId/tree/$";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -220,6 +233,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof reposDotrepoIdDotblobDotsplatRouteImport;
       parentRoute: typeof reposRoute;
     };
+    "/repos/$repoId/tree/$": {
+      id: "/repos/$repoId/tree/$";
+      path: "/$repoId/tree/$";
+      fullPath: "/repos/$repoId/tree/$";
+      preLoaderRoute: typeof reposDotrepoIdDottreeDotsplatRouteImport;
+      parentRoute: typeof reposRoute;
+    };
   }
 }
 
@@ -241,12 +261,14 @@ interface reposRouteChildren {
   reposDotrepoIdRoute: typeof reposDotrepoIdRoute;
   reposDotindexRoute: typeof reposDotindexRoute;
   reposDotrepoIdDotblobDotsplatRoute: typeof reposDotrepoIdDotblobDotsplatRoute;
+  reposDotrepoIdDottreeDotsplatRoute: typeof reposDotrepoIdDottreeDotsplatRoute;
 }
 
 const reposRouteChildren: reposRouteChildren = {
   reposDotrepoIdRoute: reposDotrepoIdRoute,
   reposDotindexRoute: reposDotindexRoute,
   reposDotrepoIdDotblobDotsplatRoute: reposDotrepoIdDotblobDotsplatRoute,
+  reposDotrepoIdDottreeDotsplatRoute: reposDotrepoIdDottreeDotsplatRoute,
 };
 
 const reposRouteWithChildren = reposRoute._addFileChildren(reposRouteChildren);

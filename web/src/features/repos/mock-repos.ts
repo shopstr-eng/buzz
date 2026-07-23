@@ -118,6 +118,30 @@ export const mockRepoReadme: ReadmeResult = {
     "# Buzz Desktop\n\nA focused community for people and agents to collaborate.\n\n## Getting started\n\nInstall dependencies, then start the development app.",
 };
 
+/**
+ * Return mock sub-tree entries for preview mode.
+ * Returns an array (possibly empty) for any path inside a known folder,
+ * or null if the path isn't a recognised mock directory.
+ */
+export function getMockSubTree(dirPath: string): TreeEntry[] | null {
+  const clean = dirPath.replace(/^\/|\/$/g, "");
+  if (clean === "src") {
+    return [
+      { name: "components", type: "tree", mode: "040000", oid: "4".repeat(40) },
+      { name: "index.ts", type: "blob", mode: "100644", oid: "5".repeat(40) },
+      { name: "types.ts", type: "blob", mode: "100644", oid: "6".repeat(40) },
+    ];
+  }
+  if (clean === "src/components") {
+    return [
+      { name: "Button.tsx", type: "blob", mode: "100644", oid: "7".repeat(40) },
+      { name: "Input.tsx", type: "blob", mode: "100644", oid: "8".repeat(40) },
+    ];
+  }
+  // Unknown sub-directory: return empty list (directory exists but is empty in mock).
+  return [];
+}
+
 export function getMockBlob(
   repoId: string,
   filepath: string,

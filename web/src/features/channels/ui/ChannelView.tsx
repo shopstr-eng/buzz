@@ -6,6 +6,7 @@ import { useSendMessage } from "../use-send-message";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import { ChannelMembersPanel } from "./ChannelMembersPanel";
+import { WorkflowChannelView } from "./WorkflowChannelView";
 import type { Channel, ChannelType } from "../types";
 
 interface Props {
@@ -20,6 +21,15 @@ function ChannelTypeIcon({ type, isPrivate }: { type: ChannelType; isPrivate: bo
 }
 
 export function ChannelView({ channel }: Props) {
+  // Workflow channels get their own dedicated view — no message composer.
+  if (channel.channelType === "workflow") {
+    return <WorkflowChannelView channel={channel} />;
+  }
+
+  return <ChatChannelView channel={channel} />;
+}
+
+function ChatChannelView({ channel }: Props) {
   const { identity, connectionState } = useRelay();
   const { messages, isLoading, addOptimistic, fetchOlder, canFetchOlder } =
     useMessages(channel.groupId);

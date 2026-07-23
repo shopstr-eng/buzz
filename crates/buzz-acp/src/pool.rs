@@ -1419,6 +1419,19 @@ pub async fn run_prompt_task(
             if let Some(sid) = agent.state.sessions.get(cid) {
                 (sid.clone(), false)
             } else {
+                // Per-channel model: apply the channel's desired model when the agent
+                // hasn't been manually switched via a live SwitchModel control signal.
+                // This runs once per new session so the very first turn for a channel
+                // already uses the right model.
+                //
+                // Set unconditionally (including None) so a channel that has no model
+                // preset resets desired_model to the ACP default rather than leaking a
+                // previous channel's model into this session (cross-channel isolation).
+                if !agent.model_overridden {
+                    if let Some(ci) = ctx.channel_info.get(cid) {
+                        agent.desired_model = ci.model.clone();
+                    }
+                }
                 // Create new session with model application.
                 match create_session_and_apply_model(
                     &mut agent,
