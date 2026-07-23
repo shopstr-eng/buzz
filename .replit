@@ -25,6 +25,7 @@ REDIS_URL = "redis://127.0.0.1:6379"
 RELAY_URL = "wss://1c0b1ec3-3745-44bf-80d6-1143b67e10f0-00-1neui5hpbvv8a-mkvc5y5b.janeway.replit.dev"
 RELAY_OWNER_PUBKEY = "b67348f092c3821745acc619a353cc8d7ed16401d422e41204a78500ee04a2f7"
 RUST_LOG = "buzz_relay=info,buzz_db=info,tower_http=warn"
+BUZZ_REQUIRE_AUTH_TOKEN = "true"
 
 [workflows]
 runButton = "Project"
