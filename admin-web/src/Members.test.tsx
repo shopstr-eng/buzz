@@ -222,6 +222,73 @@ describe("Members – confirmingRemove auto-clear", () => {
   });
 });
 
+describe("Members – Cancel button on Remove? dialog", () => {
+  it("dismisses the Remove? dialog without calling del()", () => {
+    vi.clearAllMocks();
+    const mockUseResource = vi.mocked(useResource as Mock);
+    mockUseResource.mockReturnValue(makeResource([ALICE, BOB]));
+    vi.mocked(del as Mock).mockResolvedValue(undefined);
+
+    render(<Members />);
+
+    // Open the remove confirmation for Alice
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+
+    // Click Cancel
+    fireEvent.click(screen.getByText("Cancel"));
+
+    // del() must never have been called
+    expect(vi.mocked(del as Mock)).not.toHaveBeenCalled();
+
+    // The "Remove?" confirmation must be gone
+    expect(screen.queryByText("Remove?")).not.toBeInTheDocument();
+
+    // Alice's Remove button must be back and enabled
+    const aliceRemoveBtn = screen.getByTitle(`Remove ${ALICE.pubkey}`);
+    expect(aliceRemoveBtn).toBeInTheDocument();
+    expect(aliceRemoveBtn).not.toBeDisabled();
+  });
+});
+
+describe("Members – role-change dropdown disabled during removal", () => {
+  it("disables the role-change select for every member while del() is in-flight", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolveDel!: () => void;
+    const delPromise = new Promise<void>((res) => {
+      resolveDel = res;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    const resource = makeResource([ALICE, BOB]);
+    mockUseResource.mockReturnValue(resource);
+
+    render(<Members />);
+
+    // Open the remove confirmation for Alice
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+
+    // Confirm → del() is called and held pending
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // Bob's role-change select must be disabled while del() is in-flight
+    const bobSelect = screen.getByRole("combobox", {
+      name: new RegExp(BOB.pubkey.slice(0, 8), "i"),
+    });
+    expect(bobSelect).toBeDisabled();
+
+    // Resolve del() — Bob's role-change select should return to enabled
+    await act(async () => {
+      resolveDel();
+      await delPromise;
+    });
+
+    expect(bobSelect).not.toBeDisabled();
+  });
+});
+
 describe("Members – changeRole state with mid-patch refresh", () => {
   it("leaves no orphaned error banner when patch() rejects after member drops from list", async () => {
     const mockUseResource = vi.mocked(useResource as Mock);

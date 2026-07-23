@@ -934,7 +934,7 @@ export function Members() {
                           <select
                             className="role-select"
                             value={member.role}
-                            disabled={updatingRole === member.pubkey}
+                            disabled={updatingRole === member.pubkey || !!removing}
                             aria-label={`Role for ${short(member.pubkey)}`}
                             onChange={(e) =>
                               changeRole(member.pubkey, e.target.value)
