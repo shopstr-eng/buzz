@@ -949,6 +949,36 @@ dd {
   cursor: not-allowed;
 }
 
+.role-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0.3rem 1.8rem 0.3rem 0.7rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  border: 1px solid rgb(35 30 30 / 18%);
+  border-radius: 999px;
+  background: rgb(35 30 30 / 5%)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23231e1e' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")
+    no-repeat right 0.6rem center;
+  cursor: pointer;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.role-select:hover:not(:disabled) {
+  border-color: rgb(35 30 30 / 35%);
+  background-color: rgb(35 30 30 / 9%);
+}
+
+.role-select:focus {
+  outline: 2px solid rgb(35 30 30 / 35%);
+  outline-offset: 1px;
+}
+
+.role-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .member-remove-error {
   margin-bottom: 1.25rem;
 }

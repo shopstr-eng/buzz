@@ -12,7 +12,7 @@ use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -38,9 +38,9 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
         )
         // Invite management: admin-host-gated invite minting (no NIP-98 required).
         .route("/invites", post(mint_invite_admin))
-        // Member management: list and remove relay members.
+        // Member management: list, update role, and remove relay members.
         .route("/members", get(list_members))
-        .route("/members/{pubkey}", delete(remove_member))
+        .route("/members/{pubkey}", patch(update_member).delete(remove_member))
         .layer(middleware::from_fn(security_headers))
         .layer(RequestBodyLimitLayer::new(4096))
         .with_state(state)
@@ -371,6 +371,78 @@ async fn list_members(
         .collect();
 
     Ok(Json(members))
+}
+
+/// Request body for `PATCH /api/admin/v1/members/:pubkey`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct UpdateMemberRequest {
+    role: String,
+}
+
+/// `PATCH /api/admin/v1/members/:pubkey` — change a relay member's role.
+///
+/// Only `"admin"` and `"member"` are accepted; `"owner"` is a protected role
+/// managed via ownership-transfer flows. Returns 204 on success, 400 for an
+/// invalid role or pubkey, 404 if the pubkey is not a member, and 409 if the
+/// pubkey belongs to the relay owner.
+async fn update_member(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+    Path(pubkey): Path<String>,
+    Json(body): Json<UpdateMemberRequest>,
+) -> Result<StatusCode, ApiError> {
+    authorize(&state, &headers)?;
+
+    if !is_hex_pubkey(&pubkey) {
+        return Err(ApiError::bad_request(
+            "invalid_pubkey",
+            "pubkey must be a 64-char hex string",
+        ));
+    }
+
+    if !matches!(body.role.as_str(), "admin" | "member") {
+        return Err(ApiError::bad_request(
+            "invalid_role",
+            "role must be \"admin\" or \"member\"",
+        ));
+    }
+
+    let tenant = crate::tenant::bind_deployment_community(&state.db, &state.config.relay_url)
+        .await
+        .map_err(|_| ApiError::service_unavailable("community_not_found", "no community found"))?;
+
+    let updated = state
+        .db
+        .update_relay_member_role(tenant.community(), &pubkey, &body.role)
+        .await?;
+
+    if !updated {
+        // `update_relay_member_role` excludes the owner row via `role <> 'owner'`.
+        // Distinguish not-found from owner so callers get the right error.
+        let member = state
+            .db
+            .get_relay_member(tenant.community(), &pubkey)
+            .await?;
+        return match member {
+            Some(_) => Err(ApiError::conflict(
+                "is_owner",
+                "the relay owner's role cannot be changed",
+            )),
+            None => Err(ApiError::not_found()),
+        };
+    }
+
+    tracing::info!(pubkey = %pubkey, role = %body.role, "relay member role updated via admin panel");
+
+    // Best-effort NIP-43 membership list update; log but don't fail the request.
+    if let Err(e) =
+        crate::handlers::side_effects::publish_nip43_membership_list(&tenant, &state).await
+    {
+        tracing::warn!(error = %e, "failed to publish NIP-43 membership list after role update");
+    }
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `DELETE /api/admin/v1/members/:pubkey` — remove a relay member.

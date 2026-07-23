@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ApiFailure, del, post, request } from "./api";
+import { ApiFailure, del, patch, post, request } from "./api";
 import type { FeedbackDetail, FeedbackSummary, RelayMember, Report } from "./types";
 import { useResource } from "./useResource";
 
@@ -820,6 +820,8 @@ function Members() {
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
+  const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   async function removeMember(pubkey: string) {
     if (removing) return;
@@ -836,6 +838,20 @@ function Members() {
     }
   }
 
+  async function changeRole(pubkey: string, newRole: string) {
+    if (updatingRole) return;
+    setUpdatingRole(pubkey);
+    setRoleError(null);
+    try {
+      await patch(`/members/${pubkey}`, { role: newRole });
+      resource.refetch();
+    } catch (e) {
+      setRoleError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUpdatingRole(null);
+    }
+  }
+
   return (
     <Page
       eyebrow="Members"
@@ -845,6 +861,11 @@ function Members() {
       {removeError && (
         <div className="state error member-remove-error" role="alert">
           <p>{removeError}</p>
+        </div>
+      )}
+      {roleError && (
+        <div className="state error member-remove-error" role="alert">
+          <p>{roleError}</p>
         </div>
       )}
       <StateView resource={resource}>
@@ -870,7 +891,22 @@ function Members() {
                         <code title={member.pubkey}>{short(member.pubkey)}</code>
                       </td>
                       <td>
-                        <span className="tag">{member.role}</span>
+                        {member.role === "owner" ? (
+                          <span className="tag">{member.role}</span>
+                        ) : (
+                          <select
+                            className="role-select"
+                            value={member.role}
+                            disabled={updatingRole === member.pubkey}
+                            aria-label={`Role for ${short(member.pubkey)}`}
+                            onChange={(e) =>
+                              changeRole(member.pubkey, e.target.value)
+                            }
+                          >
+                            <option value="member">member</option>
+                            <option value="admin">admin</option>
+                          </select>
+                        )}
                       </td>
                       <td className="member-invited-by">
                         {member.addedBy ? (

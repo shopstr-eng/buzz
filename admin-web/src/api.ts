@@ -87,6 +87,28 @@ export async function del(path: string): Promise<void> {
   }
 }
 
+export async function patch(path: string, body: unknown): Promise<void> {
+  const fullUrl = `${location.origin}${PREFIX}${path}`;
+  const authValue = await buildNip98Header(fullUrl, "PATCH");
+  const response = await fetch(`${PREFIX}${path}`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      Authorization: authValue,
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const envelope = await response.json().catch(() => null);
+    throw new ApiFailure(
+      response.status,
+      envelope?.error?.message ?? `Request failed (${response.status})`,
+    );
+  }
+}
+
 export async function post<T>(path: string, body: unknown): Promise<T> {
   const fullUrl = `${location.origin}${PREFIX}${path}`;
   const authValue = await buildNip98Header(fullUrl, "POST");
