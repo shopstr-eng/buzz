@@ -27,66 +27,23 @@
  *   DATABASE_URL    Postgres connection string for inserting/removing test rows.
  *   COMMUNITY_HOST  Override Host header sent with the WebSocket upgrade.
  *
- * Dependencies (nostr-tools, ws) are auto-installed from
- * scripts/nostr-tools-test-package.json when not already present.
+ * Dependencies (nostr-tools, ws) are resolved from the workspace node_modules.
+ * Run `pnpm install` (or `pnpm install --frozen-lockfile` in CI) before
+ * invoking this script.
  *
  * Exit 0 on success, 1 on any failure.
  */
 
 'use strict';
 
-// ─── Bootstrap: auto-install deps from scripts/nostr-tools-test-package.json ─
-
-const path   = require('path');
-const fs     = require('fs');
 const { execSync } = require('child_process');
 
-const SCRIPT_DIR   = __dirname;
-const PKG_JSON     = path.join(SCRIPT_DIR, 'nostr-tools-test-package.json');
-const NODE_MODULES = path.join(SCRIPT_DIR, 'nostr-tools-test-node_modules');
-
-// Resolve modules from the private install directory first so we never pollute
-// the workspace root node_modules.
-require('module').globalPaths.unshift(NODE_MODULES);
-
-function depsMissing() {
-  try { require('ws'); require('nostr-tools'); return false; } catch { return true; }
-}
-
-if (depsMissing()) {
-  if (!fs.existsSync(PKG_JSON)) {
-    console.error(`ERROR: ${PKG_JSON} not found — cannot install dependencies.`);
-    process.exit(1);
-  }
-  // npm install with --prefix requires a package.json in the prefix directory.
-  // Copy the declared package.json there, then run npm install.
-  fs.mkdirSync(NODE_MODULES, { recursive: true });
-  fs.copyFileSync(PKG_JSON, path.join(NODE_MODULES, 'package.json'));
-  console.log('==> Installing test dependencies from nostr-tools-test-package.json…');
-  execSync(
-    'npm install --prefer-offline --loglevel error',
-    { cwd: NODE_MODULES, stdio: 'inherit' },
-  );
-}
-
-// Now require runtime deps — resolve explicitly from the install directory.
-// globalPaths is populated above, but explicit resolution is more reliable.
-function req(name) {
-  // 1. Try the install dir's node_modules (npm install without --prefix puts
-  //    deps in <cwd>/node_modules).
-  const nmPath = path.join(NODE_MODULES, 'node_modules', name);
-  if (fs.existsSync(nmPath)) return require(nmPath);
-  // 2. Try the globalPaths resolution (catches already-installed system deps).
-  try { return require(name); } catch (_) {}
-  throw new Error(`Cannot resolve module '${name}' from ${NODE_MODULES}`);
-}
-
-const WebSocket = req('ws');
+const WebSocket = require('ws');
 const {
   generateSecretKey,
   getPublicKey,
   finalizeEvent,
-} = req('nostr-tools');
+} = require('nostr-tools');
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
