@@ -11,7 +11,7 @@ vi.mock("./useResource");
 vi.mock("./api");
 
 import { useResource } from "./useResource";
-import { del } from "./api";
+import { del, patch } from "./api";
 
 const ALICE: RelayMember = {
   pubkey: "aa".repeat(32),
@@ -181,5 +181,46 @@ describe("Members – confirmingRemove auto-clear", () => {
 
     // Confirmation must remain visible
     expect(screen.getByText("Remove?")).toBeInTheDocument();
+  });
+});
+
+describe("Members – changeRole state with mid-patch refresh", () => {
+  it("leaves no orphaned error banner when patch() rejects after member drops from list", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let rejectPatch!: (e: Error) => void;
+    const patchPromise = new Promise<void>((_, rej) => {
+      rejectPatch = rej;
+    });
+    vi.mocked(patch as Mock).mockReturnValue(patchPromise);
+
+    let resource = makeResource([ALICE, BOB]);
+    mockUseResource.mockReturnValue(resource);
+
+    const { rerender } = render(<Members />);
+
+    // Change Alice's role — patch() is called and held pending
+    const aliceSelect = screen.getByRole("combobox", {
+      name: new RegExp(ALICE.pubkey.slice(0, 8), "i"),
+    });
+    fireEvent.change(aliceSelect, { target: { value: "admin" } });
+
+    // Simulate a list refresh that drops Alice while patch() is still in-flight
+    resource = makeResource([BOB]);
+    mockUseResource.mockReturnValue(resource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Now reject patch() — Alice's row is already gone
+    await act(async () => {
+      rejectPatch(new Error("Network error"));
+      await patchPromise.catch(() => {});
+    });
+
+    // No orphaned error banner (member is already gone, error would be confusing)
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // Bob's row still intact
+    expect(screen.getByTitle(`Remove ${BOB.pubkey}`)).toBeInTheDocument();
   });
 });

@@ -871,7 +871,15 @@ export function Members() {
       await patch(`/members/${pubkey}`, { role: newRole });
       resource.refetch();
     } catch (e) {
-      setRoleError(e instanceof Error ? e.message : String(e));
+      // If a list refresh dropped the member while patch() was in-flight, the
+      // row is already gone — surfacing an error banner here would be
+      // confusing and orphaned. Only show the error if the member is still
+      // present in the latest data.
+      const stillPresent =
+        membersRef.current?.some((m) => m.pubkey === pubkey) ?? true;
+      if (stillPresent) {
+        setRoleError(e instanceof Error ? e.message : String(e));
+      }
     } finally {
       setUpdatingRole(null);
     }
