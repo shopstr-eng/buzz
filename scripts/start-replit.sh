@@ -234,6 +234,15 @@ if [[ -n "$ACP_PRIVATE_KEY" ]]; then
       run_bin buzz-admin buzz-admin add-member --pubkey "$ACP_PUBKEY" >/dev/null 2>&1 \
       && echo "==> ACP worker registered as relay member (community: 127.0.0.1:${_BIND_PORT})." \
       || echo "==> ACP worker member registration skipped (already exists or error)."
+
+    # Write the ACP pubkey into web/dist/assets/ so the relay's static file
+    # handler (which only serves /assets/* paths) can serve it to the web UI.
+    # The web UI fetches /assets/relay-info.json to learn the ACP pubkey before
+    # publishing kind:9000 to add the agent as a channel member.
+    if [[ -d web/dist/assets ]]; then
+      printf '{"acp_pubkey":"%s"}\n' "$ACP_PUBKEY" > web/dist/assets/relay-info.json
+      echo "==> ACP pubkey written to web/dist/assets/relay-info.json"
+    fi
   else
     echo "==> Warning: could not derive ACP pubkey — skipping member registration." >&2
   fi

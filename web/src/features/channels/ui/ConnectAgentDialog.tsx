@@ -182,24 +182,51 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
 
       if (tab === "preset") {
         if (!selectedModel) { setError("Pick a model first."); return; }
-        // Update the channel's model via kind:9002 (Edit Group Metadata).
-        const tags: string[][] = [
+
+        // 1. Set the channel's model via kind:9002 (Edit Group Metadata).
+        const metaTags: string[][] = [
           ["h", groupId],
           ["model", selectedModel.id],
         ];
         for (const [key, value] of Object.entries(credentials)) {
-          if (value.trim()) tags.push(["agent_config", key, value.trim()]);
+          if (value.trim()) metaTags.push(["agent_config", key, value.trim()]);
         }
-        const signed = await signFn({ kind: KIND_EDIT_METADATA, created_at: now, tags, content: "" });
-        connection.publish(signed);
+        const metaSigned = await signFn({ kind: KIND_EDIT_METADATA, created_at: now, tags: metaTags, content: "" });
+        connection.publish(metaSigned);
+
+        // 2. Add the ACP worker as an "agent" channel member via kind:9000 so it
+        //    shows up in the members panel and admin page. The pubkey is written
+        //    to /relay-info.json by the startup script.
+        try {
+          const resp = await fetch("/assets/relay-info.json");
+          if (resp.ok) {
+            const info = await resp.json() as { acp_pubkey?: string };
+            if (info.acp_pubkey) {
+              const memberTags: string[][] = [
+                ["h", groupId],
+                ["p", info.acp_pubkey],
+                ["role", "agent"],
+              ];
+              const memberSigned = await signFn({
+                kind: KIND_ADD_MEMBER,
+                created_at: now + 1,
+                tags: memberTags,
+                content: "",
+              });
+              connection.publish(memberSigned);
+            }
+          }
+        } catch {
+          // Non-fatal: model is still set even if member-add fails (e.g. preview mode).
+        }
       } else {
         const pubkey = parsePubkey(pubkeyInput);
         if (!pubkey) { setError("Enter a valid hex pubkey or npub."); return; }
-        // Add the agent as a channel member via kind:9000 (Add Member).
+        // Add the external agent pubkey as an "agent" channel member via kind:9000.
         const tags: string[][] = [
           ["h", groupId],
           ["p", pubkey],
-          ["role", "member"],
+          ["role", "agent"],
         ];
         const signed = await signFn({ kind: KIND_ADD_MEMBER, created_at: now, tags, content: "" });
         connection.publish(signed);
