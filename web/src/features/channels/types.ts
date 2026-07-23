@@ -63,6 +63,12 @@ export interface ModelPreset {
 
 export const AI_MODELS: ModelPreset[] = [
   {
+    id: "buzz-ai",
+    name: "Buzz AI",
+    provider: "Block",
+    description: "Block's built-in AI — no extra setup needed.",
+  },
+  {
     id: "goose-acp",
     name: "Goose",
     provider: "Block",
