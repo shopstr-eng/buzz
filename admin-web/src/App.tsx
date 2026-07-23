@@ -846,12 +846,27 @@ export function Members() {
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
+  // Stores the optimistic role value while a patch() is in-flight so the
+  // select keeps showing the newly-chosen role even if a background refetch
+  // delivers stale member data before patch() settles.
+  const [optimisticRole, setOptimisticRole] = useState<{
+    pubkey: string;
+    role: string;
+  } | null>(null);
   // Holds a reference to the member-list array that was current when
   // resource.refetch() was last called after a successful removal.  While
   // this is set and resource.data still points to the same array, the
   // refetch has not yet delivered fresh data — role-change selects must
   // stay disabled until it does.
   const [removalRefetchAnchor, setRemovalRefetchAnchor] = useState<
+    RelayMember[] | undefined
+  >(undefined);
+  // Holds a reference to the member-list array that was current when
+  // resource.refetch() was last called after a successful role-change patch().
+  // While this is set and resource.data still points to the same array, the
+  // refetch has not yet delivered fresh data — role-change selects must stay
+  // disabled until it does.
+  const [roleRefetchAnchor, setRoleRefetchAnchor] = useState<
     RelayMember[] | undefined
   >(undefined);
 
@@ -879,6 +894,14 @@ export function Members() {
       setRemovalRefetchAnchor(undefined);
     }
   }, [resource.data, removalRefetchAnchor]);
+
+  // Once the post-role-change refetch delivers a new data array, clear the
+  // role anchor so the selects are re-enabled.
+  useEffect(() => {
+    if (roleRefetchAnchor && resource.data !== roleRefetchAnchor) {
+      setRoleRefetchAnchor(undefined);
+    }
+  }, [resource.data, roleRefetchAnchor]);
 
   async function removeMember(pubkey: string) {
     if (removing) return;
@@ -914,9 +937,17 @@ export function Members() {
   async function changeRole(pubkey: string, newRole: string) {
     if (updatingRole) return;
     setUpdatingRole(pubkey);
+    // Store the optimistic role so the select keeps showing the newly-chosen
+    // value even if a background refetch delivers stale member data before
+    // patch() settles.
+    setOptimisticRole({ pubkey, role: newRole });
     setRoleError(null);
     try {
       await patch(`/members/${pubkey}`, { role: newRole });
+      // Anchor the current data array before triggering the refetch so we
+      // know when the fresh data has actually arrived (the anchor is cleared
+      // in the useEffect above when resource.data gets a new reference).
+      setRoleRefetchAnchor(resource.data);
       resource.refetch();
     } catch (e) {
       // If a list refresh dropped the member while patch() was in-flight, the
@@ -930,6 +961,7 @@ export function Members() {
       }
     } finally {
       setUpdatingRole(null);
+      setOptimisticRole(null);
     }
   }
 
@@ -977,8 +1009,17 @@ export function Members() {
                         ) : (
                           <select
                             className="role-select"
-                            value={member.role}
-                            disabled={updatingRole === member.pubkey || !!removing || !!removalRefetchAnchor}
+                            value={
+                              optimisticRole?.pubkey === member.pubkey
+                                ? optimisticRole.role
+                                : member.role
+                            }
+                            disabled={
+                              updatingRole === member.pubkey ||
+                              !!removing ||
+                              !!removalRefetchAnchor ||
+                              !!roleRefetchAnchor
+                            }
                             aria-label={`Role for ${short(member.pubkey)}`}
                             onChange={(e) =>
                               changeRole(member.pubkey, e.target.value)
