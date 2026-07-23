@@ -236,7 +236,16 @@ fn is_invite_landing_path(path: &str) -> bool {
 }
 
 fn should_serve_spa(path: &str, serve_git_web_gui: bool) -> bool {
-    is_invite_landing_path(path) || (serve_git_web_gui && is_git_web_gui_path(path))
+    is_invite_landing_path(path)
+        || is_chat_ui_path(path)
+        || (serve_git_web_gui && is_git_web_gui_path(path))
+}
+
+/// Paths owned by the web chat UI (always served as SPA regardless of
+/// the BUZZ_SERVE_GIT_WEB_GUI flag, since the chat UI is the primary
+/// entry point for workspace members).
+fn is_chat_ui_path(path: &str) -> bool {
+    path == "/login" || path == "/channels" || path.starts_with("/channels/")
 }
 
 fn is_git_web_gui_path(path: &str) -> bool {
@@ -489,6 +498,11 @@ mod tests {
         assert!(should_serve_spa("/", true));
         assert!(should_serve_spa("/repos/example", true));
         assert!(!should_serve_spa("/arbitrary", true));
+        // Chat UI paths are always served regardless of the git-web-gui flag.
+        assert!(should_serve_spa("/login", false));
+        assert!(should_serve_spa("/channels", false));
+        assert!(should_serve_spa("/channels/", false));
+        assert!(should_serve_spa("/channels/general", false));
     }
 
     async fn handler_receives_message_with_limit(limit: usize, size: usize) -> bool {

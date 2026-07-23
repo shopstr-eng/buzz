@@ -6,7 +6,11 @@
 
 import { Route as rootRouteImport } from "./routes/root";
 import { Route as indexRouteImport } from "./routes/index";
+import { Route as channelsRouteImport } from "./routes/channels";
+import { Route as loginRouteImport } from "./routes/login";
 import { Route as reposRouteImport } from "./routes/repos";
+import { Route as channelsDotindexRouteImport } from "./routes/channels.index";
+import { Route as channelsDotgroupIdRouteImport } from "./routes/channels.$groupId";
 import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
 import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
 import { Route as reposDotrepoIdDotblobDotsplatRouteImport } from "./routes/repos.$repoId.blob.$";
@@ -16,10 +20,30 @@ const indexRoute = indexRouteImport.update({
   path: "/",
   getParentRoute: () => rootRouteImport,
 } as any);
+const channelsRoute = channelsRouteImport.update({
+  id: "/channels",
+  path: "/channels",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const loginRoute = loginRouteImport.update({
+  id: "/login",
+  path: "/login",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const reposRoute = reposRouteImport.update({
   id: "/repos",
   path: "/repos",
   getParentRoute: () => rootRouteImport,
+} as any);
+const channelsDotindexRoute = channelsDotindexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotgroupIdRoute = channelsDotgroupIdRouteImport.update({
+  id: "/$groupId",
+  path: "/$groupId",
+  getParentRoute: () => channelsRoute,
 } as any);
 const inviteDotcodeRoute = inviteDotcodeRouteImport.update({
   id: "/invite/$code",
@@ -40,52 +64,76 @@ const reposDotrepoIdDotblobDotsplatRoute =
 
 export interface FileRoutesByFullPath {
   "/": typeof indexRoute;
+  "/channels": typeof channelsRouteWithChildren;
+  "/login": typeof loginRoute;
   "/repos": typeof reposRoute;
+  "/channels/$groupId": typeof channelsDotgroupIdRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
+  "/channels/": typeof channelsDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 export interface FileRoutesByTo {
   "/": typeof indexRoute;
+  "/login": typeof loginRoute;
   "/repos": typeof reposRoute;
+  "/channels/$groupId": typeof channelsDotgroupIdRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
+  "/channels": typeof channelsDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/": typeof indexRoute;
+  "/channels": typeof channelsRouteWithChildren;
+  "/login": typeof loginRoute;
   "/repos": typeof reposRoute;
+  "/channels/$groupId": typeof channelsDotgroupIdRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
+  "/channels/": typeof channelsDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | "/"
+    | "/channels"
+    | "/login"
     | "/repos"
+    | "/channels/$groupId"
     | "/invite/$code"
     | "/repos/$repoId"
+    | "/channels/"
     | "/repos/$repoId/blob/$";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
+    | "/login"
     | "/repos"
+    | "/channels/$groupId"
     | "/invite/$code"
     | "/repos/$repoId"
+    | "/channels"
     | "/repos/$repoId/blob/$";
   id:
     | "__root__"
     | "/"
+    | "/channels"
+    | "/login"
     | "/repos"
+    | "/channels/$groupId"
     | "/invite/$code"
     | "/repos/$repoId"
+    | "/channels/"
     | "/repos/$repoId/blob/$";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
   indexRoute: typeof indexRoute;
+  channelsRoute: typeof channelsRouteWithChildren;
+  loginRoute: typeof loginRoute;
   reposRoute: typeof reposRoute;
   inviteDotcodeRoute: typeof inviteDotcodeRoute;
   reposDotrepoIdRoute: typeof reposDotrepoIdRoute;
@@ -101,12 +149,40 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof indexRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/channels": {
+      id: "/channels";
+      path: "/channels";
+      fullPath: "/channels";
+      preLoaderRoute: typeof channelsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/login": {
+      id: "/login";
+      path: "/login";
+      fullPath: "/login";
+      preLoaderRoute: typeof loginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/repos": {
       id: "/repos";
       path: "/repos";
       fullPath: "/repos";
       preLoaderRoute: typeof reposRouteImport;
       parentRoute: typeof rootRouteImport;
+    };
+    "/channels/": {
+      id: "/channels/";
+      path: "/";
+      fullPath: "/channels/";
+      preLoaderRoute: typeof channelsDotindexRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/$groupId": {
+      id: "/channels/$groupId";
+      path: "/$groupId";
+      fullPath: "/channels/$groupId";
+      preLoaderRoute: typeof channelsDotgroupIdRouteImport;
+      parentRoute: typeof channelsRoute;
     };
     "/invite/$code": {
       id: "/invite/$code";
@@ -132,8 +208,24 @@ declare module "@tanstack/react-router" {
   }
 }
 
+interface channelsRouteChildren {
+  channelsDotgroupIdRoute: typeof channelsDotgroupIdRoute;
+  channelsDotindexRoute: typeof channelsDotindexRoute;
+}
+
+const channelsRouteChildren: channelsRouteChildren = {
+  channelsDotgroupIdRoute: channelsDotgroupIdRoute,
+  channelsDotindexRoute: channelsDotindexRoute,
+};
+
+const channelsRouteWithChildren = channelsRoute._addFileChildren(
+  channelsRouteChildren,
+);
+
 const rootRouteChildren: RootRouteChildren = {
   indexRoute: indexRoute,
+  channelsRoute: channelsRouteWithChildren,
+  loginRoute: loginRoute,
   reposRoute: reposRoute,
   inviteDotcodeRoute: inviteDotcodeRoute,
   reposDotrepoIdRoute: reposDotrepoIdRoute,
