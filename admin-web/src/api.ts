@@ -1,3 +1,5 @@
+import { getStoredNsecHex, signWithStoredNsec } from "./identity";
+
 const PREFIX = "/api/admin/v1";
 
 export class ApiFailure extends Error {
@@ -29,19 +31,14 @@ declare const window: Window & { nostr?: Nip07Provider };
 
 /**
  * Build a NIP-98 Authorization header value for the given URL and HTTP method.
- * Requires a NIP-07 browser extension (window.nostr).
+ * Uses a NIP-07 browser extension (window.nostr) when available, otherwise
+ * falls back to a secret key stored in sessionStorage.
  */
 export async function buildNip98Header(
   url: string,
   method: string,
 ): Promise<string> {
-  if (!window.nostr) {
-    throw new ApiFailure(
-      401,
-      "No Nostr browser extension detected. Install one (e.g. Alby or nos2x) to access the admin panel.",
-    );
-  }
-  const event = await window.nostr.signEvent({
+  const template = {
     kind: 27235,
     created_at: Math.floor(Date.now() / 1000),
     tags: [
@@ -49,8 +46,24 @@ export async function buildNip98Header(
       ["method", method.toUpperCase()],
     ],
     content: "",
-  });
-  return `Nostr ${btoa(JSON.stringify(event))}`;
+  };
+
+  // Prefer NIP-07 extension.
+  if (window.nostr) {
+    const event = await window.nostr.signEvent(template);
+    return `Nostr ${btoa(JSON.stringify(event))}`;
+  }
+
+  // Fall back to stored nsec.
+  if (getStoredNsecHex()) {
+    const b64 = signWithStoredNsec(template);
+    return `Nostr ${b64}`;
+  }
+
+  throw new ApiFailure(
+    401,
+    "No identity found. Sign in with a browser extension or a secret key.",
+  );
 }
 
 export async function request<T>(path: string): Promise<T> {

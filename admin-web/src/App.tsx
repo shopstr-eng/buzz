@@ -8,7 +8,21 @@ import {
   useState,
 } from "react";
 import { ApiFailure, del, patch, post, request } from "./api";
+import { clearStoredNsec, hasStoredNsec, storeNsec } from "./identity";
 import type { FeedbackDetail, FeedbackSummary, RelayMember, Report } from "./types";
+
+declare global {
+  interface Window {
+    nostr?: {
+      signEvent(template: {
+        kind: number;
+        created_at: number;
+        tags: string[][];
+        content: string;
+      }): Promise<unknown>;
+    };
+  }
+}
 import { useResource } from "./useResource";
 
 // Detect whether the SPA is mounted under a path prefix (e.g. /admin when
@@ -1112,8 +1126,143 @@ function Invites() {
   );
 }
 
+function hasIdentity(): boolean {
+  return (
+    (typeof window !== "undefined" && window.nostr != null) || hasStoredNsec()
+  );
+}
+
+function AdminLogin({ onLogin }: { onLogin: () => void }) {
+  const [nsec, setNsec] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const nip07Available =
+    typeof window !== "undefined" && window.nostr != null;
+
+  async function handleExtension() {
+    setError(null);
+    setLoading(true);
+    try {
+      if (!window.nostr) throw new Error("No NIP-07 extension detected.");
+      await window.nostr.signEvent({
+        kind: 27235,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [],
+        content: "",
+      });
+      onLogin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Extension sign-in failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleNsec(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    try {
+      storeNsec(nsec);
+      onLogin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid secret key.");
+    }
+  }
+
+  return (
+    <div className="admin-login-wrap">
+      <div className="admin-login-card">
+        <div className="admin-login-brand">
+          <BuzzMark />
+        </div>
+        <h1 className="admin-login-title">Buzz Admin</h1>
+        <p className="admin-login-sub">Sign in to manage your workspace.</p>
+
+        <div className="admin-login-body">
+          <button
+            type="button"
+            className="admin-login-btn-primary"
+            disabled={loading || !nip07Available}
+            title={
+              nip07Available
+                ? "Sign in with browser extension"
+                : "No NIP-07 extension detected (install Alby or nos2x)"
+            }
+            onClick={handleExtension}
+          >
+            🧩{" "}
+            {nip07Available
+              ? "Continue with browser extension"
+              : "No NIP-07 extension found"}
+          </button>
+
+          <div className="admin-login-divider">
+            <span>or</span>
+          </div>
+
+          <form onSubmit={handleNsec} className="admin-login-form">
+            <label htmlFor="admin-nsec" className="admin-login-label">
+              Secret key (nsec or hex)
+            </label>
+            <div className="admin-login-input-wrap">
+              <input
+                id="admin-nsec"
+                type={showKey ? "text" : "password"}
+                value={nsec}
+                onChange={(e) => setNsec(e.target.value)}
+                placeholder="nsec1..."
+                autoComplete="off"
+                spellCheck={false}
+                className="admin-login-input"
+              />
+              <button
+                type="button"
+                className="admin-login-eye"
+                aria-label={showKey ? "Hide key" : "Show key"}
+                onClick={() => setShowKey((v) => !v)}
+              >
+                {showKey ? "🙈" : "👁"}
+              </button>
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !nsec.trim()}
+              className="admin-login-btn-secondary"
+            >
+              🔑 Sign in with secret key
+            </button>
+          </form>
+
+          {error && (
+            <p className="admin-login-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const { path } = usePath();
+  const [authed, setAuthed] = useState(() => hasIdentity());
+
+  function handleLogin() {
+    setAuthed(true);
+  }
+
+  function handleSignOut() {
+    clearStoredNsec();
+    // Only flip to login screen if there's also no extension.
+    if (!window.nostr) setAuthed(false);
+  }
+
+  if (!authed) {
+    return <AdminLogin onLogin={handleLogin} />;
+  }
+
   const report = path.match(/^\/reports\/([^/]+)$/);
   const feedback = path.match(/^\/feedback\/([^/]+)$/);
   const content = report ? (
@@ -1154,6 +1303,14 @@ export function App() {
             <FeedbackIcon /> Feedback
           </Link>
         </nav>
+        <button
+          type="button"
+          className="nav-link admin-sign-out"
+          title="Sign out"
+          onClick={handleSignOut}
+        >
+          Sign out
+        </button>
       </header>
       <main>{content}</main>
     </div>
