@@ -22,6 +22,13 @@ export interface FeedbackSummary {
   receivedAt: string;
 }
 
+export interface RelayMember {
+  pubkey: string;
+  role: string;
+  addedBy?: string;
+  createdAt: string;
+}
+
 export interface FeedbackDetail {
   id: string;
   communityId: string;

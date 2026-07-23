@@ -12,7 +12,7 @@ use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -38,6 +38,9 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
         )
         // Invite management: admin-host-gated invite minting (no NIP-98 required).
         .route("/invites", post(mint_invite_admin))
+        // Member management: list and remove relay members.
+        .route("/members", get(list_members))
+        .route("/members/{pubkey}", delete(remove_member))
         .layer(middleware::from_fn(security_headers))
         .layer(RequestBodyLimitLayer::new(4096))
         .with_state(state)
@@ -326,6 +329,106 @@ fn summarize_body(body: &str, tags: &serde_json::Value) -> String {
         summary.push('…');
     }
     summary
+}
+
+// ---------------------------------------------------------------------------
+// Member management — admin-host gated, no NIP-98 required.
+// ---------------------------------------------------------------------------
+
+/// A relay member record returned by the admin API.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MemberResponse {
+    pubkey: String,
+    role: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    added_by: Option<String>,
+    created_at: DateTime<Utc>,
+}
+
+/// `GET /api/admin/v1/members` — list all relay members for this deployment.
+async fn list_members(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<MemberResponse>>, ApiError> {
+    authorize(&state, &headers)?;
+
+    let tenant = crate::tenant::bind_deployment_community(&state.db, &state.config.relay_url)
+        .await
+        .map_err(|_| ApiError::service_unavailable("community_not_found", "no community found"))?;
+
+    let members = state
+        .db
+        .list_relay_members(tenant.community())
+        .await?
+        .into_iter()
+        .map(|m| MemberResponse {
+            pubkey: m.pubkey,
+            role: m.role,
+            added_by: m.added_by,
+            created_at: m.created_at,
+        })
+        .collect();
+
+    Ok(Json(members))
+}
+
+/// `DELETE /api/admin/v1/members/:pubkey` — remove a relay member.
+///
+/// Returns 204 on success, 404 if the pubkey is not a member, and 409 if the
+/// pubkey belongs to the relay owner (who cannot be removed).
+async fn remove_member(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+    Path(pubkey): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    authorize(&state, &headers)?;
+
+    if !is_hex_pubkey(&pubkey) {
+        return Err(ApiError::bad_request("invalid_pubkey", "pubkey must be a 64-char hex string"));
+    }
+
+    let tenant = crate::tenant::bind_deployment_community(&state.db, &state.config.relay_url)
+        .await
+        .map_err(|_| ApiError::service_unavailable("community_not_found", "no community found"))?;
+
+    let result = state
+        .db
+        .remove_relay_member(tenant.community(), &pubkey)
+        .await?;
+
+    match result {
+        buzz_db::relay_members::RemoveResult::Removed => {
+            tracing::info!(pubkey = %pubkey, "relay member removed via admin panel");
+
+            // Best-effort NIP-43 events; log but don't fail the request.
+            if let Err(e) =
+                crate::handlers::side_effects::publish_nip43_member_removed(&tenant, &state, &pubkey).await
+            {
+                tracing::warn!(error = %e, "failed to publish NIP-43 member-removed event");
+            }
+            if let Err(e) =
+                crate::handlers::side_effects::publish_nip43_membership_list(&tenant, &state).await
+            {
+                tracing::warn!(error = %e, "failed to publish NIP-43 membership list");
+            }
+
+            Ok(StatusCode::NO_CONTENT)
+        }
+        buzz_db::relay_members::RemoveResult::IsOwner => Err(ApiError::conflict(
+            "is_owner",
+            "the relay owner cannot be removed",
+        )),
+        buzz_db::relay_members::RemoveResult::NotFound => Err(ApiError::not_found()),
+        buzz_db::relay_members::RemoveResult::RoleMismatch => Err(ApiError::not_found()),
+    }
+}
+
+fn is_hex_pubkey(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .chars()
+            .all(|c| matches!(c, '0'..='9' | 'a'..='f'))
 }
 
 // ---------------------------------------------------------------------------

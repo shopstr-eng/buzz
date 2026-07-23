@@ -115,18 +115,18 @@ Share the link with new members. They visit it in a browser, claim it, and their
 
 ## Required environment variables (set in Replit Secrets)
 
-| Variable                        | Description                                                                           |
-| ------------------------------- | ------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                  | Replit PostgreSQL connection string                                                   |
-| `REDIS_URL`                     | Redis connection string (Upstash or in-process)                                       |
-| `RELAY_URL`                     | Public WSS URL e.g. `wss://your-domain.com`                                           |
-| `BUZZ_BIND_ADDR`                | `0.0.0.0:3000`                                                                        |
-| `BUZZ_RELAY_PRIVATE_KEY`        | 32-byte hex — stable relay signing key (generate once with `buzz-admin generate-key`) |
-| `RELAY_OWNER_PUBKEY`            | Hex public key corresponding to `BUZZ_RELAY_PRIVATE_KEY`                              |
-| `BUZZ_REQUIRE_RELAY_MEMBERSHIP` | `true` — enables invite-only membership gate                                          |
+| Variable                        | Description                                                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                  | Replit PostgreSQL connection string                                                                                  |
+| `REDIS_URL`                     | Redis connection string (Upstash or in-process)                                                                      |
+| `RELAY_URL`                     | Public WSS URL e.g. `wss://your-domain.com`                                                                          |
+| `BUZZ_BIND_ADDR`                | `0.0.0.0:3000`                                                                                                       |
+| `BUZZ_RELAY_PRIVATE_KEY`        | 32-byte hex — stable relay signing key (generate once with `buzz-admin generate-key`)                                |
+| `RELAY_OWNER_PUBKEY`            | Hex public key corresponding to `BUZZ_RELAY_PRIVATE_KEY`                                                             |
+| `BUZZ_REQUIRE_RELAY_MEMBERSHIP` | `true` — enables invite-only membership gate                                                                         |
 | `BUZZ_ADMIN_HOST`               | Exact authority (e.g. `admin.your-domain.com`) for host-based admin — optional, not needed in Replit path-based mode |
-| `TYPESENSE_URL`                 | Typesense HTTP URL (optional — search feature)                                        |
-| `TYPESENSE_API_KEY`             | Typesense key (optional)                                                              |
+| `TYPESENSE_URL`                 | Typesense HTTP URL (optional — search feature)                                                                       |
+| `TYPESENSE_API_KEY`             | Typesense key (optional)                                                                                             |
 
 ## How to run
 

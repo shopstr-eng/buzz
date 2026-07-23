@@ -50,6 +50,22 @@ impl ApiError {
         }
     }
 
+    pub fn conflict(code: &'static str, message: &'static str) -> Self {
+        Self {
+            status: StatusCode::CONFLICT,
+            code,
+            message,
+        }
+    }
+
+    pub fn service_unavailable(code: &'static str, message: &'static str) -> Self {
+        Self {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            code,
+            message,
+        }
+    }
+
     pub fn internal() -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,

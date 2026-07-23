@@ -20,7 +20,9 @@ interface NostrEvent {
 }
 
 interface Nip07Provider {
-  signEvent(template: Omit<NostrEvent, "pubkey" | "id" | "sig">): Promise<NostrEvent>;
+  signEvent(
+    template: Omit<NostrEvent, "pubkey" | "id" | "sig">,
+  ): Promise<NostrEvent>;
 }
 
 declare const window: Window & { nostr?: Nip07Provider };
@@ -66,6 +68,23 @@ export async function request<T>(path: string): Promise<T> {
     );
   }
   return response.json() as Promise<T>;
+}
+
+export async function del(path: string): Promise<void> {
+  const fullUrl = `${location.origin}${PREFIX}${path}`;
+  const authValue = await buildNip98Header(fullUrl, "DELETE");
+  const response = await fetch(`${PREFIX}${path}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+    headers: { accept: "application/json", Authorization: authValue },
+  });
+  if (!response.ok) {
+    const envelope = await response.json().catch(() => null);
+    throw new ApiFailure(
+      response.status,
+      envelope?.error?.message ?? `Request failed (${response.status})`,
+    );
+  }
 }
 
 export async function post<T>(path: string, body: unknown): Promise<T> {

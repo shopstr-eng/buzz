@@ -805,3 +805,92 @@ dd {
   color: rgb(35 30 30 / 50%);
   line-height: 1.5;
 }
+
+/* ---- Member table ---- */
+
+.member-table-wrap {
+  overflow-x: auto;
+  border-radius: 1.6rem;
+  box-shadow: 0 1rem 4rem rgb(35 30 30 / 6%);
+  background: white;
+}
+
+.member-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.member-table thead th {
+  padding: 1rem 1.4rem;
+  text-align: left;
+  color: rgb(35 30 30 / 45%);
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgb(35 30 30 / 8%);
+}
+
+.member-table tbody tr {
+  border-bottom: 1px solid rgb(35 30 30 / 6%);
+  transition: background 120ms ease;
+}
+
+.member-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.member-table tbody tr:hover {
+  background: rgb(35 30 30 / 2%);
+}
+
+.member-table td {
+  padding: 1rem 1.4rem;
+  vertical-align: middle;
+  letter-spacing: -0.025em;
+}
+
+.member-date {
+  color: rgb(35 30 30 / 55%);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.member-action {
+  text-align: right;
+}
+
+.remove-btn {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  color: white;
+  background: rgb(35 30 30 / 75%);
+  border-radius: 999px;
+  transition: background 150ms ease;
+}
+
+.remove-btn:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.remove-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.member-remove-error {
+  margin-bottom: 1.25rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

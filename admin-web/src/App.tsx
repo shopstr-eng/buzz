@@ -6,8 +6,8 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ApiFailure, post, request } from "./api";
-import type { FeedbackDetail, FeedbackSummary, Report } from "./types";
+import { ApiFailure, del, post, request } from "./api";
+import type { FeedbackDetail, FeedbackSummary, RelayMember, Report } from "./types";
 import { useResource } from "./useResource";
 
 // Detect whether the SPA is mounted under a path prefix (e.g. /admin when
@@ -783,6 +783,16 @@ function InviteIcon() {
   );
 }
 
+function MemberIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
 function CopyIcon() {
   return (
     <svg
@@ -802,6 +812,91 @@ interface InviteResult {
   url: string;
 }
 
+function Members() {
+  const resource = useResource(
+    () => request<RelayMember[]>("/members"),
+    "members",
+  );
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+
+  async function removeMember(pubkey: string) {
+    if (removing) return;
+    setRemoving(pubkey);
+    setRemoveError(null);
+    try {
+      await del(`/members/${pubkey}`);
+      resource.refetch();
+    } catch (e) {
+      setRemoveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRemoving(null);
+    }
+  }
+
+  return (
+    <Page
+      eyebrow="Members"
+      title="Workspace members"
+      description="Everyone who has joined this relay. Owners cannot be removed."
+    >
+      {removeError && (
+        <div className="state error member-remove-error" role="alert">
+          <p>{removeError}</p>
+        </div>
+      )}
+      <StateView resource={resource}>
+        {(members) =>
+          members.length ? (
+            <div className="member-table-wrap">
+              <table className="member-table">
+                <thead>
+                  <tr>
+                    <th>Pubkey</th>
+                    <th>Role</th>
+                    <th>Joined</th>
+                    <th>
+                      <span className="visually-hidden">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr key={member.pubkey}>
+                      <td>
+                        <code title={member.pubkey}>{short(member.pubkey)}</code>
+                      </td>
+                      <td>
+                        <span className="tag">{member.role}</span>
+                      </td>
+                      <td className="member-date">{date(member.createdAt)}</td>
+                      <td className="member-action">
+                        {member.role !== "owner" && (
+                          <button
+                            type="button"
+                            className="remove-btn"
+                            disabled={removing === member.pubkey}
+                            onClick={() => removeMember(member.pubkey)}
+                            title={`Remove ${member.pubkey}`}
+                          >
+                            {removing === member.pubkey ? "Removing…" : "Remove"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <Empty />
+          )
+        }
+      </StateView>
+    </Page>
+  );
+}
+
 function Invites() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -815,7 +910,9 @@ function Invites() {
     setInvite(null);
     setCopied(false);
     try {
-      const data = await post<InviteResult>("/invites", { ttlSecs: ttlDays * 86400 });
+      const data = await post<InviteResult>("/invites", {
+        ttlSecs: ttlDays * 86400,
+      });
       setInvite(data);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -908,6 +1005,8 @@ export function App() {
     <FeedbackList />
   ) : path === "/invites" ? (
     <Invites />
+  ) : path === "/members" ? (
+    <Members />
   ) : (
     <Reports />
   );
@@ -923,6 +1022,9 @@ export function App() {
           </span>
         </Link>
         <nav>
+          <Link href="/members" className="nav-link" activeWhenNested>
+            <MemberIcon /> Members
+          </Link>
           <Link href="/invites" className="nav-link" activeWhenNested>
             <InviteIcon /> Invites
           </Link>

@@ -175,8 +175,8 @@ be closed in-model or by a named axiom:
    holds gets a _fresh_ key, not a conflict — B's rows-affected count is a
    function of B's own state alone, never A's. **A_HASH** is the _supporting_
    axiom: it additionally rules out the adversarial-search variant (B cannot
-   _find_ a fresh event hashing to a chosen id). Note the residual: A_HASH says
-   nothing about ids B already _knows_ out-of-band (NIP-19 `nevent` shares,
+   _find_ a fresh event hashing to a chosen id). Note the residual: A*HASH says
+   nothing about ids B already \_knows* out-of-band (NIP-19 `nevent` shares,
    multi-tenant client UIs that surface a user's own ids across communities) —
    that exposure is closed by the composite index, not the hash, and any
    above-the-interface client surface that leaks a user's A-ids while they are
@@ -199,10 +199,10 @@ be closed in-model or by a named axiom:
    `nip11_facts` (`:176`) reads only `state.config`/`state.relay_keypair`, so the
    surface is clean — but by _current code_, not by the proof; adding a
    `total_events` counter is one `&PgPool` argument away and the labeling
-   invariant catches none of it. This is the same enforcement class as the Σ_err
+   invariant catches none of it. This is the same enforcement class as the Σ*err
    alphabet (C2.2) — a typed constraint at a seam, lintable over `build`'s
-   signature — but disjoint: Σ_err governs _what symbols leave on authenticated
-   paths_, C2.4 governs _what state populates unauthenticated paths_. Any future
+   signature — but disjoint: Σ_err governs \_what symbols leave on authenticated
+   paths*, C2.4 governs _what state populates unauthenticated paths_. Any future
    unauthenticated relay-level endpoint (NIP-66 monitoring, health probes that
    expose counters) lives under C2.4 by default.
 
@@ -681,20 +681,18 @@ Each axiom is _admitted_ per deployment, not assumed universally:
      this gate today; the shipped HA examples (`replicaCount: 3` in
      `deploy/charts/buzz/examples/argocd-app.yaml:27` and
      `deploy/charts/buzz/examples/flux-helmrelease.yaml:35`) are
-     P3-non-conforming as shipped unless the operator adds one of:
-     - **(a)** an ingress annotation hashing upstream selection on a header stable
-       across replays — `nginx.ingress.kubernetes.io/upstream-hash-by:
+     P3-non-conforming as shipped unless the operator adds one of: - **(a)** an ingress annotation hashing upstream selection on a header stable
+     across replays — `nginx.ingress.kubernetes.io/upstream-hash-by:
 "$http_authorization"` works for today's NIP-98 HTTP path, since the signed
-       event rides in `Authorization: Nostr <base64>` (`bridge.rs:34-46`) and is
-       bit-identical across replays. Two caveats keep this from being the
-       recommended fix: it couples replay-stickiness to literal-byte-identity of
-       the auth header (any future header normalization — whitespace, casing,
-       base64 padding — silently breaks it), and it does not extend to any mint
-       path that moves off HTTP (a WS mint has no Authorization header to hash on).
-     - **(b)** a shared seen-set backed by a store with atomic insert-if-absent and
-       TTL ≥ 120 s (e.g. Redis, already present in the HA chart for git-pubsub).
-       **This is the recommended path** — no new infra surface and none of (a)'s
-       fragility.
+     event rides in `Authorization: Nostr <base64>` (`bridge.rs:34-46`) and is
+     bit-identical across replays. Two caveats keep this from being the
+     recommended fix: it couples replay-stickiness to literal-byte-identity of
+     the auth header (any future header normalization — whitespace, casing,
+     base64 padding — silently breaks it), and it does not extend to any mint
+     path that moves off HTTP (a WS mint has no Authorization header to hash on). - **(b)** a shared seen-set backed by a store with atomic insert-if-absent and
+     TTL ≥ 120 s (e.g. Redis, already present in the HA chart for git-pubsub).
+     **This is the recommended path** — no new infra surface and none of (a)'s
+     fragility.
 
   A regression test asserts a replayed mint within the window yields a single
   token under the deployment's routing/storage shape (and that the seen-set TTL
