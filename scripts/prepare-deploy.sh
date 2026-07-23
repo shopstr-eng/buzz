@@ -60,7 +60,12 @@ rm -rf "$TMP"
 # 3. Remove node_modules — dist/ is baked in; start script skips install
 # ---------------------------------------------------------------------------
 echo "==> Removing node_modules (dist/ already baked into image)..."
-rm -rf web/node_modules admin-web/node_modules node_modules
+rm -rf web/node_modules admin-web/node_modules desktop/node_modules node_modules
+
+# Also clear any heavy tool caches that postinstall scripts may have populated
+# (Playwright browser downloads, Tauri CLI binaries, etc.)
+rm -rf "${PLAYWRIGHT_BROWSERS_PATH:-$HOME/.cache/ms-playwright}"
+rm -rf "${HOME}/.tauri" "${HOME}/.local/share/tauri" 2>/dev/null || true
 
 echo "==> Image cleanup complete."
 du -sh target/ web/dist admin-web/dist 2>/dev/null || true
