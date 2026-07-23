@@ -159,13 +159,67 @@ fi
 
 echo "==> Starting Buzz relay on ${BUZZ_BIND_ADDR}..."
 
-# Use the pre-built binary for a fast start; fall back to cargo run if missing.
-RELAY_BIN="${REPO_ROOT}/target/release/buzz-relay"
-if [[ -x "$RELAY_BIN" ]]; then
-  echo "==> Using pre-built binary: ${RELAY_BIN}"
-  exec "$RELAY_BIN"
+# ---------------------------------------------------------------------------
+# 7. Start the Rust file-watcher in the background.
+#    It rebuilds buzz-relay + buzz-admin whenever .rs/.toml files change under
+#    crates/ and then SIGTERMs the relay so the loop below restarts it with
+#    the new binary.
+# ---------------------------------------------------------------------------
+WATCHER_SCRIPT="${REPO_ROOT}/scripts/watch-rust.sh"
+if [[ -f "$WATCHER_SCRIPT" ]]; then
+  chmod +x "$WATCHER_SCRIPT"
+  bash "$WATCHER_SCRIPT" &
+  WATCHER_PID=$!
+  echo "==> Rust file-watcher started (PID ${WATCHER_PID})."
 else
-  echo "==> Pre-built buzz-relay not found; falling back to cargo run (slow)." >&2
-  echo "==> To pre-build: cargo build --ignore-rust-version -p buzz-relay --release" >&2
-  exec cargo run -p buzz-relay --release --ignore-rust-version
+  echo "==> Warning: watch-rust.sh not found — auto-rebuild disabled." >&2
+  WATCHER_PID=""
 fi
+
+# ---------------------------------------------------------------------------
+# 8. Run the relay in a restart loop.
+#    The watcher SIGTERMs the relay after a successful build; the loop picks
+#    up the new binary automatically.  A SIGTERM/SIGINT to this process
+#    (Replit stopping the workflow) propagates cleanly.
+# ---------------------------------------------------------------------------
+RELAY_BIN="${REPO_ROOT}/target/release/buzz-relay"
+RELAY_PID=""
+STOPPING=false
+
+# When the workflow is stopped, kill the watcher and relay cleanly.
+_cleanup() {
+  STOPPING=true
+  [[ -n "$RELAY_PID" ]] && kill -TERM "$RELAY_PID" 2>/dev/null || true
+  [[ -n "$WATCHER_PID" ]] && kill -TERM "$WATCHER_PID" 2>/dev/null || true
+  rm -f /tmp/buzz-relay.pid
+}
+trap '_cleanup' SIGTERM SIGINT
+
+while true; do
+  if [[ -x "$RELAY_BIN" ]]; then
+    echo "==> Using pre-built binary: ${RELAY_BIN}"
+    "$RELAY_BIN" &
+  else
+    echo "==> Pre-built buzz-relay not found; falling back to cargo run (slow)." >&2
+    echo "==> To pre-build: cargo build --ignore-rust-version -p buzz-relay --release" >&2
+    cargo run -p buzz-relay --release --ignore-rust-version &
+  fi
+  RELAY_PID=$!
+  echo $RELAY_PID > /tmp/buzz-relay.pid
+
+  # Wait for the relay to exit (normal exit, crash, or SIGTERM from watcher)
+  wait "$RELAY_PID" || true
+
+  if [[ "$STOPPING" == true ]]; then
+    echo "==> Relay stopped cleanly."
+    break
+  fi
+
+  echo "==> Relay exited — restarting with updated binary..."
+  sleep 1
+  # Re-resolve binary path in case the watcher rebuilt it
+  RELAY_BIN="${REPO_ROOT}/target/release/buzz-relay"
+done
+
+# Clean up watcher if still running
+[[ -n "$WATCHER_PID" ]] && kill -TERM "$WATCHER_PID" 2>/dev/null || true
