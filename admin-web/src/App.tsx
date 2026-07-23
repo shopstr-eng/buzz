@@ -823,6 +823,17 @@ function Members() {
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
 
+  // If the member whose removal is being confirmed disappears from the
+  // refreshed list (removed by another admin, or the list re-fetched while
+  // polling), clear the stale confirmation so the UI doesn't get stuck.
+  useEffect(() => {
+    if (!confirmingRemove || !resource.data) return;
+    const stillPresent = resource.data.some(
+      (m) => m.pubkey === confirmingRemove,
+    );
+    if (!stillPresent) setConfirmingRemove(null);
+  }, [resource.data, confirmingRemove]);
+
   async function removeMember(pubkey: string) {
     if (removing) return;
     setRemoving(pubkey);
