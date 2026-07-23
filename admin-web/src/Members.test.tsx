@@ -252,6 +252,65 @@ describe("Members – Cancel button on Remove? dialog", () => {
 });
 
 describe("Members – role-change dropdown disabled during removal", () => {
+  it("keeps the role-change select disabled until the post-removal refetch delivers fresh data", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolveDel!: () => void;
+    const delPromise = new Promise<void>((res) => {
+      resolveDel = res;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    // Use a stable array reference — the anchor comparison relies on identity
+    const initialMembers: RelayMember[] = [ALICE, BOB];
+    const resource = makeResource(initialMembers);
+    mockUseResource.mockReturnValue(resource);
+
+    const { rerender } = render(<Members />);
+
+    // Open the remove confirmation for Alice
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+
+    // Confirm → del() is called and held pending
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // Resolve del() — removing state is cleared but refetch anchor is set to
+    // the current data array (initialMembers)
+    await act(async () => {
+      resolveDel();
+      await delPromise;
+    });
+
+    // Simulate mid-refetch: same data array reference, only stale flag changes.
+    // resource.data is still initialMembers so the anchor comparison holds.
+    const staleResource = { ...resource, stale: true };
+    mockUseResource.mockReturnValue(staleResource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Bob's role-change select must STILL be disabled — del() has settled but
+    // the fresh member list hasn't arrived yet (anchor not yet cleared).
+    const bobSelectMid = screen.getByRole("combobox", {
+      name: new RegExp(BOB.pubkey.slice(0, 8), "i"),
+    });
+    expect(bobSelectMid).toBeDisabled();
+
+    // Refetch completes — new array reference (Alice gone) clears the anchor
+    const freshResource = makeResource([BOB]);
+    mockUseResource.mockReturnValue(freshResource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Anchor cleared → select is now enabled
+    const bobSelectAfter = screen.getByRole("combobox", {
+      name: new RegExp(BOB.pubkey.slice(0, 8), "i"),
+    });
+    expect(bobSelectAfter).not.toBeDisabled();
+  });
+
   it("disables the role-change select for every member while del() is in-flight", async () => {
     const mockUseResource = vi.mocked(useResource as Mock);
 
@@ -264,7 +323,7 @@ describe("Members – role-change dropdown disabled during removal", () => {
     const resource = makeResource([ALICE, BOB]);
     mockUseResource.mockReturnValue(resource);
 
-    render(<Members />);
+    const { rerender } = render(<Members />);
 
     // Open the remove confirmation for Alice
     fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
@@ -279,10 +338,19 @@ describe("Members – role-change dropdown disabled during removal", () => {
     });
     expect(bobSelect).toBeDisabled();
 
-    // Resolve del() — Bob's role-change select should return to enabled
+    // Resolve del() — removing flag clears but refetch anchor is set;
+    // the select stays disabled until fresh data arrives.
     await act(async () => {
       resolveDel();
       await delPromise;
+    });
+
+    // Simulate the refetch completing: deliver a new array reference so the
+    // anchor comparison fires and re-enables the select.
+    const freshResource = makeResource([ALICE, BOB]);
+    mockUseResource.mockReturnValue(freshResource);
+    act(() => {
+      rerender(<Members />);
     });
 
     expect(bobSelect).not.toBeDisabled();

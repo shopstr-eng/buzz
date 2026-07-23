@@ -846,6 +846,14 @@ export function Members() {
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
+  // Holds a reference to the member-list array that was current when
+  // resource.refetch() was last called after a successful removal.  While
+  // this is set and resource.data still points to the same array, the
+  // refetch has not yet delivered fresh data — role-change selects must
+  // stay disabled until it does.
+  const [removalRefetchAnchor, setRemovalRefetchAnchor] = useState<
+    RelayMember[] | undefined
+  >(undefined);
 
   // Always reflects the latest member list so async callbacks can check
   // whether a member is still present after an in-flight refresh.
@@ -863,6 +871,15 @@ export function Members() {
     if (!stillPresent) setConfirmingRemove(null);
   }, [resource.data, confirmingRemove]);
 
+  // Once the post-removal refetch delivers a new data array (different
+  // reference than the one we anchored on), clear the anchor so the
+  // role-change selects are re-enabled.
+  useEffect(() => {
+    if (removalRefetchAnchor && resource.data !== removalRefetchAnchor) {
+      setRemovalRefetchAnchor(undefined);
+    }
+  }, [resource.data, removalRefetchAnchor]);
+
   async function removeMember(pubkey: string) {
     if (removing) return;
     setRemoving(pubkey);
@@ -873,6 +890,10 @@ export function Members() {
     setRemoveError(null);
     try {
       await del(`/members/${pubkey}`);
+      // Anchor the current data array before triggering the refetch so we
+      // know when the fresh data has actually arrived (the anchor is cleared
+      // in the useEffect above when resource.data gets a new reference).
+      setRemovalRefetchAnchor(resource.data);
       resource.refetch();
     } catch (e) {
       // If a list refresh dropped the member while del() was in-flight, the
@@ -957,7 +978,7 @@ export function Members() {
                           <select
                             className="role-select"
                             value={member.role}
-                            disabled={updatingRole === member.pubkey || !!removing}
+                            disabled={updatingRole === member.pubkey || !!removing || !!removalRefetchAnchor}
                             aria-label={`Role for ${short(member.pubkey)}`}
                             onChange={(e) =>
                               changeRole(member.pubkey, e.target.value)
