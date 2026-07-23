@@ -14,6 +14,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 MODE="${1:-all}"
 
+# RELAY_WS_URL for ws-membership-gate mode (default: ws://localhost:3000)
+RELAY_WS_URL="${RELAY_WS_URL:-ws://localhost:3000}"
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -124,6 +127,15 @@ run_integration_tests() {
     run_test_step "workspace integration tests (none found)" true
 }
 
+# ---- WS membership gate (requires a relay with BUZZ_REQUIRE_RELAY_MEMBERSHIP=true) ----
+
+run_ws_membership_gate() {
+  section "WebSocket Membership Gate Test (NIP-42)"
+  log "Relay: ${RELAY_WS_URL}"
+  run_test_step "ws-membership-gate" \
+    node "${SCRIPT_DIR}/test-ws-membership-gate.js"
+}
+
 # ---- Main -------------------------------------------------------------------
 
 START_TIME=$(date +%s)
@@ -134,6 +146,9 @@ case "${MODE}" in
     ;;
   integration)
     run_integration_tests
+    ;;
+  ws-membership-gate)
+    run_ws_membership_gate
     ;;
   all|*)
     run_unit_tests

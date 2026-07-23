@@ -21,6 +21,12 @@ importers:
       "@biomejs/biome":
         specifier: ^2.4.6
         version: 2.4.16
+      nostr-tools:
+        specifier: ^2.23.3
+        version: 2.23.12
+      ws:
+        specifier: ^8.19.0
+        version: 8.21.1
 
   admin-web:
     dependencies:
