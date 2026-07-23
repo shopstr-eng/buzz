@@ -20,16 +20,17 @@ export BUZZ_GIT_CONFORMANCE_PROBE="${BUZZ_GIT_CONFORMANCE_PROBE:-false}"
 
 # Derive RELAY_URL from the current domain so the community row is seeded for
 # the host the Replit proxy actually sends in the Host header.
-# In dev: REPLIT_DEV_DOMAIN is set (*.janeway.replit.dev).
-# In prod: REPLIT_DOMAINS is set (*.replit.app or custom domain), REPLIT_DEV_DOMAIN is not.
-if [[ -n "${REPLIT_DEV_DOMAIN:-}" ]]; then
-  export RELAY_URL="wss://${REPLIT_DEV_DOMAIN}"
-  export BUZZ_MEDIA_BASE_URL="https://${REPLIT_DEV_DOMAIN}/media"
-elif [[ -n "${REPLIT_DOMAINS:-}" ]]; then
+# Both REPLIT_DEV_DOMAIN and REPLIT_DOMAINS can be set in a production VM —
+# check REPLIT_DOMAINS first so production always seeds the real public domain
+# (e.g. buzzstr.replit.app) rather than the ephemeral janeway preview URL.
+if [[ -n "${REPLIT_DOMAINS:-}" ]]; then
   # REPLIT_DOMAINS may be comma-separated; take the first entry.
   PRIMARY_DOMAIN="$(echo "${REPLIT_DOMAINS}" | cut -d',' -f1 | tr -d ' ')"
   export RELAY_URL="wss://${PRIMARY_DOMAIN}"
   export BUZZ_MEDIA_BASE_URL="https://${PRIMARY_DOMAIN}/media"
+elif [[ -n "${REPLIT_DEV_DOMAIN:-}" ]]; then
+  export RELAY_URL="wss://${REPLIT_DEV_DOMAIN}"
+  export BUZZ_MEDIA_BASE_URL="https://${REPLIT_DEV_DOMAIN}/media"
 fi
 
 # ---------------------------------------------------------------------------
