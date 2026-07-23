@@ -130,6 +130,16 @@ if command -v psql >/dev/null 2>&1 && [[ -n "${RELAY_URL:-}" ]]; then
     "INSERT INTO communities (host) VALUES ('${RELAY_HOST}') ON CONFLICT (lower(host)) DO NOTHING;" \
     2>/dev/null && echo "==> Community row seeded (host=${RELAY_HOST})." \
     || echo "==> Community seed skipped (already exists or psql unavailable)."
+
+  # Also seed localhost aliases so the Replit internal preview (127.0.0.1:5000)
+  # and local curl/screenshot tools can reach the relay without a community error.
+  BIND_PORT=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
+  for LOCAL_HOST in "127.0.0.1:${BIND_PORT}" "localhost:${BIND_PORT}" "localhost"; do
+    psql "$DATABASE_URL" -c \
+      "INSERT INTO communities (host) VALUES ('${LOCAL_HOST}') ON CONFLICT (lower(host)) DO NOTHING;" \
+      2>/dev/null || true
+  done
+  echo "==> Localhost aliases seeded."
 fi
 
 # ---------------------------------------------------------------------------
