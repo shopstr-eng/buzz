@@ -3687,4 +3687,138 @@ mod tests {
             "attribution line must carry the pubkey;\nlog:\n{log}"
         );
     }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // T4 — HTTP /events auth gate: unauthenticated submissions must be rejected
+    //
+    // These tests confirm that the HTTP transport's auth extraction path
+    // (verify_bridge_auth) blocks unauthenticated POST /events requests before
+    // any ingest logic runs.  Two scenarios:
+    //
+    //   T4a — no auth headers at all (no Authorization, no X-Pubkey) with the
+    //          default dev config (require_auth_token = false).  The fallback
+    //          X-Pubkey path requires the header to be present; absence must
+    //          still produce 401.
+    //
+    //   T4b — X-Pubkey header present but require_auth_token = true.  The
+    //          dev-mode fallback is disabled under enforcement; only NIP-98
+    //          Authorization is accepted.  A bare X-Pubkey must yield 401.
+    //
+    // Both tests share the same `#[ignore = "requires Postgres"]` guard as the
+    // counter tests above (bind_community needs a real communities row).
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /// Drive a single POST /events request with NO auth headers and return the
+    /// HTTP status code.
+    ///
+    /// Unlike `post_events`, this helper omits both `x-pubkey` and
+    /// `Authorization`, so `verify_bridge_auth` has nothing to work with and
+    /// must return the "missing Nostr auth" 401.
+    async fn post_events_no_auth(
+        state: Arc<crate::state::AppState>,
+        host: &str,
+        body: &[u8],
+    ) -> axum::http::StatusCode {
+        use axum::body::Body;
+        use axum::http::{header, Request};
+        use tower::ServiceExt;
+
+        crate::router::build_router(state)
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/events")
+                    .header(header::HOST, host)
+                    .body(Body::from(body.to_vec()))
+                    .expect("build request"),
+            )
+            .await
+            .expect("router oneshot")
+            .status()
+    }
+
+    /// T4a — no auth header yields 401: POST /events with no Authorization and
+    /// no X-Pubkey must be rejected with 401 even in dev mode
+    /// (require_auth_token = false), where a present X-Pubkey would be accepted.
+    ///
+    /// This pins the HTTP auth gate: the absence of any credential must close
+    /// the door regardless of enforcement mode.
+    ///
+    /// Discriminating: if `verify_bridge_auth` were removed or bypassed, the
+    /// request would reach ingest logic and the status would not be 401.
+    #[test]
+    #[ignore = "requires Postgres"]
+    fn submit_event_no_auth_header_yields_401() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current_thread runtime");
+
+        let Some(state) = rt.block_on(bridge_handler_test_state()) else {
+            panic!("local Postgres not reachable — start Postgres on 127.0.0.1:5432 before running ignored bridge handler tests");
+        };
+
+        // Provision a fresh community so bind_community succeeds.
+        let host = {
+            let h = format!("bridge-test-{}.local", uuid::Uuid::new_v4().simple());
+            rt.block_on(state.db.ensure_configured_community(&h))
+                .expect("ensure community");
+            h
+        };
+
+        // No auth headers at all — verify_bridge_auth must return 401.
+        let status = rt.block_on(post_events_no_auth(state, &host, b"{}"));
+        assert_eq!(
+            status,
+            axum::http::StatusCode::UNAUTHORIZED,
+            "POST /events with no auth header must yield 401"
+        );
+    }
+
+    /// T4b — X-Pubkey blocked when auth-token enforcement is active: POST
+    /// /events with only an X-Pubkey header and require_auth_token = true must
+    /// be rejected with 401.
+    ///
+    /// When auth enforcement is enabled the dev-mode X-Pubkey fallback is
+    /// disabled; only a valid NIP-98 Authorization header is accepted.  A bare
+    /// X-Pubkey must not be treated as valid credentials.
+    ///
+    /// Discriminating: if the `!require_auth_token` guard in
+    /// `verify_bridge_auth_with_options` were removed, the X-Pubkey path would
+    /// be taken even under enforcement and this test would not yield 401.
+    #[test]
+    #[ignore = "requires Postgres"]
+    fn submit_event_xpubkey_blocked_when_auth_token_required_yields_401() {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("current_thread runtime");
+
+        let Some(mut state) = rt.block_on(bridge_handler_test_state()) else {
+            panic!("local Postgres not reachable — start Postgres on 127.0.0.1:5432 before running ignored bridge handler tests");
+        };
+
+        // Enable auth-token enforcement — X-Pubkey fallback must be refused.
+        Arc::get_mut(&mut state)
+            .expect("exclusive Arc ref for require_auth_token mutation")
+            .config
+            .require_auth_token = true;
+
+        // Provision a fresh community so bind_community succeeds.
+        let host = {
+            let h = format!("bridge-test-{}.local", uuid::Uuid::new_v4().simple());
+            rt.block_on(state.db.ensure_configured_community(&h))
+                .expect("ensure community");
+            h
+        };
+
+        // post_events sends x-pubkey only (no Authorization: Nostr header).
+        let pubkey_hex = Keys::generate().public_key().to_hex();
+        let status = rt.block_on(post_events(state, &host, &pubkey_hex, b"{}"));
+        assert_eq!(
+            status,
+            axum::http::StatusCode::UNAUTHORIZED,
+            "POST /events with X-Pubkey only must yield 401 when require_auth_token is true"
+        );
+    }
 }
