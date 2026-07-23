@@ -1,6 +1,11 @@
 /**
  * Minimal relay WebSocket client for the admin panel.
  * Handles NIP-42 auth, subscriptions, and event publishing.
+ *
+ * REQ messages are buffered until NIP-42 auth completes so the relay never
+ * receives a subscription before the connection is authenticated.  The relay
+ * closes any REQ that arrives before auth with "auth-required"; without
+ * buffering those subscriptions are silently dead and channels never load.
  */
 
 import { hasStoredNsec, signEventObject } from "./identity";
@@ -45,8 +50,23 @@ export class AdminRelayWs {
   private ws: WebSocket;
   private subs = new Map<string, SubCallbacks>();
   private counter = 0;
-  /** Messages waiting to be sent once the socket is open. */
+
+  /**
+   * Messages queued before the WebSocket is open (any type).
+   * Flushed in `onopen`.
+   */
   private sendQueue: string[] = [];
+
+  /**
+   * REQ messages held back until NIP-42 auth completes.
+   * The relay closes any REQ that arrives before auth with "auth-required",
+   * so we must not send subscriptions until we have authenticated.
+   */
+  private reqQueue: string[] = [];
+
+  /** True once we have sent an AUTH response. */
+  private authed = false;
+
   private closed = false;
 
   constructor(
@@ -61,7 +81,8 @@ export class AdminRelayWs {
     const ws = new WebSocket(this.url);
 
     ws.onopen = () => {
-      // Flush any messages queued before the socket opened.
+      // Flush non-REQ messages queued before the socket opened.
+      // REQ messages stay in reqQueue until after auth.
       for (const m of this.sendQueue) ws.send(m);
       this.sendQueue = [];
     };
@@ -77,7 +98,7 @@ export class AdminRelayWs {
       const [type, ...rest] = msg;
 
       if (type === "AUTH" && typeof rest[0] === "string") {
-        // NIP-42: relay requests auth — respond.
+        // NIP-42: relay requests auth — respond, then flush buffered REQs.
         const challenge = rest[0];
         try {
           const authEvent = await sign({
@@ -89,6 +110,16 @@ export class AdminRelayWs {
             content: "",
           });
           this.rawSend(["AUTH", authEvent]);
+
+          // Mark as authenticated and flush all buffered REQ messages.
+          this.authed = true;
+          for (const m of this.reqQueue) {
+            if (this.ws.readyState === WebSocket.OPEN) {
+              this.ws.send(m);
+            }
+          }
+          this.reqQueue = [];
+
           this.onReady();
         } catch {
           this.onFatalError("Could not sign the NIP-42 auth challenge.");
@@ -108,7 +139,15 @@ export class AdminRelayWs {
         return;
       }
 
-      // CLOSED — if auth-required, we already handle AUTH above.
+      if (type === "CLOSED" && typeof rest[0] === "string") {
+        // Relay closed the subscription — remove it so we don't leak the entry.
+        // After the auth fix above, "auth-required" closes should no longer occur,
+        // but handle them defensively.
+        const subId = rest[0] as string;
+        this.subs.delete(subId);
+        return;
+      }
+
       // NOTICE — ignore.
     };
 
@@ -139,10 +178,26 @@ export class AdminRelayWs {
   ): () => void {
     const subId = `adm-${++this.counter}`;
     this.subs.set(subId, { onEvent, onEose });
-    this.rawSend(["REQ", subId, filters]);
+
+    const msg = JSON.stringify(["REQ", subId, filters]);
+    if (this.authed && this.ws.readyState === WebSocket.OPEN) {
+      // Already authenticated — send immediately.
+      this.ws.send(msg);
+    } else {
+      // Buffer until auth completes (or socket opens).
+      this.reqQueue.push(msg);
+    }
+
     return () => {
       this.subs.delete(subId);
-      this.rawSend(["CLOSE", subId]);
+      // Only send CLOSE if auth completed; otherwise just drop from reqQueue.
+      if (this.authed) {
+        this.rawSend(["CLOSE", subId]);
+      } else {
+        this.reqQueue = this.reqQueue.filter(
+          (m) => !m.includes(`"${subId}"`),
+        );
+      }
     };
   }
 

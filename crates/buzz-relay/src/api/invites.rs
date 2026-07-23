@@ -271,12 +271,41 @@ pub async fn mint_invite(
     let (code, expires_at) =
         invite_token::mint_invite(&key, tenant.community(), ttl, request.single_use);
 
-    // Same TLS-posture logic as nip98_expected_url: wss deployments get an
-    // https landing page URL, ws dev/test deployments get http.
-    let scheme = if state.config.relay_url.trim_start().starts_with("wss://") {
-        "https"
+    // Build the canonical invite landing URL.
+    //
+    // Scheme follows TLS posture: wss → https, ws → http.
+    //
+    // Host: prefer the relay's configured RELAY_URL (the operator-facing canonical
+    // hostname, e.g. "buzz.shopstrmarkets.com") over the raw HTTP request Host.
+    // This matters when the admin panel is accessed via a different domain than the
+    // one the relay is publicly known by — without this, invites minted from
+    // buzzstr.replit.app/admin/ would produce buzzstr.replit.app invite links even
+    // when a custom domain is the intended entry point.
+    //
+    // Fallback: if relay_url is unset or unparseable, use tenant.host() so the
+    // behaviour is unchanged from before (single-host dev deployments).
+    let relay_url = state.config.relay_url.trim();
+    let (scheme, canonical_host): (&str, String) = if relay_url.starts_with("wss://") {
+        let host = relay_url
+            .trim_start_matches("wss://")
+            .split('/')
+            .next()
+            .filter(|h| !h.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| tenant.host().to_owned());
+        ("https", host)
+    } else if relay_url.starts_with("ws://") {
+        let host = relay_url
+            .trim_start_matches("ws://")
+            .split('/')
+            .next()
+            .filter(|h| !h.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| tenant.host().to_owned());
+        ("http", host)
     } else {
-        "http"
+        // No relay_url configured — fall back to the request host.
+        ("https", tenant.host().to_owned())
     };
 
     tracing::info!(
@@ -284,13 +313,14 @@ pub async fn mint_invite(
         minted_by = %sender_hex,
         expires_at,
         single_use = request.single_use,
+        invite_host = %canonical_host,
         "relay invite minted"
     );
 
     Ok(Json(serde_json::json!({
         "code": code,
         "expires_at": expires_at,
-        "url": format!("{scheme}://{}/invite/{}", tenant.host(), code),
+        "url": format!("{scheme}://{canonical_host}/invite/{}", code),
     })))
 }
 

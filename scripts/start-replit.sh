@@ -23,7 +23,15 @@ export BUZZ_GIT_CONFORMANCE_PROBE="${BUZZ_GIT_CONFORMANCE_PROBE:-false}"
 # Both REPLIT_DEV_DOMAIN and REPLIT_DOMAINS can be set in a production VM —
 # check REPLIT_DOMAINS first so production always seeds the real public domain
 # (e.g. buzzstr.replit.app) rather than the ephemeral janeway preview URL.
-if [[ -n "${REPLIT_DOMAINS:-}" ]]; then
+if [[ -n "${BUZZ_CUSTOM_DOMAINS:-}" ]]; then
+  # Prefer the operator-configured canonical domain (e.g. buzz.shopstrmarkets.com)
+  # over Replit's generated domain.  This ensures invite URLs, RELAY_URL in NIP-11,
+  # and any other self-referential links use the public-facing hostname.
+  # BUZZ_CUSTOM_DOMAINS is comma-separated; take the first entry.
+  CANONICAL_DOMAIN="$(echo "${BUZZ_CUSTOM_DOMAINS}" | cut -d',' -f1 | tr -d ' ')"
+  export RELAY_URL="wss://${CANONICAL_DOMAIN}"
+  export BUZZ_MEDIA_BASE_URL="https://${CANONICAL_DOMAIN}/media"
+elif [[ -n "${REPLIT_DOMAINS:-}" ]]; then
   # REPLIT_DOMAINS may be comma-separated; take the first entry.
   PRIMARY_DOMAIN="$(echo "${REPLIT_DOMAINS}" | cut -d',' -f1 | tr -d ' ')"
   export RELAY_URL="wss://${PRIMARY_DOMAIN}"
