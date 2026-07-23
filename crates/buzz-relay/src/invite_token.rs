@@ -24,19 +24,24 @@
 //! relay keypair therefore invalidates all outstanding invites, which is the
 //! intended blast-radius control for a leaked link.
 //!
-//! ## Security properties (and non-properties)
+//! ## Security properties
 //!
-//! - Codes are **multi-use until expiry** — there is no server-side "used"
-//!   bit. Default expiry is deliberately short ([`DEFAULT_INVITE_TTL_SECS`]).
 //! - Codes are **community-scoped**: a code minted for community A fails
 //!   verification when presented to community B, even on the same deployment.
 //! - Codes are **role-capped at `member`** at mint time (enforced by the mint
 //!   route, and re-checked here on verify so a hand-crafted payload with an
 //!   elevated role is rejected even if it carries a valid MAC from a future
 //!   buggy caller).
-//! - Revocation is coarse: rotate the relay keypair, or remove the member
-//!   after the fact. Per-code revocation requires the future `relay_invites`
-//!   table increment.
+//! - **Single-use codes** (`s = true` in the payload) are enforced server-side
+//!   by writing a claim record to the `relay_invites` table the first time the
+//!   code is presented. A second presenter receives a rejection regardless of
+//!   expiry. The claim check and membership insert share a single transaction so
+//!   concurrent races resolve to exactly one winner.
+//! - **Multi-use codes** (default, `s = false`) remain stateless: no
+//!   `relay_invites` row is written. Default expiry is deliberately short
+//!   ([`DEFAULT_INVITE_TTL_SECS`]).
+//! - Revocation is coarse: rotate the relay keypair (invalidates all outstanding
+//!   codes) or remove the member after the fact.
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -72,6 +77,15 @@ pub struct InvitePayload {
     pub e: u64,
     /// Random nonce so identically-parameterised invites differ.
     pub n: String,
+    /// Single-use flag. When `true`, the relay enforces exactly-one-claim via
+    /// the `relay_invites` table. Omitted (false) for backwards-compatible
+    /// multi-use codes.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub s: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 /// Why a code failed verification. Variants are deliberately coarse — the
@@ -125,7 +139,15 @@ fn sign_payload(key: &[u8; 32], payload_bytes: &[u8]) -> Vec<u8> {
 ///
 /// The role is fixed to `"member"` — elevated roles are granted post-join via
 /// the existing kind:9032 change-role command, never via a bearer link.
-pub fn mint_invite(key: &[u8; 32], community: CommunityId, ttl_secs: u64) -> (String, u64) {
+///
+/// When `single_use` is `true`, the `s` flag is embedded in the signed payload
+/// and the relay enforces exactly-one-claim at the `relay_invites` table.
+pub fn mint_invite(
+    key: &[u8; 32],
+    community: CommunityId,
+    ttl_secs: u64,
+    single_use: bool,
+) -> (String, u64) {
     let ttl = ttl_secs.clamp(60, MAX_INVITE_TTL_SECS);
     let expires_at = now_unix() + ttl;
 
@@ -135,6 +157,7 @@ pub fn mint_invite(key: &[u8; 32], community: CommunityId, ttl_secs: u64) -> (St
         r: "member".to_string(),
         e: expires_at,
         n: URL_SAFE_NO_PAD.encode(nonce),
+        s: single_use,
     };
     let payload_bytes = serde_json::to_vec(&payload).expect("payload serializes");
     let mac = sign_payload(key, &payload_bytes);
@@ -213,17 +236,27 @@ mod tests {
     fn mint_then_verify_roundtrip() {
         let key = test_key();
         let c = community();
-        let (code, expires_at) = mint_invite(&key, c, 3600);
+        let (code, expires_at) = mint_invite(&key, c, 3600, false);
         let payload = verify_invite(&key, c, &code).expect("valid code verifies");
         assert_eq!(payload.c, c.as_uuid().to_string());
         assert_eq!(payload.r, "member");
         assert_eq!(payload.e, expires_at);
+        assert!(!payload.s, "multi-use code must not set single-use flag");
+    }
+
+    #[test]
+    fn single_use_flag_roundtrips() {
+        let key = test_key();
+        let c = community();
+        let (code, _) = mint_invite(&key, c, 3600, true);
+        let payload = verify_invite(&key, c, &code).expect("valid single-use code verifies");
+        assert!(payload.s, "single-use code must carry s=true");
     }
 
     #[test]
     fn rejects_wrong_community() {
         let key = test_key();
-        let (code, _) = mint_invite(&key, community(), 3600);
+        let (code, _) = mint_invite(&key, community(), 3600, false);
         assert_eq!(
             verify_invite(&key, community(), &code),
             Err(InviteError::WrongCommunity)
@@ -234,7 +267,7 @@ mod tests {
     fn rejects_tampered_payload() {
         let key = test_key();
         let c = community();
-        let (code, _) = mint_invite(&key, c, 3600);
+        let (code, _) = mint_invite(&key, c, 3600, false);
         let (payload_b64, mac_b64) = code.split_once('.').unwrap();
 
         // Re-encode a payload with an elevated role but keep the original MAC.
@@ -255,7 +288,7 @@ mod tests {
     #[test]
     fn rejects_wrong_key() {
         let c = community();
-        let (code, _) = mint_invite(&test_key(), c, 3600);
+        let (code, _) = mint_invite(&test_key(), c, 3600, false);
         assert_eq!(
             verify_invite(&test_key(), c, &code),
             Err(InviteError::BadSignature)
@@ -301,7 +334,7 @@ mod tests {
     #[test]
     fn ttl_is_capped() {
         let key = test_key();
-        let (_, expires_at) = mint_invite(&key, community(), u64::MAX);
+        let (_, expires_at) = mint_invite(&key, community(), u64::MAX, false);
         assert!(expires_at <= now_unix() + MAX_INVITE_TTL_SECS + 5);
     }
 

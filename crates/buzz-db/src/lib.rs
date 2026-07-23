@@ -2952,6 +2952,30 @@ impl Db {
             .await
     }
 
+    /// Atomically claims a **single-use** invite code and grants relay membership.
+    ///
+    /// Returns [`relay_members::SingleUseClaimResult`] indicating whether the
+    /// code was freshly consumed, the caller was already a member, or the code
+    /// was already used by another presenter.
+    pub async fn claim_relay_membership_single_use(
+        &self,
+        community: CommunityId,
+        pubkey: &str,
+        role: &str,
+        policy_version: Option<&str>,
+        code_hash: &str,
+    ) -> Result<relay_members::SingleUseClaimResult> {
+        relay_members::claim_relay_membership_single_use(
+            &self.pool,
+            community,
+            pubkey,
+            role,
+            policy_version,
+            code_hash,
+        )
+        .await
+    }
+
     /// Returns whether a member has persisted acceptance evidence for a policy version.
     pub async fn has_join_policy_acceptance(
         &self,

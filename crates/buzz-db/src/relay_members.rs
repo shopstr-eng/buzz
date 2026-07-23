@@ -156,6 +156,96 @@ pub async fn claim_relay_membership(
     Ok(inserted)
 }
 
+/// Result of a [`claim_relay_membership_single_use`] attempt.
+#[derive(Debug, PartialEq)]
+pub enum SingleUseClaimResult {
+    /// The invite code was accepted and membership was granted.
+    Joined,
+    /// The claimer was already a member; the code is now consumed.
+    AlreadyMember,
+    /// The single-use code was already redeemed by a different (or prior) claimer.
+    CodeAlreadyUsed,
+}
+
+/// Atomically claims a **single-use** invite code and grants relay membership.
+///
+/// Within a single transaction:
+/// 1. Attempts to `INSERT` into `relay_invites` (`ON CONFLICT DO NOTHING`).
+///    If 0 rows are affected the code was already claimed — returns
+///    [`SingleUseClaimResult::CodeAlreadyUsed`] and the transaction is
+///    rolled back.
+/// 2. Inserts the joining pubkey into `relay_members` (`ON CONFLICT DO
+///    NOTHING`).
+/// 3. Records policy acceptance evidence when `policy_version` is `Some`.
+///
+/// Returns [`SingleUseClaimResult::Joined`] when the membership row was
+/// freshly inserted, or [`SingleUseClaimResult::AlreadyMember`] when the
+/// pubkey was already in `relay_members` (the invite is still consumed so the
+/// code cannot be replayed by a third party).
+pub async fn claim_relay_membership_single_use(
+    pool: &PgPool,
+    community: CommunityId,
+    pubkey: &str,
+    role: &str,
+    policy_version: Option<&str>,
+    code_hash: &str,
+) -> Result<SingleUseClaimResult> {
+    let mut tx = pool.begin().await?;
+
+    // 1. Try to claim the code atomically.
+    let claimed = sqlx::query(
+        "INSERT INTO relay_invites (community_id, code_hash, claimer_pubkey) \
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+    )
+    .bind(community.as_uuid())
+    .bind(code_hash)
+    .bind(pubkey)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected()
+        > 0;
+
+    if !claimed {
+        tx.rollback().await?;
+        return Ok(SingleUseClaimResult::CodeAlreadyUsed);
+    }
+
+    // 2. Grant membership.
+    let inserted = sqlx::query(
+        "INSERT INTO relay_members (community_id, pubkey, role, added_by) \
+         VALUES ($1, $2, $3, 'invite') \
+         ON CONFLICT (community_id, pubkey) DO NOTHING",
+    )
+    .bind(community.as_uuid())
+    .bind(pubkey)
+    .bind(role)
+    .execute(&mut *tx)
+    .await?
+    .rows_affected()
+        > 0;
+
+    // 3. Persist policy evidence if required.
+    if let Some(version) = policy_version {
+        sqlx::query(
+            "INSERT INTO join_policy_acceptances (community_id, pubkey, policy_version) \
+             VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+        )
+        .bind(community.as_uuid())
+        .bind(pubkey)
+        .bind(version)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+
+    if inserted {
+        Ok(SingleUseClaimResult::Joined)
+    } else {
+        Ok(SingleUseClaimResult::AlreadyMember)
+    }
+}
+
 /// Returns whether a member has persisted acceptance evidence for a policy version.
 pub async fn has_join_policy_acceptance(
     pool: &PgPool,

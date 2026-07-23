@@ -443,6 +443,9 @@ struct AdminMintInviteRequest {
     /// 72 h.
     #[serde(default)]
     ttl_secs: Option<u64>,
+    /// When `true`, the minted code can only be redeemed by the first claimer.
+    #[serde(default)]
+    single_use: bool,
 }
 
 /// `POST /api/admin/v1/invites` — mint an invite link from the admin panel.
@@ -498,7 +501,8 @@ async fn mint_invite_admin(
     let ttl = request
         .ttl_secs
         .unwrap_or(crate::invite_token::DEFAULT_INVITE_TTL_SECS);
-    let (code, expires_at) = crate::invite_token::mint_invite(&key, tenant.community(), ttl);
+    let (code, expires_at) =
+        crate::invite_token::mint_invite(&key, tenant.community(), ttl, request.single_use);
 
     let scheme = if state.config.relay_url.trim_start().starts_with("wss://") {
         "https"
@@ -509,6 +513,7 @@ async fn mint_invite_admin(
     tracing::info!(
         community = %tenant.community(),
         expires_at,
+        single_use = request.single_use,
         "relay invite minted via admin panel"
     );
 

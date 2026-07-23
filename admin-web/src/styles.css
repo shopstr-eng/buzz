@@ -744,6 +744,18 @@ dd {
   font-size: 0.95rem;
 }
 
+.invite-single-use-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #231e1e;
+  cursor: pointer;
+  white-space: nowrap;
+  padding-bottom: 0.1rem;
+}
+
 .invite-result {
   padding: 1.25rem 1.5rem;
   border: 1px solid rgb(35 30 30 / 10%);

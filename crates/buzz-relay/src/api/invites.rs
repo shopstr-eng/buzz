@@ -24,6 +24,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::Value;
 
+use sha2::{Digest, Sha256};
+
 use crate::handlers::side_effects::{publish_nip43_member_added, publish_nip43_membership_list};
 use crate::invite_token::{self, DEFAULT_INVITE_TTL_SECS};
 use crate::state::AppState;
@@ -47,6 +49,10 @@ pub struct MintInviteRequest {
     /// [`invite_token::MAX_INVITE_TTL_SECS`]; defaults to 72 h.
     #[serde(default)]
     pub ttl_secs: Option<u64>,
+    /// When `true`, the minted code can only be redeemed by the first claimer.
+    /// Subsequent presenters are rejected with `invite_already_used`.
+    #[serde(default)]
+    pub single_use: bool,
 }
 
 /// Body for `POST /api/invites/claim`.
@@ -262,7 +268,8 @@ pub async fn mint_invite(
 
     let key = invite_token::derive_invite_key(&state.relay_keypair);
     let ttl = request.ttl_secs.unwrap_or(DEFAULT_INVITE_TTL_SECS);
-    let (code, expires_at) = invite_token::mint_invite(&key, tenant.community(), ttl);
+    let (code, expires_at) =
+        invite_token::mint_invite(&key, tenant.community(), ttl, request.single_use);
 
     // Same TLS-posture logic as nip98_expected_url: wss deployments get an
     // https landing page URL, ws dev/test deployments get http.
@@ -276,6 +283,7 @@ pub async fn mint_invite(
         community = %tenant.community(),
         minted_by = %sender_hex,
         expires_at,
+        single_use = request.single_use,
         "relay invite minted"
     );
 
@@ -327,25 +335,48 @@ pub async fn claim_invite(
             .map_err(|_| api_error(StatusCode::FORBIDDEN, "join_policy_required"))?;
     }
 
-    let was_inserted = state
-        .db
-        .claim_relay_membership(
-            tenant.community(),
-            &claimer_hex,
-            &payload.r,
-            state
-                .config
-                .join_policy
-                .as_ref()
-                .map(|policy| policy.version.as_str()),
-        )
-        .await
-        .map_err(|e| internal_error(&format!("invite claim insert: {e}")))?;
+    let policy_version = state
+        .config
+        .join_policy
+        .as_ref()
+        .map(|policy| policy.version.as_str());
+
+    let was_inserted = if payload.s {
+        // Single-use: atomically claim the code and grant membership in one
+        // transaction. Concurrent presenters of the same code serialize on the
+        // relay_invites INSERT so exactly one wins.
+        let code_hash = hex::encode(Sha256::digest(request.code.as_bytes()));
+        match state
+            .db
+            .claim_relay_membership_single_use(
+                tenant.community(),
+                &claimer_hex,
+                &payload.r,
+                policy_version,
+                &code_hash,
+            )
+            .await
+            .map_err(|e| internal_error(&format!("single-use invite claim: {e}")))?
+        {
+            buzz_db::relay_members::SingleUseClaimResult::Joined => true,
+            buzz_db::relay_members::SingleUseClaimResult::AlreadyMember => false,
+            buzz_db::relay_members::SingleUseClaimResult::CodeAlreadyUsed => {
+                return Err(api_error(StatusCode::FORBIDDEN, "invite_already_used"));
+            }
+        }
+    } else {
+        state
+            .db
+            .claim_relay_membership(tenant.community(), &claimer_hex, &payload.r, policy_version)
+            .await
+            .map_err(|e| internal_error(&format!("invite claim insert: {e}")))?
+    };
 
     if was_inserted {
         tracing::info!(
             community = %tenant.community(),
             member = %claimer_hex,
+            single_use = payload.s,
             "relay member added via invite"
         );
         if let Err(e) = publish_nip43_member_added(&tenant, &state, &claimer_hex).await {

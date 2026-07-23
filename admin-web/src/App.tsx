@@ -903,6 +903,7 @@ function Invites() {
   const [invite, setInvite] = useState<InviteResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [ttlDays, setTtlDays] = useState(3);
+  const [singleUse, setSingleUse] = useState(false);
 
   async function mintInvite() {
     setLoading(true);
@@ -912,6 +913,7 @@ function Invites() {
     try {
       const data = await post<InviteResult>("/invites", {
         ttlSecs: ttlDays * 86400,
+        singleUse,
       });
       setInvite(data);
     } catch (e) {
@@ -957,6 +959,17 @@ function Invites() {
               <option value={30}>30 days</option>
             </select>
           </label>
+          <label className="invite-single-use-label">
+            <input
+              type="checkbox"
+              checked={singleUse}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                setSingleUse(e.target.checked)
+              }
+              disabled={loading}
+            />
+            <span>Single-use</span>
+          </label>
           <button type="button" onClick={mintInvite} disabled={loading}>
             {loading ? "Generating…" : "Generate invite link"}
           </button>
@@ -983,8 +996,9 @@ function Invites() {
               </button>
             </div>
             <p className="invite-hint">
-              Share this link with new members. The link can be used multiple
-              times until it expires.
+              {singleUse
+                ? "Share this link with one new member. The link can only be used once."
+                : "Share this link with new members. The link can be used multiple times until it expires."}
             </p>
           </div>
         )}
