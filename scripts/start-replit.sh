@@ -141,6 +141,21 @@ if command -v psql >/dev/null 2>&1 && [[ -n "${RELAY_URL:-}" ]]; then
       2>/dev/null || true
   done
   echo "==> Localhost aliases seeded."
+
+  # Seed any additional custom domains (e.g. a custom domain pointed at the relay).
+  # Set BUZZ_CUSTOM_DOMAINS to a comma-separated list of hostnames in the production
+  # environment secrets — they will be inserted here on every startup (idempotent).
+  if [[ -n "${BUZZ_CUSTOM_DOMAINS:-}" ]]; then
+    IFS=',' read -ra CUSTOM_HOSTS <<< "$BUZZ_CUSTOM_DOMAINS"
+    for CUSTOM_HOST in "${CUSTOM_HOSTS[@]}"; do
+      CUSTOM_HOST="$(echo "$CUSTOM_HOST" | tr -d ' ')"
+      [[ -z "$CUSTOM_HOST" ]] && continue
+      psql "$DATABASE_URL" -c \
+        "INSERT INTO communities (host) VALUES ('${CUSTOM_HOST}') ON CONFLICT (lower(host)) DO NOTHING;" \
+        2>/dev/null && echo "==> Custom domain seeded (host=${CUSTOM_HOST})." \
+        || echo "==> Custom domain seed skipped (already exists or error): ${CUSTOM_HOST}"
+    done
+  fi
 fi
 
 # ---------------------------------------------------------------------------
