@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Hash, Lock, Wifi, WifiOff, Loader, LogOut } from "lucide-react";
+import { BookMarked, Hash, Lock, Wifi, WifiOff, Loader, LogOut } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../use-channels";
 import type { Channel } from "../types";
@@ -53,6 +53,8 @@ function ChannelItem({ channel }: { channel: Channel }) {
 export function ChannelSidebar() {
   const { channels, isLoading } = useChannels();
   const { identity, logout } = useRelay();
+  const { location } = useRouterState();
+  const reposActive = location.pathname.startsWith("/repos");
 
   return (
     <aside className="flex h-full w-56 shrink-0 flex-col border-r border-black/10 bg-[#EBEBEB] dark:border-white/10 dark:bg-[#1A1A1A]">
@@ -71,6 +73,19 @@ export function ChannelSidebar() {
 
       {/* Channel list */}
       <div className="flex-1 overflow-y-auto px-2 py-3">
+        {/* Repos link */}
+        <Link
+          to="/repos"
+          className={`mb-2 flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+            reposActive
+              ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+              : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+          }`}
+        >
+          <BookMarked className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          Repositories
+        </Link>
+
         <div className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-black/40 dark:text-white/40">
           Channels
         </div>

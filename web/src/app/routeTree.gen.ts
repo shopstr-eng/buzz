@@ -12,6 +12,7 @@ import { Route as reposRouteImport } from "./routes/repos";
 import { Route as channelsDotindexRouteImport } from "./routes/channels.index";
 import { Route as channelsDotgroupIdRouteImport } from "./routes/channels.$groupId";
 import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
+import { Route as reposDotindexRouteImport } from "./routes/repos.index";
 import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
 import { Route as reposDotrepoIdDotblobDotsplatRouteImport } from "./routes/repos.$repoId.blob.$";
 
@@ -50,37 +51,43 @@ const inviteDotcodeRoute = inviteDotcodeRouteImport.update({
   path: "/invite/$code",
   getParentRoute: () => rootRouteImport,
 } as any);
+const reposDotindexRoute = reposDotindexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => reposRoute,
+} as any);
 const reposDotrepoIdRoute = reposDotrepoIdRouteImport.update({
-  id: "/repos/$repoId",
-  path: "/repos/$repoId",
-  getParentRoute: () => rootRouteImport,
+  id: "/$repoId",
+  path: "/$repoId",
+  getParentRoute: () => reposRoute,
 } as any);
 const reposDotrepoIdDotblobDotsplatRoute =
   reposDotrepoIdDotblobDotsplatRouteImport.update({
-    id: "/repos/$repoId/blob/$",
-    path: "/repos/$repoId/blob/$",
-    getParentRoute: () => rootRouteImport,
+    id: "/$repoId/blob/$",
+    path: "/$repoId/blob/$",
+    getParentRoute: () => reposRoute,
   } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof indexRoute;
   "/channels": typeof channelsRouteWithChildren;
   "/login": typeof loginRoute;
-  "/repos": typeof reposRoute;
+  "/repos": typeof reposRouteWithChildren;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
   "/channels/": typeof channelsDotindexRoute;
+  "/repos/": typeof reposDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 export interface FileRoutesByTo {
   "/": typeof indexRoute;
   "/login": typeof loginRoute;
-  "/repos": typeof reposRoute;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
   "/channels": typeof channelsDotindexRoute;
+  "/repos": typeof reposDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 export interface FileRoutesById {
@@ -88,11 +95,12 @@ export interface FileRoutesById {
   "/": typeof indexRoute;
   "/channels": typeof channelsRouteWithChildren;
   "/login": typeof loginRoute;
-  "/repos": typeof reposRoute;
+  "/repos": typeof reposRouteWithChildren;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
   "/channels/": typeof channelsDotindexRoute;
+  "/repos/": typeof reposDotindexRoute;
   "/repos/$repoId/blob/$": typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 export interface FileRouteTypes {
@@ -106,16 +114,17 @@ export interface FileRouteTypes {
     | "/invite/$code"
     | "/repos/$repoId"
     | "/channels/"
+    | "/repos/"
     | "/repos/$repoId/blob/$";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/"
     | "/login"
-    | "/repos"
     | "/channels/$groupId"
     | "/invite/$code"
     | "/repos/$repoId"
     | "/channels"
+    | "/repos"
     | "/repos/$repoId/blob/$";
   id:
     | "__root__"
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | "/invite/$code"
     | "/repos/$repoId"
     | "/channels/"
+    | "/repos/"
     | "/repos/$repoId/blob/$";
   fileRoutesById: FileRoutesById;
 }
@@ -134,10 +144,8 @@ export interface RootRouteChildren {
   indexRoute: typeof indexRoute;
   channelsRoute: typeof channelsRouteWithChildren;
   loginRoute: typeof loginRoute;
-  reposRoute: typeof reposRoute;
+  reposRoute: typeof reposRouteWithChildren;
   inviteDotcodeRoute: typeof inviteDotcodeRoute;
-  reposDotrepoIdRoute: typeof reposDotrepoIdRoute;
-  reposDotrepoIdDotblobDotsplatRoute: typeof reposDotrepoIdDotblobDotsplatRoute;
 }
 
 declare module "@tanstack/react-router" {
@@ -191,19 +199,26 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof inviteDotcodeRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/repos/": {
+      id: "/repos/";
+      path: "/";
+      fullPath: "/repos/";
+      preLoaderRoute: typeof reposDotindexRouteImport;
+      parentRoute: typeof reposRoute;
+    };
     "/repos/$repoId": {
       id: "/repos/$repoId";
-      path: "/repos/$repoId";
+      path: "/$repoId";
       fullPath: "/repos/$repoId";
       preLoaderRoute: typeof reposDotrepoIdRouteImport;
-      parentRoute: typeof rootRouteImport;
+      parentRoute: typeof reposRoute;
     };
     "/repos/$repoId/blob/$": {
       id: "/repos/$repoId/blob/$";
-      path: "/repos/$repoId/blob/$";
+      path: "/$repoId/blob/$";
       fullPath: "/repos/$repoId/blob/$";
       preLoaderRoute: typeof reposDotrepoIdDotblobDotsplatRouteImport;
-      parentRoute: typeof rootRouteImport;
+      parentRoute: typeof reposRoute;
     };
   }
 }
@@ -222,14 +237,26 @@ const channelsRouteWithChildren = channelsRoute._addFileChildren(
   channelsRouteChildren,
 );
 
+interface reposRouteChildren {
+  reposDotrepoIdRoute: typeof reposDotrepoIdRoute;
+  reposDotindexRoute: typeof reposDotindexRoute;
+  reposDotrepoIdDotblobDotsplatRoute: typeof reposDotrepoIdDotblobDotsplatRoute;
+}
+
+const reposRouteChildren: reposRouteChildren = {
+  reposDotrepoIdRoute: reposDotrepoIdRoute,
+  reposDotindexRoute: reposDotindexRoute,
+  reposDotrepoIdDotblobDotsplatRoute: reposDotrepoIdDotblobDotsplatRoute,
+};
+
+const reposRouteWithChildren = reposRoute._addFileChildren(reposRouteChildren);
+
 const rootRouteChildren: RootRouteChildren = {
   indexRoute: indexRoute,
   channelsRoute: channelsRouteWithChildren,
   loginRoute: loginRoute,
-  reposRoute: reposRoute,
+  reposRoute: reposRouteWithChildren,
   inviteDotcodeRoute: inviteDotcodeRoute,
-  reposDotrepoIdRoute: reposDotrepoIdRoute,
-  reposDotrepoIdDotblobDotsplatRoute: reposDotrepoIdDotblobDotsplatRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

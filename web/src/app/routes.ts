@@ -4,9 +4,11 @@ export const routes = rootRoute("root.tsx", [
   index("index.tsx"),
   route("/login", "login.tsx"),
   route("/invite/$code", "invite.$code.tsx"),
-  route("/repos", "repos.tsx"),
-  route("/repos/$repoId", "repos.$repoId.tsx"),
-  route("/repos/$repoId/blob/$", "repos.$repoId.blob.$.tsx"),
+  route("/repos", "repos.tsx", [
+    index("repos.index.tsx"),
+    route("$repoId", "repos.$repoId.tsx"),
+    route("$repoId/blob/$", "repos.$repoId.blob.$.tsx"),
+  ]),
   route("/channels", "channels.tsx", [
     index("channels.index.tsx"),
     route("$groupId", "channels.$groupId.tsx"),

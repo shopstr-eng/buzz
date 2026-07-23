@@ -1,5 +1,12 @@
-import { Navigate, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
+import { loadIdentity } from "@/shared/lib/identity";
+import { AppLayout } from "@/features/channels/ui/AppLayout";
 
 export const Route = createFileRoute("/repos")({
-  component: () => <Navigate to="/" />,
+  beforeLoad: () => {
+    if (!loadIdentity()) {
+      throw redirect({ to: "/login" });
+    }
+  },
+  component: AppLayout,
 });
