@@ -36,6 +36,44 @@ function makeResource(members: RelayMember[]): Resource<RelayMember[]> {
 }
 
 describe("Members – removing state with mid-delete refresh", () => {
+  it("shows 'Removing…' while del() is in-flight and clears it after del() resolves", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolveDel!: () => void;
+    const delPromise = new Promise<void>((res) => {
+      resolveDel = res;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    const resource = makeResource([ALICE, BOB]);
+    mockUseResource.mockReturnValue(resource);
+
+    render(<Members />);
+
+    // Open the remove confirmation for Alice
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+
+    // Confirm → del() is called and held pending; no list refresh
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // "Removing…" must be visible while del() is still in-flight
+    expect(screen.getByText("Removing…")).toBeInTheDocument();
+    // Bob's row is unaffected
+    expect(screen.getByTitle(`Remove ${BOB.pubkey}`)).toBeInTheDocument();
+
+    // Resolve del() — removing state should be cleared
+    await act(async () => {
+      resolveDel();
+      await delPromise;
+    });
+
+    // "Removing…" label must be gone after del() settles
+    expect(screen.queryByText("Removing…")).not.toBeInTheDocument();
+    // Alice's normal Remove button reappears (member still in mocked list)
+    expect(screen.getByTitle(`Remove ${ALICE.pubkey}`)).toBeInTheDocument();
+  });
+
   it("leaves no stuck spinner or error banner when del() resolves after member drops from list", async () => {
     const mockUseResource = vi.mocked(useResource as Mock);
 

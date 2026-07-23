@@ -843,7 +843,10 @@ export function Members() {
   async function removeMember(pubkey: string) {
     if (removing) return;
     setRemoving(pubkey);
-    setConfirmingRemove(null);
+    // Keep confirmingRemove set so the confirmation row stays visible and
+    // renders "Removing…" while del() is in-flight.  It is cleared in the
+    // finally block once the operation settles (or by the useEffect above if
+    // a list refresh drops the member first).
     setRemoveError(null);
     try {
       await del(`/members/${pubkey}`);
@@ -860,6 +863,7 @@ export function Members() {
       }
     } finally {
       setRemoving(null);
+      setConfirmingRemove(null);
     }
   }
 
