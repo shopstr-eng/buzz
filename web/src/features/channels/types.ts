@@ -37,16 +37,70 @@ export const KIND_STREAM_MSG_V2 = 40002;
 export const KIND_CREATE_GROUP = 9007;
 export const KIND_AGENT_PROFILE = 10100;
 
+/** A single credential field required to activate a model. */
+export interface CredentialField {
+  /** Environment-variable-style key stored as an agent_config tag. */
+  key: string;
+  label: string;
+  placeholder?: string;
+  hint?: string;
+}
+
 /** AI model presets for workflow channels */
 export interface ModelPreset {
   id: string;
   name: string;
   provider: string;
+  description: string;
+  /** If present, the user must supply these before the channel is created. */
+  credentials?: CredentialField[];
 }
 
 export const AI_MODELS: ModelPreset[] = [
-  { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "Anthropic" },
-  { id: "claude-opus-4-20250514", name: "Claude Opus 4", provider: "Anthropic" },
-  { id: "gpt-5", name: "GPT-5", provider: "OpenAI" },
-  { id: "codex-acp", name: "Codex", provider: "OpenAI" },
+  {
+    id: "buzz-ai",
+    name: "Buzz AI",
+    provider: "Block",
+    description: "Block's built-in AI — no extra setup needed.",
+  },
+  {
+    id: "goose-acp",
+    name: "Goose",
+    provider: "Block",
+    description: "Block's open-source coding agent. Needs an Anthropic key.",
+    credentials: [
+      {
+        key: "ANTHROPIC_API_KEY",
+        label: "Anthropic API key",
+        placeholder: "sk-ant-api03-…",
+        hint: "Goose uses Claude under the hood.",
+      },
+    ],
+  },
+  {
+    id: "claude",
+    name: "Claude",
+    provider: "Anthropic",
+    description: "Anthropic's Claude assistant.",
+    credentials: [
+      {
+        key: "ANTHROPIC_API_KEY",
+        label: "Anthropic API key",
+        placeholder: "sk-ant-api03-…",
+      },
+    ],
+  },
+  {
+    id: "codex-acp",
+    name: "Codex",
+    provider: "OpenAI",
+    description: "OpenAI's Codex coding agent.",
+    credentials: [
+      {
+        key: "OPENAI_API_KEY",
+        label: "OpenAI API key",
+        placeholder: "sk-proj-…",
+      },
+    ],
+  },
 ];
