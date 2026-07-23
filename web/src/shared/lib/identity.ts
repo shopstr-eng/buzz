@@ -10,6 +10,7 @@
 
 import {
   finalizeEvent,
+  generateSecretKey,
   getPublicKey,
   nip19,
 } from "nostr-tools";
@@ -57,6 +58,25 @@ export async function loginWithNip07(): Promise<StoredIdentity> {
   const identity: StoredIdentity = { pubkey, type: "nip07" };
   sessionStorage.setItem(KEY_IDENTITY, JSON.stringify(identity));
   return identity;
+}
+
+// ── generate new identity ─────────────────────────────────────────────────
+
+export interface GeneratedIdentity {
+  identity: StoredIdentity;
+  /** bech32-encoded nsec — show this to the user once so they can save it */
+  nsec: string;
+}
+
+export function generateNewIdentity(): GeneratedIdentity {
+  const secretKeyBytes = generateSecretKey();
+  const pubkey = getPublicKey(secretKeyBytes);
+  const nsec = nip19.nsecEncode(secretKeyBytes);
+  const hexKey = bytesToHex(secretKeyBytes);
+  const identity: StoredIdentity = { pubkey, type: "nsec" };
+  sessionStorage.setItem(KEY_IDENTITY, JSON.stringify(identity));
+  sessionStorage.setItem(KEY_NSEC, hexKey);
+  return { identity, nsec };
 }
 
 // ── nsec ────────────────────────────────────────────────────────────────────

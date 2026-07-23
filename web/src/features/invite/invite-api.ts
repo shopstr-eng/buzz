@@ -19,10 +19,7 @@ export async function claimInviteInBrowser(
     code,
     policy_receipt: policyReceipt,
   });
-  const authorization = await makeNip98AuthHeader(url, "POST", {
-    body,
-    requireNip07: true,
-  });
+  const authorization = await makeNip98AuthHeader(url, "POST", { body });
   const response = await fetch(url, {
     method: "POST",
     headers: {

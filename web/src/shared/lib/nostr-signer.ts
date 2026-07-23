@@ -97,10 +97,28 @@ export async function signNostrEvent(
     throw new Nip07UnavailableError();
   }
 
+  // Use a persistent nsec identity if one is stored (e.g. generated or entered by user).
+  const storedHex =
+    typeof sessionStorage !== "undefined"
+      ? sessionStorage.getItem("buzz_nsec_v1")
+      : null;
+  if (storedHex) {
+    const key = hexToBytes(storedHex);
+    return finalizeEvent(unsigned, key) as SignedNostrEvent;
+  }
+
   const secretKey = getEphemeralSecretKey();
   const signed = finalizeEvent(unsigned, secretKey);
   if (signed.pubkey !== getPublicKey(secretKey)) {
     throw new Error("Failed to create the ephemeral browser identity.");
   }
   return signed;
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+  }
+  return bytes;
 }

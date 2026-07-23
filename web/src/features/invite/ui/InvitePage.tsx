@@ -6,9 +6,15 @@ import {
   detectBuzzDownloadPlatform,
   resolveBuzzDownloadUrlForPlatform,
 } from "@/shared/lib/buzz-download";
+import {
+  generateNewIdentity,
+  loadIdentity,
+  loginWithNsec,
+} from "@/shared/lib/identity";
 import { hasNip07Provider } from "@/shared/lib/nostr-signer";
 import { relayWsUrl } from "@/shared/lib/relay-url";
 import { Button } from "@/shared/ui/button";
+import { Check, Copy, Eye, EyeOff, KeyRound, Puzzle, Sparkles } from "lucide-react";
 import * as React from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -39,6 +45,18 @@ export function InvitePage({ code }: { code: string }) {
   const [browserJoinError, setBrowserJoinError] = React.useState<string | null>(
     null,
   );
+  // Identity creation step (shown inline when user has no identity)
+  const [identityReady, setIdentityReady] = React.useState(
+    () => loadIdentity() !== null || hasNip07Provider(),
+  );
+  const [showIdentityStep, setShowIdentityStep] = React.useState(false);
+  const [idMode, setIdMode] = React.useState<"choose" | "generate" | "nsec">("choose");
+  const [genNsec, setGenNsec] = React.useState<string | null>(null);
+  const [genKeySaved, setGenKeySaved] = React.useState(false);
+  const [genCopied, setGenCopied] = React.useState(false);
+  const [nsecInput, setNsecInput] = React.useState("");
+  const [showNsecValue, setShowNsecValue] = React.useState(false);
+  const [identityError, setIdentityError] = React.useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = React.useState(BUZZ_RELEASES_URL);
   const [needsMacChoice, setNeedsMacChoice] = React.useState(false);
   const [showMacChoice, setShowMacChoice] = React.useState(false);
@@ -103,12 +121,16 @@ export function InvitePage({ code }: { code: string }) {
   };
 
   const joinInBrowser = async () => {
+    if (!identityReady) {
+      setShowIdentityStep(true);
+      return;
+    }
     setBrowserJoinError(null);
     setJoiningBrowser(true);
     try {
       const receipt = await acceptPolicy();
       await claimInviteInBrowser(code, receipt);
-      window.location.assign("/");
+      window.location.assign("/channels");
     } catch (error) {
       setBrowserJoinError(
         error instanceof Error ? error.message : "Could not claim this invite.",
@@ -118,7 +140,54 @@ export function InvitePage({ code }: { code: string }) {
     }
   };
 
-  const browserSigningAvailable = hasNip07Provider();
+  const handleGenerateIdentity = () => {
+    const { nsec } = generateNewIdentity();
+    setGenNsec(nsec);
+    setGenKeySaved(false);
+    setGenCopied(false);
+    setIdMode("generate");
+  };
+
+  const handleCopyGenNsec = async () => {
+    if (!genNsec) return;
+    await navigator.clipboard.writeText(genNsec);
+    setGenCopied(true);
+    setTimeout(() => setGenCopied(false), 2000);
+  };
+
+  const handleConfirmGeneratedIdentity = () => {
+    setIdentityReady(true);
+    setShowIdentityStep(false);
+    setIdMode("choose");
+  };
+
+  const handleNsecIdentity = (e: React.FormEvent) => {
+    e.preventDefault();
+    setIdentityError(null);
+    try {
+      loginWithNsec(nsecInput);
+      setIdentityReady(true);
+      setShowIdentityStep(false);
+      setIdMode("choose");
+    } catch (err) {
+      setIdentityError(err instanceof Error ? err.message : "Invalid key.");
+    }
+  };
+
+  const handleNip07Identity = async () => {
+    setIdentityError(null);
+    try {
+      if (!window.nostr) throw new Error("No NIP-07 extension found.");
+      await window.nostr.getPublicKey(); // confirms it's accessible
+      setIdentityReady(true);
+      setShowIdentityStep(false);
+      setIdMode("choose");
+    } catch (err) {
+      setIdentityError(err instanceof Error ? err.message : "Extension login failed.");
+    }
+  };
+
+  const browserSigningAvailable = true; // always show "Join in browser"; identity check happens on click
   const disabled =
     policy === undefined ||
     opening ||
@@ -211,6 +280,148 @@ export function InvitePage({ code }: { code: string }) {
             </div>
           </div>
 
+          {/* Inline identity creation step */}
+          {showIdentityStep && (
+            <div className="mt-6 w-full max-w-md rounded-2xl border border-black/10 bg-[#FAFAFA] p-6 text-left">
+              <p className="mb-4 text-sm font-semibold text-black">
+                Choose your Nostr identity
+              </p>
+
+              {idMode === "choose" && (
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={handleGenerateIdentity}
+                    className="flex w-full items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-black/5"
+                  >
+                    <Sparkles className="h-4 w-4 shrink-0 text-black/50" />
+                    <div className="text-left">
+                      <div className="font-medium">Generate a new identity</div>
+                      <div className="text-xs font-normal text-black/50">New to Nostr — create a fresh keypair</div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIdMode("nsec")}
+                    className="flex w-full items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-black/5"
+                  >
+                    <KeyRound className="h-4 w-4 shrink-0 text-black/50" />
+                    <div className="text-left">
+                      <div className="font-medium">I already have a key</div>
+                      <div className="text-xs font-normal text-black/50">Enter your nsec or hex secret key</div>
+                    </div>
+                  </button>
+                  {hasNip07Provider() && (
+                    <button
+                      type="button"
+                      onClick={handleNip07Identity}
+                      className="flex w-full items-center gap-3 rounded-xl border border-black/10 bg-white px-4 py-3 text-sm font-medium text-black transition-colors hover:bg-black/5"
+                    >
+                      <Puzzle className="h-4 w-4 shrink-0 text-black/50" />
+                      <div className="text-left">
+                        <div className="font-medium">Use browser extension</div>
+                        <div className="text-xs font-normal text-black/50">Sign with your NIP-07 extension</div>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {idMode === "generate" && genNsec && (
+                <div className="space-y-3">
+                  <p className="text-xs text-black/60">Your new secret key — save this before continuing:</p>
+                  <div className="relative">
+                    <input
+                      readOnly
+                      type="text"
+                      value={genNsec}
+                      className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 pr-10 font-mono text-xs text-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyGenNsec}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70"
+                      aria-label="Copy secret key"
+                    >
+                      {genCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <strong>Save this key before continuing.</strong> It's your password — there's no recovery if you lose it.
+                  </div>
+                  <label className="flex cursor-pointer items-start gap-2 text-sm text-black/70">
+                    <input
+                      type="checkbox"
+                      checked={genKeySaved}
+                      onChange={(e) => setGenKeySaved(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-black/30 accent-black"
+                    />
+                    I've saved my secret key somewhere safe
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setIdMode("choose"); setGenNsec(null); }}
+                      className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm text-black/60 hover:bg-black/5"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmGeneratedIdentity}
+                      disabled={!genKeySaved}
+                      className="flex-1 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {idMode === "nsec" && (
+                <form onSubmit={handleNsecIdentity} className="space-y-3">
+                  <div className="relative">
+                    <input
+                      type={showNsecValue ? "text" : "password"}
+                      value={nsecInput}
+                      onChange={(e) => setNsecInput(e.target.value)}
+                      placeholder="nsec1..."
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full rounded-lg border border-black/15 bg-white px-3 py-2 pr-10 text-sm text-black placeholder-black/30 outline-none focus:border-black/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNsecValue((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-black/40 hover:text-black/70"
+                    >
+                      {showNsecValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {identityError && (
+                    <p className="text-xs text-red-600">{identityError}</p>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setIdMode("choose"); setIdentityError(null); }}
+                      className="flex-1 rounded-lg border border-black/15 px-4 py-2 text-sm text-black/60 hover:bg-black/5"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!nsecInput.trim()}
+                      className="flex-1 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+
           <div className="mt-9 w-full max-w-md space-y-2">
             {browserSigningAvailable ? (
               <Button
@@ -218,7 +429,7 @@ export function InvitePage({ code }: { code: string }) {
                 disabled={disabled}
                 onClick={joinInBrowser}
               >
-                {joiningBrowser ? "Joining…" : "Join in browser"}
+                {joiningBrowser ? "Joining…" : identityReady ? "Join in browser" : "Join in browser"}
               </Button>
             ) : null}
             {policy === null ? (
