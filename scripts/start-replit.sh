@@ -53,13 +53,58 @@ run_bin() {
 }
 
 # ---------------------------------------------------------------------------
-# 2. Run migrations (idempotent — safe to run on every restart)
+# 2. Build web UIs (only when source files are newer than the dist output)
+# ---------------------------------------------------------------------------
+build_ui_if_stale() {
+  local dir="$1"
+  local name="$2"
+  local dist="${dir}/dist/index.html"
+
+  # Install node_modules if missing
+  if [[ ! -d "${dir}/node_modules" ]]; then
+    echo "==> Installing ${name} dependencies..."
+    (cd "${dir}" && npm install --prefer-offline)
+  fi
+
+  # Rebuild if dist is absent or any tracked source file is newer than dist
+  local stale=false
+  if [[ ! -f "$dist" ]]; then
+    stale=true
+  else
+    # Check src/, index.html, vite.config*, tsconfig*, postcss.config*
+    if find "${dir}" \
+        \( -path "${dir}/node_modules" -prune \) -o \
+        \( -path "${dir}/dist" -prune \) -o \
+        \( \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \
+              -o -name '*.html' -o -name '*.js' -o -name '*.mjs' \
+              -o -name 'vite.config*' -o -name 'tsconfig*' \
+              -o -name 'postcss.config*' -o -name 'tailwind.config*' \) \
+           -newer "$dist" -print -quit \) \
+        2>/dev/null | grep -q .; then
+      stale=true
+    fi
+  fi
+
+  if [[ "$stale" == true ]]; then
+    echo "==> Building ${name}..."
+    (cd "${dir}" && npm run build)
+    echo "==> ${name} build complete."
+  else
+    echo "==> ${name} is up to date, skipping build."
+  fi
+}
+
+build_ui_if_stale "web" "web UI"
+build_ui_if_stale "admin-web" "admin UI"
+
+# ---------------------------------------------------------------------------
+# 3. Run migrations (idempotent — safe to run on every restart)
 # ---------------------------------------------------------------------------
 echo "==> Running database migrations..."
 run_bin buzz-admin buzz-admin migrate
 
 # ---------------------------------------------------------------------------
-# 3. Seed community row from RELAY_URL (idempotent)
+# 4. Seed community row from RELAY_URL (idempotent)
 # ---------------------------------------------------------------------------
 echo "==> Seeding community row (idempotent)..."
 # seed-local-community.sh requires python3 which isn't available in this env;
@@ -73,7 +118,7 @@ if command -v psql >/dev/null 2>&1 && [[ -n "${RELAY_URL:-}" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Derive RELAY_OWNER_PUBKEY from BUZZ_RELAY_PRIVATE_KEY (if not already set)
+# 5. Derive RELAY_OWNER_PUBKEY from BUZZ_RELAY_PRIVATE_KEY (if not already set)
 # ---------------------------------------------------------------------------
 if [[ -z "${RELAY_OWNER_PUBKEY:-}" ]] && [[ -n "${BUZZ_RELAY_PRIVATE_KEY:-}" ]]; then
   echo "==> Deriving RELAY_OWNER_PUBKEY from BUZZ_RELAY_PRIVATE_KEY..."
@@ -87,7 +132,7 @@ if [[ -z "${RELAY_OWNER_PUBKEY:-}" ]] && [[ -n "${BUZZ_RELAY_PRIVATE_KEY:-}" ]];
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Start the relay
+# 6. Start the relay
 # ---------------------------------------------------------------------------
 export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:3000}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
