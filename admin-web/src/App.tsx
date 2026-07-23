@@ -1018,7 +1018,8 @@ export function Members() {
                               updatingRole === member.pubkey ||
                               !!removing ||
                               !!removalRefetchAnchor ||
-                              !!roleRefetchAnchor
+                              !!roleRefetchAnchor ||
+                              resource.stale
                             }
                             aria-label={`Role for ${short(member.pubkey)}`}
                             onChange={(e) =>

@@ -311,6 +311,149 @@ describe("Members – role-change dropdown disabled during removal", () => {
     expect(bobSelectAfter).not.toBeDisabled();
   });
 
+  it("never briefly enables the select on stale data when the component remounts mid-refetch (page reload)", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolveDel!: () => void;
+    const delPromise = new Promise<void>((res) => {
+      resolveDel = res;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    // Phase 1: mount the component and trigger a removal
+    const initialMembers: RelayMember[] = [ALICE, BOB];
+    const resource = makeResource(initialMembers);
+    mockUseResource.mockReturnValue(resource);
+
+    const { unmount } = render(<Members />);
+
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // Resolve del() — in a real app the anchor would now be set and refetch
+    // in-flight; we're about to simulate a page reload before it lands.
+    await act(async () => {
+      resolveDel();
+      await delPromise;
+    });
+
+    // Phase 2: simulate a hard page reload — unmount the original component
+    // entirely.  The removalRefetchAnchor and all other per-component state
+    // is now gone.
+    unmount();
+
+    // Phase 3: remount as a completely new instance — useResource is called
+    // fresh and returns the loading skeleton (data undefined, loading true).
+    // This mirrors what the browser does on a hard reload before the first
+    // network response arrives.
+    const loadingResource: Resource<RelayMember[]> = {
+      data: undefined,
+      loading: true,
+      stale: false,
+      error: undefined,
+      refetch: vi.fn(),
+    };
+    mockUseResource.mockReturnValue(loadingResource);
+    render(<Members />);
+
+    // While the first response is still in-flight the table is not rendered
+    // at all (StateView shows its "Loading…" placeholder), so there is no
+    // window in which a stale select could be briefly enabled.
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+
+    // Phase 4: fresh data arrives on the remounted instance.  A new array
+    // reference is used (Alice gone) — the select must now be enabled with no
+    // disabled guard because the new instance has no anchor state.
+    const freshResource = makeResource([BOB]);
+    mockUseResource.mockReturnValue(freshResource);
+    act(() => {
+      // Re-render the already-mounted second instance with fresh data
+      // (same pattern used by other tests: re-render with updated mock).
+      render(<Members />);
+    });
+
+    const bobSelect = screen.getAllByRole("combobox", {
+      name: new RegExp(BOB.pubkey.slice(0, 8), "i"),
+    })[0];
+    expect(bobSelect).not.toBeDisabled();
+  });
+
+  it("keeps the role-change select disabled when fast cache returns stale member list instantly on remount", async () => {
+    const mockUseResource = vi.mocked(useResource as Mock);
+
+    let resolveDel!: () => void;
+    const delPromise = new Promise<void>((res) => {
+      resolveDel = res;
+    });
+    vi.mocked(del as Mock).mockReturnValue(delPromise);
+
+    // Phase 1: mount and trigger a removal
+    const initialMembers: RelayMember[] = [ALICE, BOB];
+    const resource = makeResource(initialMembers);
+    mockUseResource.mockReturnValue(resource);
+
+    const { unmount } = render(<Members />);
+
+    fireEvent.click(screen.getByTitle(`Remove ${ALICE.pubkey}`));
+    expect(screen.getByText("Remove?")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Yes, remove"));
+
+    // Resolve del() — anchor is set, refetch in-flight
+    await act(async () => {
+      resolveDel();
+      await delPromise;
+    });
+
+    // Phase 2: simulate a hard page reload — unmount clears all component state
+    unmount();
+
+    // Phase 3: remount as a completely new instance.  This time a CDN / edge
+    // cache returns the pre-removal list immediately (stale: true) so
+    // useResource sets data right away without going through the
+    // data=undefined loading skeleton.  The fresh fetch is still in-flight.
+    const staleCacheResource: Resource<RelayMember[]> = {
+      data: [ALICE, BOB], // stale pre-removal list
+      loading: true,
+      stale: true,        // fast cache hit — fresh fetch not yet complete
+      error: undefined,
+      refetch: vi.fn(),
+    };
+    mockUseResource.mockReturnValue(staleCacheResource);
+    const { rerender } = render(<Members />);
+
+    // The table is rendered (data is defined) but the role-change selects must
+    // be disabled while stale data is being served — the removal may not yet
+    // be reflected.
+    const aliceSelectStale = screen.getByRole("combobox", {
+      name: new RegExp(ALICE.pubkey.slice(0, 8), "i"),
+    });
+    expect(aliceSelectStale).toBeDisabled();
+
+    const bobSelectStale = screen.getByRole("combobox", {
+      name: new RegExp(BOB.pubkey.slice(0, 8), "i"),
+    });
+    expect(bobSelectStale).toBeDisabled();
+
+    // Phase 4: fresh data arrives — Alice is gone, stale clears
+    const freshResource = makeResource([BOB]);
+    mockUseResource.mockReturnValue(freshResource);
+    act(() => {
+      rerender(<Members />);
+    });
+
+    // Alice's row is gone; Bob's select is now enabled
+    expect(screen.queryByRole("combobox", {
+      name: new RegExp(ALICE.pubkey.slice(0, 8), "i"),
+    })).not.toBeInTheDocument();
+
+    const bobSelectFresh = screen.getByRole("combobox", {
+      name: new RegExp(BOB.pubkey.slice(0, 8), "i"),
+    });
+    expect(bobSelectFresh).not.toBeDisabled();
+  });
+
   it("disables the role-change select for every member while del() is in-flight", async () => {
     const mockUseResource = vi.mocked(useResource as Mock);
 
