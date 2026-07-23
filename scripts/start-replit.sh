@@ -18,6 +18,14 @@ export PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/home/runner/workspac
 # Disable git object-store conformance probe (requires S3 which isn't configured).
 export BUZZ_GIT_CONFORMANCE_PROBE="${BUZZ_GIT_CONFORMANCE_PROBE:-false}"
 
+# Always derive RELAY_URL from the current REPLIT_DEV_DOMAIN so the community
+# row is seeded for the host the Replit proxy actually sends in the Host header.
+# This overrides any stale hardcoded value in the shared env vars.
+if [[ -n "${REPLIT_DEV_DOMAIN:-}" ]]; then
+  export RELAY_URL="wss://${REPLIT_DEV_DOMAIN}"
+  export BUZZ_MEDIA_BASE_URL="https://${REPLIT_DEV_DOMAIN}/media"
+fi
+
 # ---------------------------------------------------------------------------
 # 1. Start Redis (background)
 # ---------------------------------------------------------------------------
