@@ -5,20 +5,21 @@
 
 import { useEffect, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
-import { KIND_GROUP_METADATA, type Channel } from "./types";
+import { KIND_GROUP_METADATA, type Channel, type ChannelType } from "./types";
 import type { NostrEvent } from "@/shared/lib/relay-connection";
 
 function eventToChannel(ev: NostrEvent): Channel | null {
   const groupId = ev.tags.find((t) => t[0] === "d")?.[1];
   if (!groupId) return null;
 
-  const name =
-    ev.tags.find((t) => t[0] === "name")?.[1] ?? groupId;
+  const name = ev.tags.find((t) => t[0] === "name")?.[1] ?? groupId;
   const about = ev.tags.find((t) => t[0] === "about")?.[1];
   const picture = ev.tags.find((t) => t[0] === "picture")?.[1];
   const isPrivate = ev.tags.some((t) => t[0] === "private");
+  const channelType = (ev.tags.find((t) => t[0] === "t")?.[1] ?? "stream") as ChannelType;
+  const model = ev.tags.find((t) => t[0] === "model")?.[1];
 
-  return { groupId, name, about, picture, isPrivate };
+  return { groupId, name, about, picture, isPrivate, channelType, model };
 }
 
 export function useChannels(): {

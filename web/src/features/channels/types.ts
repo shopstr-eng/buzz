@@ -1,5 +1,7 @@
 /** Domain types for NIP-29 groups and chat messages. */
 
+export type ChannelType = "stream" | "forum" | "workflow";
+
 export interface Channel {
   /** The NIP-29 group ID — `d` tag on kind 39000 events. */
   groupId: string;
@@ -7,6 +9,9 @@ export interface Channel {
   about?: string;
   picture?: string;
   isPrivate: boolean;
+  channelType: ChannelType;
+  /** Model ID for workflow channels (e.g. "claude-sonnet-4-20250514"). */
+  model?: string;
   memberCount?: number;
 }
 
@@ -29,3 +34,19 @@ export const KIND_GROUP_ADMINS = 39001;
 export const KIND_GROUP_MEMBERS = 39002;
 export const KIND_STREAM_MSG = 9;
 export const KIND_STREAM_MSG_V2 = 40002;
+export const KIND_CREATE_GROUP = 9007;
+export const KIND_AGENT_PROFILE = 10100;
+
+/** AI model presets for workflow channels */
+export interface ModelPreset {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+export const AI_MODELS: ModelPreset[] = [
+  { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", provider: "Anthropic" },
+  { id: "claude-opus-4-20250514", name: "Claude Opus 4", provider: "Anthropic" },
+  { id: "gpt-5", name: "GPT-5", provider: "OpenAI" },
+  { id: "codex-acp", name: "Codex", provider: "OpenAI" },
+];
