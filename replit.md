@@ -177,3 +177,4 @@ just check          # fmt + clippy + desktop check
 - Web-first — no Tauri native desktop dependency for the Replit deployment
 - Custom domain over WSS — `RELAY_URL` must always be the public `wss://` domain
 - Admin UI accessible via the web at `/admin` path on the same domain
+- Do not create git commits announcing a publish/deployment — it bloats commit history
