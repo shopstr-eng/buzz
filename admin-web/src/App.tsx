@@ -819,10 +819,12 @@ function Members() {
   );
   const [removing, setRemoving] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
 
   async function removeMember(pubkey: string) {
     if (removing) return;
     setRemoving(pubkey);
+    setConfirmingRemove(null);
     setRemoveError(null);
     try {
       await del(`/members/${pubkey}`);
@@ -872,15 +874,37 @@ function Members() {
                       <td className="member-date">{date(member.createdAt)}</td>
                       <td className="member-action">
                         {member.role !== "owner" && (
-                          <button
-                            type="button"
-                            className="remove-btn"
-                            disabled={removing === member.pubkey}
-                            onClick={() => removeMember(member.pubkey)}
-                            title={`Remove ${member.pubkey}`}
-                          >
-                            {removing === member.pubkey ? "Removing…" : "Remove"}
-                          </button>
+                          confirmingRemove === member.pubkey ? (
+                            <span className="remove-confirm">
+                              <span className="remove-confirm-label">Remove?</span>
+                              <button
+                                type="button"
+                                className="remove-btn remove-btn-confirm"
+                                disabled={!!removing}
+                                onClick={() => removeMember(member.pubkey)}
+                              >
+                                {removing === member.pubkey ? "Removing…" : "Yes, remove"}
+                              </button>
+                              <button
+                                type="button"
+                                className="remove-btn-cancel"
+                                disabled={!!removing}
+                                onClick={() => setConfirmingRemove(null)}
+                              >
+                                Cancel
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              className="remove-btn"
+                              disabled={!!removing}
+                              onClick={() => setConfirmingRemove(member.pubkey)}
+                              title={`Remove ${member.pubkey}`}
+                            >
+                              Remove
+                            </button>
+                          )
                         )}
                       </td>
                     </tr>

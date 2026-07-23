@@ -891,6 +891,54 @@ dd {
   cursor: not-allowed;
 }
 
+.remove-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.remove-confirm-label {
+  font-size: 0.8rem;
+  color: #c0392b;
+  font-weight: 500;
+}
+
+.remove-btn-confirm {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  color: white;
+  background: #c0392b;
+  border-radius: 999px;
+  transition: background 150ms ease;
+}
+
+.remove-btn-confirm:hover:not(:disabled) {
+  background: #a93226;
+}
+
+.remove-btn-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.remove-btn-cancel {
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  color: rgb(35 30 30 / 75%);
+  background: rgb(35 30 30 / 8%);
+  border-radius: 999px;
+  transition: background 150ms ease;
+}
+
+.remove-btn-cancel:hover:not(:disabled) {
+  background: rgb(35 30 30 / 15%);
+}
+
+.remove-btn-cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .member-remove-error {
   margin-bottom: 1.25rem;
 }
