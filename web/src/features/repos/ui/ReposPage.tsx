@@ -1,12 +1,14 @@
-import { BookMarked, GitBranch } from "lucide-react";
+import { BookMarked, GitBranch, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useEffect, useMemo, useState } from "react";
 
 import buzzAppIcon from "@/assets/app-icon@3x.png";
 import { Input } from "@/shared/ui/input";
+import { useRelay } from "@/shared/context/relay-context";
 import { mockRepos } from "../mock-repos";
 import { useRepos } from "../use-repos";
 import { ConnectButton } from "./ConnectButton";
+import { CreateRepoDialog } from "./CreateRepoDialog";
 import { OrgSidebar } from "./OrgSidebar";
 import { RepoListItem } from "./RepoListItem";
 
@@ -45,7 +47,8 @@ function SearchEmptyState() {
   );
 }
 
-function CommunityEmptyState() {
+function CommunityEmptyState({ onNew }: { onNew: () => void }) {
+  const { identity } = useRelay();
   return (
     <div className="flex flex-1 items-center justify-center bg-[#F3F3F3] px-4 py-16 text-center dark:bg-[#171717]">
       <div className="flex w-full max-w-xl flex-col items-center px-6 py-10 sm:px-12 sm:py-12">
@@ -56,13 +59,25 @@ function CommunityEmptyState() {
           <img alt="Buzz" className="h-full w-full" src={buzzAppIcon} />
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight text-black dark:text-white">
-          This community is empty
+          No repositories yet
         </h1>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-black/60 dark:text-white/60">
-          Repositories pushed to this community will show up here. Open this
-          community in the Buzz desktop app to start pushing code.
+          Announce a repository to register it with this community, then push
+          code to it with Git.
         </p>
-        <ConnectButton className="mt-6" />
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          {identity && (
+            <button
+              type="button"
+              onClick={onNew}
+              className="flex items-center gap-2 rounded-lg bg-black px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-80 dark:bg-white dark:text-black"
+            >
+              <Plus className="h-4 w-4" />
+              New repository
+            </button>
+          )}
+          <ConnectButton />
+        </div>
       </div>
     </div>
   );
@@ -87,6 +102,8 @@ export function ReposPage() {
   const isLoading = preview ? false : isLoadingRepos;
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortOrder>("newest");
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const { identity } = useRelay();
 
   useEffect(() => {
     if (error) {
@@ -142,7 +159,14 @@ export function ReposPage() {
   }
 
   if (!repos || repos.length === 0) {
-    return <CommunityEmptyState />;
+    return (
+      <>
+        <CommunityEmptyState onNew={() => setShowCreateDialog(true)} />
+        {showCreateDialog && (
+          <CreateRepoDialog onClose={() => setShowCreateDialog(false)} />
+        )}
+      </>
+    );
   }
 
   return (
@@ -154,9 +178,21 @@ export function ReposPage() {
           <ConnectButton className="w-full" />
         </div>
 
-        <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-black dark:text-white">
-          <BookMarked className="h-4 w-4" /> Repositories
-        </h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-black dark:text-white">
+            <BookMarked className="h-4 w-4" /> Repositories
+          </h2>
+          {identity && (
+            <button
+              type="button"
+              onClick={() => setShowCreateDialog(true)}
+              className="flex items-center gap-1.5 rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-80 dark:bg-white dark:text-black"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              New
+            </button>
+          )}
+        </div>
 
         {/* Search + Sort bar */}
         <div className="mb-4 flex gap-3">
@@ -194,6 +230,10 @@ export function ReposPage() {
       <aside className="hidden w-72 shrink-0 border-l border-black/10 pl-8 dark:border-white/10 lg:block">
         <OrgSidebar repos={repos} />
       </aside>
+
+      {showCreateDialog && (
+        <CreateRepoDialog onClose={() => setShowCreateDialog(false)} />
+      )}
     </div>
   );
 }
