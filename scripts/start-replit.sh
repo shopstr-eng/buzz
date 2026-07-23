@@ -74,13 +74,9 @@ build_ui_if_stale() {
   local name="$2"
   local dist="${dir}/dist/index.html"
 
-  # Install node_modules if missing
-  if [[ ! -d "${dir}/node_modules" ]]; then
-    echo "==> Installing ${name} dependencies..."
-    (cd "${dir}" && npm install --prefer-offline)
-  fi
-
-  # Rebuild if dist is absent or any tracked source file is newer than dist
+  # Check staleness FIRST — skip everything (including npm install) when dist
+  # is already up to date. This keeps production boot fast when the build step
+  # pre-built the UIs and baked them into the image.
   local stale=false
   if [[ ! -f "$dist" ]]; then
     stale=true
@@ -100,6 +96,11 @@ build_ui_if_stale() {
   fi
 
   if [[ "$stale" == true ]]; then
+    # Only install node_modules when we actually need to rebuild.
+    if [[ ! -d "${dir}/node_modules" ]]; then
+      echo "==> Installing ${name} dependencies..."
+      (cd "${dir}" && npm install --prefer-offline)
+    fi
     echo "==> Building ${name}..."
     (cd "${dir}" && npm run build)
     echo "==> ${name} build complete."

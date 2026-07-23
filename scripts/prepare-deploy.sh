@@ -1,9 +1,32 @@
 #!/usr/bin/env bash
-# Run as the deployment build step to trim the image below the 8 GiB limit.
-# Keeps only the pre-built release binaries; removes everything else in
-# target/ and all node_modules (the start script reinstalls them on first boot).
+# Run as the deployment build step to:
+# 1. Pre-build the web UIs so production boot skips npm install entirely.
+# 2. Trim target/ to just the release binaries to stay under the 8 GiB image limit.
+# 3. Remove node_modules after building (they're no longer needed in the image).
 set -euo pipefail
 
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+
+# ---------------------------------------------------------------------------
+# 1. Build web UIs (bake fresh dist/ into the image)
+# ---------------------------------------------------------------------------
+build_ui() {
+  local dir="$1"
+  local name="$2"
+  echo "==> Building ${name} for production..."
+  if [[ ! -d "${dir}/node_modules" ]]; then
+    (cd "${dir}" && npm install --prefer-offline)
+  fi
+  (cd "${dir}" && npm run build)
+  echo "==> ${name} build complete."
+}
+
+build_ui "web" "web UI"
+build_ui "admin-web" "admin UI"
+
+# ---------------------------------------------------------------------------
+# 2. Strip target/ — keep only the pre-built release binaries
+# ---------------------------------------------------------------------------
 echo "==> Trimming target/ — keeping release binaries only..."
 
 KEEP=(
@@ -11,21 +34,18 @@ KEEP=(
   "target/release/buzz-admin"
 )
 
-# Stash the binaries we need
 TMP=$(mktemp -d)
 for bin in "${KEEP[@]}"; do
   if [[ -f "$bin" ]]; then
     cp "$bin" "$TMP/$(basename "$bin")"
     echo "    kept: $bin"
   else
-    echo "    WARNING: $bin not found — will fall back to cargo run on first boot" >&2
+    echo "    WARNING: $bin not found — relay will fall back to cargo run on first boot" >&2
   fi
 done
 
-# Wipe the whole target tree
 rm -rf target/
 
-# Restore the binaries
 mkdir -p target/release
 for bin in "${KEEP[@]}"; do
   name="$(basename "$bin")"
@@ -36,8 +56,11 @@ for bin in "${KEEP[@]}"; do
 done
 rm -rf "$TMP"
 
-echo "==> Removing node_modules (reinstalled on first boot by start script)..."
+# ---------------------------------------------------------------------------
+# 3. Remove node_modules — dist/ is baked in; start script skips install
+# ---------------------------------------------------------------------------
+echo "==> Removing node_modules (dist/ already baked into image)..."
 rm -rf web/node_modules admin-web/node_modules node_modules
 
 echo "==> Image cleanup complete."
-du -sh target/ 2>/dev/null || true
+du -sh target/ web/dist admin-web/dist 2>/dev/null || true
