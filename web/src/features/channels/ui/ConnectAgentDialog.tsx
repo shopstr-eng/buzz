@@ -149,6 +149,7 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
 
   // Preset state
   const [selectedModel, setSelectedModel] = useState<ModelPreset | null>(null);
+  const [modelName, setModelName] = useState("");
   const [credentials, setCredentials] = useState<Record<string, string>>({});
   function setCredential(key: string, value: string) {
     setCredentials((prev) => ({ ...prev, [key]: value }));
@@ -188,6 +189,9 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
           ["h", groupId],
           ["model", selectedModel.id],
         ];
+        // Include the specific model name if the user supplied or overrode it.
+        const resolvedModel = modelName.trim() || selectedModel.defaultModel;
+        if (resolvedModel) metaTags.push(["agent_config", "MODEL_NAME", resolvedModel]);
         for (const [key, value] of Object.entries(credentials)) {
           if (value.trim()) metaTags.push(["agent_config", key, value.trim()]);
         }
@@ -319,12 +323,34 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
                     preset={preset}
                     selected={selectedModel?.id === preset.id}
                     onSelect={() => {
-                      setSelectedModel(selectedModel?.id === preset.id ? null : preset);
+                      const next = selectedModel?.id === preset.id ? null : preset;
+                      setSelectedModel(next);
+                      setModelName(next?.defaultModel ?? "");
                       setCredentials({});
                     }}
                   />
                 ))}
               </div>
+
+              {/* Model name override — shown once a preset is selected */}
+              {selectedModel && (
+                <div className="border-t border-black/10 pt-3 dark:border-white/10">
+                  <label className="mb-1.5 block text-xs font-semibold text-black/60 dark:text-white/60">
+                    Model name
+                  </label>
+                  <input
+                    type="text"
+                    value={modelName}
+                    onChange={(e) => setModelName(e.target.value)}
+                    placeholder={selectedModel.defaultModel ?? "e.g. claude-opus-4-5"}
+                    spellCheck={false}
+                    className="w-full rounded-md border border-black/15 bg-white px-3 py-2 font-mono text-sm text-black placeholder-black/25 outline-none focus:border-black/40 dark:border-white/15 dark:bg-[#222] dark:text-white dark:placeholder-white/25 dark:focus:border-white/40"
+                  />
+                  <p className="mt-1 text-[11px] text-black/40 dark:text-white/40">
+                    Override the default model identifier sent to the agent.
+                  </p>
+                </div>
+              )}
 
               {/* Credential inputs for selected model */}
               {selectedModel?.credentials?.length && (

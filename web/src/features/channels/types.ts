@@ -59,6 +59,11 @@ export interface ModelPreset {
   name: string;
   provider: string;
   description: string;
+  /**
+   * Default model identifier sent to the ACP as an agent_config tag.
+   * The user can override this in the connect dialog.
+   */
+  defaultModel?: string;
   /** If present, the user must supply these before the channel is created. */
   credentials?: CredentialField[];
 }
@@ -75,6 +80,7 @@ export const AI_MODELS: ModelPreset[] = [
     name: "Goose",
     provider: "Block",
     description: "Block's open-source coding agent. Needs an Anthropic key.",
+    defaultModel: "claude-opus-4-5",
     credentials: [
       {
         key: "ANTHROPIC_API_KEY",
@@ -89,6 +95,7 @@ export const AI_MODELS: ModelPreset[] = [
     name: "Claude",
     provider: "Anthropic",
     description: "Anthropic's Claude assistant.",
+    defaultModel: "claude-opus-4-5",
     credentials: [
       {
         key: "ANTHROPIC_API_KEY",
@@ -102,6 +109,7 @@ export const AI_MODELS: ModelPreset[] = [
     name: "Codex",
     provider: "OpenAI",
     description: "OpenAI's Codex coding agent.",
+    defaultModel: "gpt-4o",
     credentials: [
       {
         key: "OPENAI_API_KEY",
