@@ -194,39 +194,54 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
         const metaSigned = await signFn({ kind: KIND_EDIT_METADATA, created_at: now, tags: metaTags, content: "" });
         connection.publish(metaSigned);
 
-        // 2. Add the ACP worker as an "agent" channel member via kind:9000 so it
-        //    shows up in the members panel and admin page. The pubkey is written
-        //    to /relay-info.json by the startup script.
+        // 2. Add the ACP worker as a channel member via kind:9000 so it shows up
+        //    in the members panel and admin page. The pubkey is written to
+        //    /assets/relay-info.json by the startup script at boot time.
+        //    Role must be a valid NIP-29 MemberRole: "owner" | "admin" | "member" | "bot".
+        //    We use "member" so the relay accepts it; isAgent detection comes from kind:10100.
+        let acpPubkey: string | null = null;
         try {
           const resp = await fetch("/assets/relay-info.json");
           if (resp.ok) {
             const info = await resp.json() as { acp_pubkey?: string };
-            if (info.acp_pubkey) {
-              const memberTags: string[][] = [
-                ["h", groupId],
-                ["p", info.acp_pubkey],
-                ["role", "agent"],
-              ];
-              const memberSigned = await signFn({
-                kind: KIND_ADD_MEMBER,
-                created_at: now + 1,
-                tags: memberTags,
-                content: "",
-              });
-              connection.publish(memberSigned);
-            }
+            acpPubkey = info.acp_pubkey ?? null;
           }
         } catch {
-          // Non-fatal: model is still set even if member-add fails (e.g. preview mode).
+          // fetch can fail in preview/mock mode — non-fatal, model tag was still set.
+        }
+
+        if (acpPubkey) {
+          const memberTags: string[][] = [
+            ["h", groupId],
+            ["p", acpPubkey],
+            ["role", "member"],
+          ];
+          const memberSigned = await signFn({
+            kind: KIND_ADD_MEMBER,
+            created_at: now + 1,
+            tags: memberTags,
+            content: "",
+          });
+          connection.publish(memberSigned);
+        } else {
+          // Surface to user so they know member-add didn't fire.
+          setError(
+            "Agent model set, but could not add the agent as a channel member " +
+            "(relay-info.json unavailable). Refresh the page and try again, " +
+            "or add the agent manually via the Custom pubkey tab.",
+          );
+          setSubmitting(false);
+          return;
         }
       } else {
         const pubkey = parsePubkey(pubkeyInput);
         if (!pubkey) { setError("Enter a valid hex pubkey or npub."); return; }
-        // Add the external agent pubkey as an "agent" channel member via kind:9000.
+        // Add the external agent pubkey as a channel member via kind:9000.
+        // Role "member" is the safest valid NIP-29 MemberRole for external agents.
         const tags: string[][] = [
           ["h", groupId],
           ["p", pubkey],
-          ["role", "agent"],
+          ["role", "member"],
         ];
         const signed = await signFn({ kind: KIND_ADD_MEMBER, created_at: now, tags, content: "" });
         connection.publish(signed);
