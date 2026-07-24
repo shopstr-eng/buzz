@@ -32,6 +32,8 @@ export interface ChatMessage {
 export const KIND_GROUP_METADATA = 39000;
 export const KIND_GROUP_ADMINS = 39001;
 export const KIND_GROUP_MEMBERS = 39002;
+export const KIND_MEMBER_ADDED_NOTIFICATION = 44100;
+export const KIND_MEMBER_REMOVED_NOTIFICATION = 44101;
 export const KIND_STREAM_MSG = 9;
 export const KIND_STREAM_MSG_V2 = 40002;
 export const KIND_CREATE_GROUP = 9007;
