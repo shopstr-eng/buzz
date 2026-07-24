@@ -611,16 +611,19 @@ struct SignAgentProfileRequest {
 #[derive(Serialize)]
 struct SignAgentProfileResponse {
     pubkey: String,
-    kind0: serde_json::Value,
-    kind10100: serde_json::Value,
+    /// Stored display name — used by admin UI to update the row without re-fetching.
+    name: String,
+    /// Stored avatar URL.
+    picture: String,
 }
 
 /// Sign kind:0 (user metadata) and kind:10100 (agent profile) with the ACP
-/// private key so the admin UI can publish them via the relay WebSocket.
+/// private key and store them directly in the relay's database.
 ///
-/// Reads `BUZZ_ACP_PRIVATE_KEY` from the environment, which is exported by
-/// the startup script. Returns signed event JSON; the client is responsible
-/// for publishing them via `["EVENT", ...]`.
+/// Reads `BUZZ_ACP_PRIVATE_KEY` from the environment (exported by start-replit.sh).
+/// Events are stored server-side — clients do NOT need to publish them via WS
+/// (which would be rejected because the admin connection's authenticated pubkey
+/// differs from the ACP event pubkey, per relay event.rs:637).
 async fn sign_agent_profile(
     State(state): State<Arc<crate::state::AppState>>,
     headers: HeaderMap,
@@ -635,8 +638,8 @@ async fn sign_agent_profile(
         .map_err(|_| ApiError::bad_request("acp_key_invalid", "ACP private key is not valid"))?;
     let pubkey_hex = keys.public_key().to_hex();
 
-    let name = body.name.as_deref().unwrap_or("Buzz AI");
-    let picture = body.picture.as_deref().unwrap_or("");
+    let name = body.name.as_deref().unwrap_or("Buzz AI").to_string();
+    let picture = body.picture.as_deref().unwrap_or("").to_string();
     let about = body.about.as_deref().unwrap_or("AI agent powered by Buzz relay");
 
     let kind0 = EventBuilder::new(
@@ -658,10 +661,30 @@ async fn sign_agent_profile(
     .sign_with_keys(&keys)
     .map_err(|_| ApiError::internal())?;
 
+    // Resolve the community and write both events directly to the DB.
+    // This bypasses the WebSocket publish path (which enforces event.pubkey ==
+    // auth_pubkey) and lets us write events signed with the ACP key from an
+    // admin-authenticated HTTP request.
+    let tenant = crate::tenant::bind_deployment_community(&state.db, &state.config.relay_url)
+        .await
+        .map_err(|_| ApiError::internal())?;
+
+    state
+        .db
+        .replace_addressable_event(tenant.community(), &kind0, None)
+        .await
+        .map_err(|_| ApiError::internal())?;
+
+    state
+        .db
+        .replace_addressable_event(tenant.community(), &kind10100, None)
+        .await
+        .map_err(|_| ApiError::internal())?;
+
     Ok(Json(SignAgentProfileResponse {
         pubkey: pubkey_hex,
-        kind0: serde_json::to_value(&kind0).unwrap_or_default(),
-        kind10100: serde_json::to_value(&kind10100).unwrap_or_default(),
+        name,
+        picture,
     }))
 }
 

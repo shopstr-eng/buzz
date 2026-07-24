@@ -357,6 +357,7 @@ _start_acp() {
   BUZZ_ACP_AGENT_ARGS="${BUZZ_ACP_AGENT_ARGS:-acp}" \
   BUZZ_ACP_SUBSCRIBE="${BUZZ_ACP_SUBSCRIBE:-mentions}" \
   BUZZ_ACP_LAZY_POOL="${BUZZ_ACP_LAZY_POOL:-true}" \
+  BUZZ_ACP_RESPOND_TO="${BUZZ_ACP_RESPOND_TO:-anyone}" \
   "$ACP_BIN" >>/tmp/buzz-acp.log 2>&1 &
 
   ACP_PID=$!

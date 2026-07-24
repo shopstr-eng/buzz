@@ -43,8 +43,10 @@ interface ChannelRecord {
 
 interface SignProfileResponse {
   pubkey: string;
-  kind0: NostrEvent;
-  kind10100: NostrEvent;
+  /** Display name that was stored. Used to update the row without re-fetching. */
+  name: string;
+  /** Avatar URL that was stored. */
+  picture: string;
 }
 
 function short(pubkey: string) {
@@ -139,12 +141,11 @@ function AddToChannelModal({ agent, channels, onAdd, onClose }: AddModalProps) {
 
 type EditProfileModalProps = {
   agent: AgentRecord;
-  ws: AdminRelayWs;
   onClose: () => void;
   onSaved: (pubkey: string, name: string, picture: string) => void;
 };
 
-function EditProfileModal({ agent, ws, onClose, onSaved }: EditProfileModalProps) {
+function EditProfileModal({ agent, onClose, onSaved }: EditProfileModalProps) {
   const [name, setName]       = useState(agent.name ?? "");
   const [picture, setPicture] = useState(agent.picture ?? "");
   const [about, setAbout]     = useState("");
@@ -161,9 +162,8 @@ function EditProfileModal({ agent, ws, onClose, onSaved }: EditProfileModalProps
         picture: picture || undefined,
         about: about || undefined,
       });
-      ws.publishSigned(resp.kind0);
-      ws.publishSigned(resp.kind10100);
-      onSaved(agent.pubkey, resp.kind0.content ? JSON.parse(resp.kind0.content).name ?? name : name, picture);
+      // Events are stored server-side by the endpoint — no WS publish needed.
+      onSaved(agent.pubkey, resp.name || name, resp.picture || picture);
       setDone(true);
       setTimeout(onClose, 900);
     } catch (e) {
@@ -533,7 +533,7 @@ export function Agents() {
                       )}
                     </td>
                     <td className="ag-actions" style={{ whiteSpace: "nowrap" }}>
-                      {isAcp(agent.pubkey) && wsRef.current && (
+                      {isAcp(agent.pubkey) && (
                         <button
                           type="button"
                           className="ch-btn-secondary ag-add-btn"
@@ -570,10 +570,9 @@ export function Agents() {
         />
       )}
 
-      {editTarget && wsRef.current && (
+      {editTarget && (
         <EditProfileModal
           agent={editTarget}
-          ws={wsRef.current}
           onClose={() => setEditTarget(null)}
           onSaved={onProfileSaved}
         />
