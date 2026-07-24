@@ -112,56 +112,69 @@ export function useWorkflowRuns(groupId: string | null): {
 
     // Run state machine: keyed by runId. Later events update status in-place.
     const runMap = new Map<string, WorkflowRun>();
+    const now = Math.floor(Date.now() / 1000);
 
-    const unsub = connection.subscribe(
-      { kinds: RUN_STATUS_KINDS, "#h": [groupId], limit: 200 },
-      (ev) => {
-        const runId =
-          ev.tags.find((t) => t[0] === "run")?.[1] ??
-          ev.tags.find((t) => t[0] === "d")?.[1] ??
-          ev.id;
-        const workflowId =
-          ev.tags.find((t) => t[0] === "workflow")?.[1] ??
-          ev.tags.find((t) => t[0] === "d")?.[1] ??
-          "";
+    function applyEvent(ev: { kind: number; id: string; tags: string[][]; content: string; created_at: number }) {
+      const runId =
+        ev.tags.find((t) => t[0] === "run")?.[1] ??
+        ev.tags.find((t) => t[0] === "d")?.[1] ??
+        ev.id;
+      const workflowId =
+        ev.tags.find((t) => t[0] === "workflow")?.[1] ??
+        ev.tags.find((t) => t[0] === "d")?.[1] ??
+        "";
 
-        const existing = runMap.get(runId);
-        const status = kindToStatus(ev.kind);
+      const existing = runMap.get(runId);
+      const status = kindToStatus(ev.kind);
 
-        const updated: WorkflowRun = existing
-          ? {
-              ...existing,
-              status,
-              updatedAt: ev.created_at,
-              currentStep:
-                ev.kind === KIND_WORKFLOW_STEP_STARTED
-                  ? (ev.tags.find((t) => t[0] === "step")?.[1] ?? existing.currentStep)
-                  : existing.currentStep,
-              errorMessage:
-                ev.kind === KIND_WORKFLOW_FAILED || ev.kind === KIND_WORKFLOW_STEP_FAILED
-                  ? (ev.content || existing.errorMessage)
-                  : existing.errorMessage,
-              approvalToken:
-                ev.kind === KIND_WORKFLOW_APPROVAL_REQUESTED
-                  ? (ev.tags.find((t) => t[0] === "token")?.[1] ?? existing.approvalToken)
-                  : existing.approvalToken,
-            }
-          : {
-              runId,
-              workflowId,
-              status,
-              startedAt: ev.created_at,
-              updatedAt: ev.created_at,
-            };
+      const updated: WorkflowRun = existing
+        ? {
+            ...existing,
+            status,
+            updatedAt: ev.created_at,
+            currentStep:
+              ev.kind === KIND_WORKFLOW_STEP_STARTED
+                ? (ev.tags.find((t) => t[0] === "step")?.[1] ?? existing.currentStep)
+                : existing.currentStep,
+            errorMessage:
+              ev.kind === KIND_WORKFLOW_FAILED || ev.kind === KIND_WORKFLOW_STEP_FAILED
+                ? (ev.content || existing.errorMessage)
+                : existing.errorMessage,
+            approvalToken:
+              ev.kind === KIND_WORKFLOW_APPROVAL_REQUESTED
+                ? (ev.tags.find((t) => t[0] === "token")?.[1] ?? existing.approvalToken)
+                : existing.approvalToken,
+          }
+        : {
+            runId,
+            workflowId,
+            status,
+            startedAt: ev.created_at,
+            updatedAt: ev.created_at,
+          };
 
-        runMap.set(runId, updated);
-        setRuns(
-          Array.from(runMap.values()).sort((a, b) => b.startedAt - a.startedAt),
-        );
-      },
+      runMap.set(runId, updated);
+      setRuns(Array.from(runMap.values()).sort((a, b) => b.startedAt - a.startedAt));
+    }
+
+    // Phase 1: fetch historical run events (up to 500 across all time).
+    // Unsubscribes after EOSE so the relay doesn't keep it as a live filter.
+    const histUnsub = connection.subscribe(
+      { kinds: RUN_STATUS_KINDS, "#h": [groupId], until: now, limit: 500 },
+      applyEvent,
+      () => histUnsub(),
     );
 
-    return unsub;
+    // Phase 2: live subscription for run events from this moment forward.
+    const liveUnsub = connection.subscribe(
+      { kinds: RUN_STATUS_KINDS, "#h": [groupId], since: now },
+      applyEvent,
+    );
+
+    return () => {
+      histUnsub();
+      liveUnsub();
+    };
   }, [connection, connectionState, groupId]);
 
   const triggerRun = useCallback(

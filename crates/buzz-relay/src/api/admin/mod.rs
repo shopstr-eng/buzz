@@ -44,6 +44,11 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
         .route("/members/{pubkey}", patch(update_member).delete(remove_member))
         // Agent profile: sign kind:0 + kind:10100 with the ACP private key.
         .route("/agents/sign-profile", post(sign_agent_profile))
+        // Agent provider settings: persist API key + model to .env.agent.
+        .route(
+            "/settings/agent-provider",
+            get(get_agent_provider).post(set_agent_provider),
+        )
         .layer(middleware::from_fn(security_headers))
         .layer(RequestBodyLimitLayer::new(4096))
         .with_state(state)
@@ -686,6 +691,166 @@ async fn sign_agent_profile(
         name,
         picture,
     }))
+}
+
+// ── Agent provider settings ───────────────────────────────────────────────
+//
+// Replit provides keyless access to Anthropic and OpenAI via its AI
+// Integrations feature — the credentials (ANTHROPIC_API_KEY / OPENAI_API_KEY)
+// are injected automatically into the environment, billed to the user's
+// Replit account.  We therefore only need to store the provider choice and
+// optional model / base-URL overrides; no API key handling here.
+
+/// Path to the dotenv file written by the admin UI and sourced by start-replit.sh.
+const AGENT_ENV_PATH: &str = ".env.agent";
+
+const KEY_PROVIDER: &str = "BUZZ_AGENT_PROVIDER";
+const KEY_ANTHROPIC_MODEL: &str = "ANTHROPIC_MODEL";
+const KEY_OPENAI_MODEL: &str = "OPENAI_COMPAT_MODEL";
+const KEY_OPENAI_BASE_URL: &str = "OPENAI_COMPAT_BASE_URL";
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentProviderSettings {
+    provider: Option<String>,
+    model: Option<String>,
+    base_url: Option<String>,
+    /// True when the stored file differs from what the process currently has in env.
+    restart_required: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SetAgentProviderRequest {
+    /// "anthropic", "openai", or null to disable.
+    provider: Option<String>,
+    /// Optional model override; empty string clears the stored value.
+    model: Option<String>,
+    /// OpenAI-compat only: custom endpoint base URL (e.g. Azure, Ollama).
+    base_url: Option<String>,
+}
+
+/// Parse a simple KEY=VALUE dotenv file. Blank lines and `#`-comments are ignored.
+fn parse_env_file(content: &str) -> std::collections::HashMap<String, String> {
+    content
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                return None;
+            }
+            let (key, val) = line.split_once('=')?;
+            Some((key.trim().to_string(), val.trim().to_string()))
+        })
+        .collect()
+}
+
+fn read_env_file() -> std::collections::HashMap<String, String> {
+    std::fs::read_to_string(AGENT_ENV_PATH)
+        .map(|c| parse_env_file(&c))
+        .unwrap_or_default()
+}
+
+fn write_env_file(vars: &std::collections::HashMap<String, String>) -> Result<(), ApiError> {
+    let mut lines: Vec<String> = vars
+        .iter()
+        .map(|(k, v)| format!("{k}={v}"))
+        .collect();
+    lines.sort();
+    let content = format!(
+        "# Agent provider config — managed by the admin UI. Sourced by start-replit.sh.\n{}\n",
+        lines.join("\n")
+    );
+    std::fs::write(AGENT_ENV_PATH, content).map_err(|_| ApiError::internal())
+}
+
+fn build_provider_settings(
+    vars: &std::collections::HashMap<String, String>,
+) -> AgentProviderSettings {
+    let provider = vars.get(KEY_PROVIDER).cloned();
+    let (model, base_url) = match provider.as_deref() {
+        Some("anthropic") => (vars.get(KEY_ANTHROPIC_MODEL).cloned(), None),
+        Some("openai") | Some("openai-compat") => (
+            vars.get(KEY_OPENAI_MODEL).cloned(),
+            vars.get(KEY_OPENAI_BASE_URL).cloned(),
+        ),
+        _ => (None, None),
+    };
+    let running = std::env::var(KEY_PROVIDER).ok();
+    let restart_required = running.as_deref() != provider.as_deref();
+    AgentProviderSettings { provider, model, base_url, restart_required }
+}
+
+/// GET /settings/agent-provider — returns the stored provider configuration.
+async fn get_agent_provider(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<AgentProviderSettings>, ApiError> {
+    authorize(&state, &headers)?;
+    Ok(Json(build_provider_settings(&read_env_file())))
+}
+
+/// POST /settings/agent-provider — saves provider + model choice to .env.agent.
+/// API credentials are not stored here; Replit AI Integrations supplies them automatically.
+async fn set_agent_provider(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<SetAgentProviderRequest>,
+) -> Result<Json<AgentProviderSettings>, ApiError> {
+    authorize(&state, &headers)?;
+
+    match body.provider.as_deref() {
+        None | Some("anthropic") | Some("openai") | Some("openai-compat") => {}
+        Some(_) => {
+            return Err(ApiError::bad_request(
+                "invalid_provider",
+                "provider must be anthropic, openai, openai-compat, or null",
+            ));
+        }
+    }
+
+    let mut vars = read_env_file();
+
+    match body.provider.as_deref() {
+        None => {
+            vars.clear();
+        }
+        Some(prov) => {
+            vars.insert(KEY_PROVIDER.to_string(), prov.to_string());
+
+            // Remove settings for the other provider family.
+            if prov == "anthropic" {
+                vars.remove(KEY_OPENAI_MODEL);
+                vars.remove(KEY_OPENAI_BASE_URL);
+            } else {
+                vars.remove(KEY_ANTHROPIC_MODEL);
+            }
+
+            // Model: empty string means "clear".
+            let model_key = if prov == "anthropic" { KEY_ANTHROPIC_MODEL } else { KEY_OPENAI_MODEL };
+            match body.model.as_deref() {
+                Some(m) if !m.trim().is_empty() => {
+                    vars.insert(model_key.to_string(), m.trim().to_string());
+                }
+                Some(_) => { vars.remove(model_key); }
+                None => {}
+            }
+
+            // Base URL (OpenAI-compat only — for Azure, Ollama, etc.).
+            if prov != "anthropic" {
+                match body.base_url.as_deref() {
+                    Some(u) if !u.trim().is_empty() => {
+                        vars.insert(KEY_OPENAI_BASE_URL.to_string(), u.trim().to_string());
+                    }
+                    Some(_) => { vars.remove(KEY_OPENAI_BASE_URL); }
+                    None => {}
+                }
+            }
+        }
+    }
+
+    write_env_file(&vars)?;
+    Ok(Json(build_provider_settings(&vars)))
 }
 
 #[cfg(test)]

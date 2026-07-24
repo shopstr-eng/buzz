@@ -24,10 +24,18 @@ import {
   ThumbsDown,
   Zap,
   BookOpen,
+  MessageSquare,
 } from "lucide-react";
 import { useWorkflows } from "../use-workflows";
 import { useWorkflowRuns, type WorkflowRun, type WorkflowRunStatus } from "../use-workflow-runs";
-import type { Channel } from "../types";
+import { useMessages } from "../use-messages";
+import { useSendMessage } from "../use-send-message";
+import { useChannelMembers } from "../use-channel-members";
+import { useReactions } from "../use-reactions";
+import { useRelay } from "@/shared/context/relay-context";
+import { MessageList } from "./MessageList";
+import { MessageComposer } from "./MessageComposer";
+import type { Channel, ChatMessage } from "../types";
 
 // ── Reference card data derived from buzz-workflow schema ──────────────────
 
@@ -501,6 +509,56 @@ function WorkflowList({
   );
 }
 
+// ── Agent chat panel ───────────────────────────────────────────────────────
+
+function AgentChatPanel({ channel }: { channel: Channel }) {
+  const { identity, connectionState } = useRelay();
+  const { messages, isLoading, addOptimistic, fetchOlder, canFetchOlder } =
+    useMessages(channel.groupId);
+  const { send, isSending } = useSendMessage(channel.groupId, addOptimistic);
+  const { members } = useChannelMembers(channel.groupId);
+  const { reactions, addReaction } = useReactions(channel.groupId, identity?.pubkey);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+
+  const isReady = connectionState === "ready";
+  const hasAgents = members.some((m) => m.isAgent);
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      {hasAgents && (
+        <div className="shrink-0 border-b border-black/5 bg-violet-50/60 px-4 py-2 text-[11px] text-violet-700 dark:border-white/5 dark:bg-violet-900/10 dark:text-violet-300">
+          @mention an agent to trigger workflows, ask questions, or request a code review.
+          Use <code className="rounded bg-violet-100 px-1 font-mono dark:bg-violet-900/40">/run</code>,{" "}
+          <code className="rounded bg-violet-100 px-1 font-mono dark:bg-violet-900/40">/review</code>, or{" "}
+          <code className="rounded bg-violet-100 px-1 font-mono dark:bg-violet-900/40">/help</code> slash commands.
+        </div>
+      )}
+      <MessageList
+        messages={messages}
+        myPubkey={identity?.pubkey}
+        isLoading={isLoading}
+        canFetchOlder={canFetchOlder}
+        onFetchOlder={fetchOlder}
+        reactions={reactions}
+        onAddReaction={(msgId, emoji) => addReaction(msgId, emoji)}
+        onReply={(msg) => setReplyTo(msg)}
+      />
+      <MessageComposer
+        channelName={channel.name}
+        onSend={(content, mentionPubkeys, replyToId) =>
+          send(content, replyToId, mentionPubkeys)
+        }
+        isSending={isSending}
+        disabled={!isReady || !identity}
+        members={members}
+        replyTo={replyTo}
+        onClearReply={() => setReplyTo(null)}
+        hasWorkflows
+      />
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
 export function WorkflowChannelView({ channel }: { channel: Channel }) {
@@ -508,15 +566,13 @@ export function WorkflowChannelView({ channel }: { channel: Channel }) {
   const { runs, triggerRun, approveRun, error: runError } = useWorkflowRuns(channel.groupId);
 
   const [isSaving, setIsSaving] = useState(false);
-  const [tab, setTab] = useState<"editor" | "workflows">("workflows");
-  // When non-null, the editor is in "edit existing" mode.
+  const [tab, setTab] = useState<"workflows" | "editor" | "chat">("workflows");
   const [editingWorkflow, setEditingWorkflow] = useState<{ id: string; yaml: string } | null>(null);
 
   async function handleSave(name: string, yaml: string, existingId?: string) {
     setIsSaving(true);
     try {
       await publishWorkflow(name, yaml, existingId);
-      // After saving, clear any editing context and return to the list.
       setEditingWorkflow(null);
       setTab("workflows");
     } finally {
@@ -530,7 +586,6 @@ export function WorkflowChannelView({ channel }: { channel: Channel }) {
   }
 
   function handleNewWorkflow() {
-    // Clear editing context so the editor starts fresh with a new UUID.
     setEditingWorkflow(null);
     setTab("editor");
   }
@@ -580,41 +635,57 @@ export function WorkflowChannelView({ channel }: { channel: Channel }) {
           }`}
         >
           <Plus className="h-3.5 w-3.5" />
-          New workflow
+          New
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("chat")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium transition-colors ${
+            tab === "chat"
+              ? "border-b-2 border-black text-black dark:border-white dark:text-white"
+              : "text-black/40 hover:text-black/70 dark:text-white/40 dark:hover:text-white/70"
+          }`}
+        >
+          <MessageSquare className="h-3.5 w-3.5" />
+          Chat
         </button>
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4">
-        {runError && (
-          <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
-            {runError}
-          </div>
-        )}
+      {tab === "chat" ? (
+        <AgentChatPanel channel={channel} />
+      ) : (
+        <div className="flex-1 overflow-y-auto p-4">
+          {runError && (
+            <div className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+              {runError}
+            </div>
+          )}
 
-        {tab === "editor" ? (
-          <WorkflowEditor
-            onSave={handleSave}
-            isSaving={isSaving}
-            initialYaml={editingWorkflow?.yaml}
-            existingId={editingWorkflow?.id}
-          />
-        ) : (
-          <WorkflowList
-            workflows={workflows}
-            isLoading={isLoading}
-            runs={runs}
-            onRun={triggerRun}
-            onEdit={handleEdit}
-            onDelete={(workflowId) => {
-              const wf = workflows.find((w) => w.workflowId === workflowId);
-              if (wf) deleteWorkflow(wf);
-            }}
-            onApprove={(token) => approveRun(token, true)}
-            onDeny={(token) => approveRun(token, false)}
-          />
-        )}
-      </div>
+          {tab === "editor" ? (
+            <WorkflowEditor
+              onSave={handleSave}
+              isSaving={isSaving}
+              initialYaml={editingWorkflow?.yaml}
+              existingId={editingWorkflow?.id}
+            />
+          ) : (
+            <WorkflowList
+              workflows={workflows}
+              isLoading={isLoading}
+              runs={runs}
+              onRun={triggerRun}
+              onEdit={handleEdit}
+              onDelete={(workflowId) => {
+                const wf = workflows.find((w) => w.workflowId === workflowId);
+                if (wf) deleteWorkflow(wf);
+              }}
+              onApprove={(token) => approveRun(token, true)}
+              onDeny={(token) => approveRun(token, false)}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -425,6 +425,66 @@ pub async fn claim_invite(
     })))
 }
 
+/// `GET /api/me/membership` — NIP-98 authenticated, exempt from the relay
+/// membership gate.  Used by the web login page to verify that a signing key
+/// is in this community before completing the login flow.
+///
+/// Returns `{"member": bool, "role": string | null}`.
+/// When `require_relay_membership` is disabled the relay is open and everyone
+/// is treated as a member (`"member": true`).
+pub async fn membership_status(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let raw_host = headers
+        .get(axum::http::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    let tenant = crate::tenant::bind_community(&state.db, raw_host)
+        .await
+        .map_err(|_| {
+            api_error(
+                StatusCode::NOT_FOUND,
+                "relay: no community is configured for this host",
+            )
+        })?;
+
+    let url = bridge::nip98_expected_url(
+        &state.config.relay_url,
+        &tenant,
+        "/api/me/membership",
+    );
+    let (pubkey, event_id_bytes) = bridge::verify_bridge_auth_with_options(
+        &headers,
+        "GET",
+        &url,
+        None,
+        true,  // require NIP-98; no X-Pubkey dev-mode fallback
+        false, // GET has no body, so no payload tag
+    )?;
+    bridge::check_nip98_replay(&state, &tenant, event_id_bytes).await?;
+
+    // Open relay — every authenticated caller is admitted.
+    if !state.config.require_relay_membership {
+        return Ok(Json(serde_json::json!({
+            "member": true,
+            "role": serde_json::Value::Null,
+        })));
+    }
+
+    let pubkey_hex = pubkey.to_hex();
+    let member = state
+        .db
+        .get_relay_member(tenant.community(), &pubkey_hex)
+        .await
+        .map_err(|e| internal_error(&format!("membership lookup: {e}")))?;
+
+    Ok(Json(serde_json::json!({
+        "member": member.is_some(),
+        "role": member.map(|m| m.role),
+    })))
+}
+
 /// Fixed-window rate limit on claim attempts, keyed by community and claimer
 /// pubkey so traffic for one tenant cannot consume another tenant's allowance.
 ///

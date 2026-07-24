@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import type { ChatMessage } from "../types";
+import type { ReactionsMap } from "../use-reactions";
 import { MessageRow } from "./MessageRow";
 
 interface Props {
@@ -8,6 +9,9 @@ interface Props {
   isLoading: boolean;
   canFetchOlder: boolean;
   onFetchOlder: () => void;
+  reactions?: ReactionsMap;
+  onAddReaction?: (messageId: string, emoji: string) => void;
+  onReply?: (message: ChatMessage) => void;
 }
 
 export function MessageList({
@@ -16,10 +20,20 @@ export function MessageList({
   isLoading,
   canFetchOlder,
   onFetchOlder,
+  reactions,
+  onAddReaction,
+  onReply,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
+
+  // Build a lookup map for reply-to context
+  const messagesById = useMemo(() => {
+    const m = new Map<string, ChatMessage>();
+    for (const msg of messages) m.set(msg.id, msg);
+    return m;
+  }, [messages]);
 
   // Auto-scroll to bottom when new messages arrive (only when already near bottom).
   useEffect(() => {
@@ -87,13 +101,20 @@ export function MessageList({
         const showHeader =
           !prev ||
           prev.pubkey !== msg.pubkey ||
-          msg.createdAt - prev.createdAt > 300; // 5-min break resets grouping
+          msg.createdAt - prev.createdAt > 300;
+
+        const replyToMessage = msg.replyToId ? messagesById.get(msg.replyToId) ?? null : null;
+
         return (
           <MessageRow
             key={msg.id}
             message={msg}
             myPubkey={myPubkey}
             showHeader={showHeader}
+            reactions={reactions?.[msg.id]}
+            onAddReaction={onAddReaction ? (emoji) => onAddReaction(msg.id, emoji) : undefined}
+            onReply={onReply ? () => onReply(msg) : undefined}
+            replyToMessage={replyToMessage}
           />
         );
       })}

@@ -1490,3 +1490,211 @@ dd {
   color: rgba(0,0,0,.65);
   line-height: 1.5;
 }
+
+/* ── Settings page ─────────────────────────────────────────────────────── */
+
+.settings-notice {
+  margin: 0 0 1.5rem;
+  padding: .75rem 1rem;
+  border-radius: .5rem;
+  font-size: .875rem;
+  line-height: 1.5;
+}
+
+.settings-notice--warn {
+  background: rgba(245,158,11,.1);
+  color: #92400e;
+  border: 1px solid rgba(245,158,11,.25);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 560px;
+}
+
+.settings-fieldset {
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: .6rem;
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+
+.settings-fieldset legend {
+  padding: 0 .35rem;
+  font-size: .78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: rgba(0,0,0,.45);
+}
+
+.settings-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  cursor: pointer;
+}
+
+.settings-radio input[type="radio"] {
+  margin-top: .2rem;
+  flex-shrink: 0;
+  accent-color: #2563eb;
+}
+
+.settings-radio-body {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+
+.settings-radio-label {
+  font-size: .925rem;
+  font-weight: 500;
+  color: rgba(0,0,0,.85);
+}
+
+.settings-radio-hint {
+  font-size: .8rem;
+  color: rgba(0,0,0,.5);
+  line-height: 1.45;
+}
+
+.settings-radio-hint a {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+}
+
+.settings-field-label {
+  font-size: .85rem;
+  font-weight: 500;
+  color: rgba(0,0,0,.7);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.settings-field-optional {
+  font-weight: 400;
+  color: rgba(0,0,0,.4);
+  font-size: .78rem;
+}
+
+.settings-field-link {
+  margin-left: auto;
+  font-size: .78rem;
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.settings-field-link:hover { text-decoration: underline; }
+
+.settings-input {
+  width: 100%;
+  padding: .5rem .75rem;
+  border: 1px solid rgba(0,0,0,.18);
+  border-radius: .4rem;
+  font-size: .9rem;
+  font-family: inherit;
+  background: #fff;
+  color: inherit;
+  box-sizing: border-box;
+  transition: border-color .15s;
+}
+
+.settings-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,.15);
+}
+
+.settings-field-hint {
+  font-size: .78rem;
+  color: rgba(0,0,0,.45);
+  line-height: 1.4;
+}
+
+.settings-field-hint--ok {
+  color: #047857;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.settings-save-btn {
+  padding: .55rem 1.25rem;
+  background: #111;
+  color: #fff;
+  border: none;
+  border-radius: .45rem;
+  font-size: .9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+
+.settings-save-btn:hover:not(:disabled) { opacity: .82; }
+
+.settings-save-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.settings-success {
+  font-size: .875rem;
+  color: #047857;
+  font-weight: 500;
+}
+
+.settings-error {
+  font-size: .875rem;
+  color: #b91c1c;
+}
+
+.settings-current {
+  margin-top: 2.5rem;
+  padding: 1.25rem;
+  background: rgba(0,0,0,.03);
+  border-radius: .6rem;
+  max-width: 560px;
+}
+
+.settings-current-title {
+  font-size: .85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: rgba(0,0,0,.4);
+  margin: 0 0 .75rem;
+}
+
+.settings-dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .4rem 1.25rem;
+  margin: 0;
+  font-size: .9rem;
+}
+
+.settings-dl dt {
+  color: rgba(0,0,0,.5);
+  font-weight: 500;
+}
+
+.settings-dl dd {
+  margin: 0;
+  color: rgba(0,0,0,.85);
+}

@@ -4,11 +4,12 @@ import { useRelay } from "@/shared/context/relay-context";
 import { useMessages } from "../use-messages";
 import { useSendMessage } from "../use-send-message";
 import { useChannelMembers } from "../use-channel-members";
+import { useReactions } from "../use-reactions";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import { ChannelMembersPanel } from "./ChannelMembersPanel";
 import { WorkflowChannelView } from "./WorkflowChannelView";
-import type { Channel, ChannelType } from "../types";
+import type { Channel, ChannelType, ChatMessage } from "../types";
 
 interface Props {
   channel: Channel;
@@ -22,11 +23,9 @@ function ChannelTypeIcon({ type, isPrivate }: { type: ChannelType; isPrivate: bo
 }
 
 export function ChannelView({ channel }: Props) {
-  // Workflow channels get their own dedicated view — no message composer.
   if (channel.channelType === "workflow") {
     return <WorkflowChannelView channel={channel} />;
   }
-
   return <ChatChannelView channel={channel} />;
 }
 
@@ -35,10 +34,10 @@ function ChatChannelView({ channel }: Props) {
   const { messages, isLoading, addOptimistic, fetchOlder, canFetchOlder } =
     useMessages(channel.groupId);
   const { send, isSending } = useSendMessage(channel.groupId, addOptimistic);
-  // Members are fetched here so the composer can offer @mention completions.
-  // ChannelMembersPanel has its own subscription when open; this one is always active.
   const { members } = useChannelMembers(channel.groupId);
+  const { reactions, addReaction } = useReactions(channel.groupId, identity?.pubkey);
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
 
   const isReady = connectionState === "ready";
 
@@ -52,14 +51,6 @@ function ChatChannelView({ channel }: Props) {
           <h1 className="text-sm font-semibold text-black dark:text-white">
             {channel.name}
           </h1>
-
-          {/* Model badge for workflow channels */}
-          {channel.channelType === "workflow" && channel.model && (
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-              {channel.model.split("-")[0]}
-            </span>
-          )}
-
           {channel.about && (
             <>
               <div className="h-3.5 w-px bg-black/15 dark:bg-white/15" />
@@ -68,8 +59,6 @@ function ChatChannelView({ channel }: Props) {
               </p>
             </>
           )}
-
-          {/* Members toggle */}
           <button
             type="button"
             onClick={() => setMembersPanelOpen((o) => !o)}
@@ -93,15 +82,22 @@ function ChatChannelView({ channel }: Props) {
           isLoading={isLoading}
           canFetchOlder={canFetchOlder}
           onFetchOlder={fetchOlder}
+          reactions={reactions}
+          onAddReaction={(msgId, emoji) => addReaction(msgId, emoji)}
+          onReply={(msg) => setReplyTo(msg)}
         />
 
-        {/* Composer with @mention support */}
+        {/* Composer */}
         <MessageComposer
           channelName={channel.name}
-          onSend={(content, mentionPubkeys) => send(content, undefined, mentionPubkeys)}
+          onSend={(content, mentionPubkeys, replyToId) =>
+            send(content, replyToId, mentionPubkeys)
+          }
           isSending={isSending}
           disabled={!isReady || !identity}
           members={members}
+          replyTo={replyTo}
+          onClearReply={() => setReplyTo(null)}
         />
       </div>
 

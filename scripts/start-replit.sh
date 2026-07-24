@@ -348,6 +348,13 @@ _start_acp() {
   local http_scheme
   [[ "$relay_scheme" == "wss" ]] && http_scheme="https" || http_scheme="http"
 
+  # Source admin-configured AI provider credentials (.env.agent written by the admin UI).
+  if [[ -f "${REPO_ROOT}/.env.agent" ]]; then
+    # shellcheck disable=SC1090
+    set -a; source "${REPO_ROOT}/.env.agent"; set +a
+    echo "==> Loaded AI provider config from .env.agent (provider=${BUZZ_AGENT_PROVIDER:-none})."
+  fi
+
   BUZZ_PRIVATE_KEY="$ACP_PRIVATE_KEY" \
   BUZZ_RELAY_URL="$acp_relay_url" \
   BUZZ_ACP_NIP42_RELAY_URL="${relay_scheme}://127.0.0.1:${bind_port}" \
@@ -358,6 +365,7 @@ _start_acp() {
   BUZZ_ACP_SUBSCRIBE="${BUZZ_ACP_SUBSCRIBE:-mentions}" \
   BUZZ_ACP_LAZY_POOL="${BUZZ_ACP_LAZY_POOL:-true}" \
   BUZZ_ACP_RESPOND_TO="${BUZZ_ACP_RESPOND_TO:-anyone}" \
+  BUZZ_ACP_MCP_COMMAND="${BUZZ_ACP_MCP_COMMAND:-${REPO_ROOT}/target/release/buzz-cli}" \
   "$ACP_BIN" >>/tmp/buzz-acp.log 2>&1 &
 
   ACP_PID=$!
