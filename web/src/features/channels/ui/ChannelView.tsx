@@ -3,6 +3,7 @@ import { Hash, Lock, Users, Zap, MessageSquare } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useMessages } from "../use-messages";
 import { useSendMessage } from "../use-send-message";
+import { useChannelMembers } from "../use-channel-members";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import { ChannelMembersPanel } from "./ChannelMembersPanel";
@@ -34,6 +35,9 @@ function ChatChannelView({ channel }: Props) {
   const { messages, isLoading, addOptimistic, fetchOlder, canFetchOlder } =
     useMessages(channel.groupId);
   const { send, isSending } = useSendMessage(channel.groupId, addOptimistic);
+  // Members are fetched here so the composer can offer @mention completions.
+  // ChannelMembersPanel has its own subscription when open; this one is always active.
+  const { members } = useChannelMembers(channel.groupId);
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
 
   const isReady = connectionState === "ready";
@@ -91,12 +95,13 @@ function ChatChannelView({ channel }: Props) {
           onFetchOlder={fetchOlder}
         />
 
-        {/* Composer */}
+        {/* Composer with @mention support */}
         <MessageComposer
           channelName={channel.name}
-          onSend={send}
+          onSend={(content, mentionPubkeys) => send(content, undefined, mentionPubkeys)}
           isSending={isSending}
           disabled={!isReady || !identity}
+          members={members}
         />
       </div>
 

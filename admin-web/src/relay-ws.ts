@@ -207,6 +207,11 @@ export class AdminRelayWs {
     return event;
   }
 
+  /** Publish an already-signed Nostr event without re-signing. */
+  publishSigned(event: NostrEvent): void {
+    this.rawSend(["EVENT", event]);
+  }
+
   close() {
     this.closed = true;
     this.ws.close();

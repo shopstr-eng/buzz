@@ -1,6 +1,8 @@
 /**
  * Hook for sending a kind-9 (NIP-29 stream) chat message to a group.
  * Adds an optimistic message immediately and publishes to the relay.
+ *
+ * mentionPubkeys — pubkeys typed via @mention picker; each becomes a ["p", pk] tag.
  */
 
 import { useCallback, useState } from "react";
@@ -12,7 +14,7 @@ export function useSendMessage(
   groupId: string | null,
   addOptimistic: (msg: ChatMessage) => void,
 ): {
-  send: (content: string, replyToId?: string) => Promise<void>;
+  send: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
   isSending: boolean;
   error: string | null;
 } {
@@ -21,7 +23,7 @@ export function useSendMessage(
   const [error, setError] = useState<string | null>(null);
 
   const send = useCallback(
-    async (content: string, replyToId?: string) => {
+    async (content: string, replyToId?: string, mentionPubkeys?: string[]) => {
       if (!connection || !identity || !groupId) return;
       const trimmed = content.trim();
       if (!trimmed) return;
@@ -38,6 +40,9 @@ export function useSendMessage(
       const now = Math.floor(Date.now() / 1000);
       const tags: string[][] = [["h", groupId]];
       if (replyToId) tags.push(["e", replyToId, "", "reply"]);
+      for (const pk of mentionPubkeys ?? []) {
+        tags.push(["p", pk]);
+      }
 
       try {
         const unsigned = {

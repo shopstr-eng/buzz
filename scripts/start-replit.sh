@@ -251,6 +251,9 @@ fi
 # ---------------------------------------------------------------------------
 # 6. Start the relay
 # ---------------------------------------------------------------------------
+# Expose the ACP private key to the relay process so the admin API can sign
+# kind:0 / kind:10100 profile events on behalf of the ACP agent.
+export BUZZ_ACP_PRIVATE_KEY="${ACP_PRIVATE_KEY}"
 export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:3000}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 

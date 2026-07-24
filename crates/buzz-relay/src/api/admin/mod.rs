@@ -15,6 +15,7 @@ use axum::{
     routing::{delete, get, patch, post},
     Json, Router,
 };
+use nostr::{EventBuilder, Keys, Kind};
 use chrono::{DateTime, Utc};
 use error::ApiError;
 use serde::{Deserialize, Serialize};
@@ -41,6 +42,8 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
         // Member management: list, update role, and remove relay members.
         .route("/members", get(list_members))
         .route("/members/{pubkey}", patch(update_member).delete(remove_member))
+        // Agent profile: sign kind:0 + kind:10100 with the ACP private key.
+        .route("/agents/sign-profile", post(sign_agent_profile))
         .layer(middleware::from_fn(security_headers))
         .layer(RequestBodyLimitLayer::new(4096))
         .with_state(state)
@@ -594,6 +597,72 @@ async fn mint_invite_admin(
         "expires_at": expires_at,
         "url": format!("{scheme}://{}/invite/{}", tenant.host(), code),
     })))
+}
+
+// ── Agent profile signing ────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct SignAgentProfileRequest {
+    name: Option<String>,
+    picture: Option<String>,
+    about: Option<String>,
+}
+
+#[derive(Serialize)]
+struct SignAgentProfileResponse {
+    pubkey: String,
+    kind0: serde_json::Value,
+    kind10100: serde_json::Value,
+}
+
+/// Sign kind:0 (user metadata) and kind:10100 (agent profile) with the ACP
+/// private key so the admin UI can publish them via the relay WebSocket.
+///
+/// Reads `BUZZ_ACP_PRIVATE_KEY` from the environment, which is exported by
+/// the startup script. Returns signed event JSON; the client is responsible
+/// for publishing them via `["EVENT", ...]`.
+async fn sign_agent_profile(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+    Json(body): Json<SignAgentProfileRequest>,
+) -> Result<Json<SignAgentProfileResponse>, ApiError> {
+    authorize(&state, &headers)?;
+
+    let acp_key_hex = std::env::var("BUZZ_ACP_PRIVATE_KEY")
+        .map_err(|_| ApiError::bad_request("acp_key_missing", "BUZZ_ACP_PRIVATE_KEY not configured"))?;
+
+    let keys = Keys::parse(&acp_key_hex)
+        .map_err(|_| ApiError::bad_request("acp_key_invalid", "ACP private key is not valid"))?;
+    let pubkey_hex = keys.public_key().to_hex();
+
+    let name = body.name.as_deref().unwrap_or("Buzz AI");
+    let picture = body.picture.as_deref().unwrap_or("");
+    let about = body.about.as_deref().unwrap_or("AI agent powered by Buzz relay");
+
+    let kind0 = EventBuilder::new(
+        Kind::Metadata,
+        serde_json::json!({ "name": name, "picture": picture, "about": about }).to_string(),
+    )
+    .sign_with_keys(&keys)
+    .map_err(|_| ApiError::internal())?;
+
+    let kind10100 = EventBuilder::new(
+        Kind::Custom(10100),
+        serde_json::json!({
+            "channel_add_policy": "owner_only",
+            "name": name,
+            "about": about,
+        })
+        .to_string(),
+    )
+    .sign_with_keys(&keys)
+    .map_err(|_| ApiError::internal())?;
+
+    Ok(Json(SignAgentProfileResponse {
+        pubkey: pubkey_hex,
+        kind0: serde_json::to_value(&kind0).unwrap_or_default(),
+        kind10100: serde_json::to_value(&kind10100).unwrap_or_default(),
+    }))
 }
 
 #[cfg(test)]

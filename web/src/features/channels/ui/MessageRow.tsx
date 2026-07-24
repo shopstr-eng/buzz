@@ -27,6 +27,44 @@ function truncatePubkey(pubkey: string): string {
   return `${pubkey.slice(0, 4)}…${pubkey.slice(-4)}`;
 }
 
+/**
+ * Parse message content and highlight @mentions.
+ * Mentions are inserted as `@{8hexchars}…{4hexchars}` by the composer picker,
+ * or as `nostr:npub1…` for NIP-27 compatibility.
+ * Both patterns are rendered as a violet chip.
+ */
+function ContentWithMentions({ content }: { content: string }) {
+  // Match @{hex8}…{hex4}  OR  nostr:npub1{bech32}
+  const MENTION_RE = /@([0-9a-f]{6,8})\u2026([0-9a-f]{3,6})|nostr:(npub1[a-z0-9]+)/gi;
+
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = MENTION_RE.exec(content)) !== null) {
+    if (match.index > last) {
+      parts.push(content.slice(last, match.index));
+    }
+    const display = match[3]
+      ? `@${match[3].slice(0, 10)}…` // nostr:npub1 → shorten
+      : `@${match[1]}…${match[2]}`; // @hex…hex
+    parts.push(
+      <span
+        key={match.index}
+        className="inline-flex items-center rounded bg-violet-100 px-1 py-0.5 font-mono text-[11px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
+      >
+        {display}
+      </span>,
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < content.length) {
+    parts.push(content.slice(last));
+  }
+
+  return <>{parts}</>;
+}
+
 export function MessageRow({ message, myPubkey, showHeader }: Props) {
   const isMe = myPubkey === message.pubkey;
   const bg = useMemo(() => avatarColor(message.pubkey), [message.pubkey]);
@@ -36,6 +74,8 @@ export function MessageRow({ message, myPubkey, showHeader }: Props) {
     () => relativeTime(message.createdAt),
     [message.createdAt],
   );
+
+  const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/.test(message.content);
 
   return (
     <div
@@ -71,7 +111,7 @@ export function MessageRow({ message, myPubkey, showHeader }: Props) {
           </div>
         )}
         <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
-          {message.content}
+          {hasMention ? <ContentWithMentions content={message.content} /> : message.content}
         </p>
       </div>
     </div>
