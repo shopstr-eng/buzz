@@ -10,6 +10,9 @@
 .env
 .env.local
 .env.*.local
+# Agent provider config written by the admin UI — must stay out of git so
+# checkpoints/rollbacks and branch merges never delete or revert it.
+.env.agent
 
 # Editor / IDE
 .idea/

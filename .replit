@@ -25,6 +25,8 @@ RUST_LOG = "buzz_relay=info,buzz_db=info,tower_http=warn"
 
 [userenv.production]
 BUZZ_CUSTOM_DOMAINS = "buzz.shopstrmarkets.com"
+ANTHROPIC_MODEL = "claude-opus-4-5"
+BUZZ_AGENT_PROVIDER = "anthropic"
 
 [deployment]
 deploymentTarget = "vm"
