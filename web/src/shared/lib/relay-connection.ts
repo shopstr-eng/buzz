@@ -34,8 +34,12 @@ type SubCallbacks = {
   onEose?: () => void;
 };
 
+type OkCallback = (ok: boolean, reason: string) => void;
+
 const MIN_RECONNECT_MS = 1_000;
 const MAX_RECONNECT_MS = 30_000;
+
+const PUBLISH_TIMEOUT_MS = 8_000;
 
 export class RelayConnection {
   private ws: WebSocket | null = null;
@@ -48,6 +52,8 @@ export class RelayConnection {
   private stopped = false;
   private stateListeners = new Set<(s: ConnectionState) => void>();
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Pending OK callbacks keyed by event id. */
+  private okCallbacks = new Map<string, OkCallback>();
 
   public state: ConnectionState = "disconnected";
 
@@ -105,9 +111,35 @@ export class RelayConnection {
     return () => this.unsubscribe(subId);
   }
 
-  /** Publish a signed Nostr event. */
+  /** Publish a signed Nostr event (fire-and-forget). */
   publish(event: SignedNostrEvent): void {
     this.send(JSON.stringify(["EVENT", event]));
+  }
+
+  /**
+   * Publish a signed Nostr event and wait for the relay's OK/NOTICE response.
+   * Resolves on `["OK", id, true, ...]` and rejects on `["OK", id, false, reason]`.
+   * Also rejects after PUBLISH_TIMEOUT_MS if no OK arrives.
+   */
+  publishAndWait(event: SignedNostrEvent): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.okCallbacks.delete(event.id);
+        reject(new Error("Relay did not acknowledge the event in time."));
+      }, PUBLISH_TIMEOUT_MS);
+
+      this.okCallbacks.set(event.id, (ok, reason) => {
+        clearTimeout(timer);
+        this.okCallbacks.delete(event.id);
+        if (ok) {
+          resolve();
+        } else {
+          reject(new Error(reason || "Relay rejected the event."));
+        }
+      });
+
+      this.send(JSON.stringify(["EVENT", event]));
+    });
   }
 
   // ── internal ───────────────────────────────────────────────────────────
@@ -208,16 +240,27 @@ export class RelayConnection {
       return;
     }
 
-    if (type === "OK" && data[1] === this.authEventId) {
-      if (data[2] === true) {
-        this.authenticated = true;
-        this.setState("ready");
-        // Replay active subscriptions then flush queued sends
-        this.resubscribeAll();
-        this.flushPending();
-      } else {
-        console.error("[RelayConnection] AUTH rejected:", data[3]);
+    if (type === "OK" && typeof data[1] === "string") {
+      const eventId = data[1] as string;
+      const accepted = data[2] === true;
+      const reason = typeof data[3] === "string" ? data[3] : "";
+
+      if (eventId === this.authEventId) {
+        if (accepted) {
+          this.authenticated = true;
+          this.setState("ready");
+          // Replay active subscriptions then flush queued sends
+          this.resubscribeAll();
+          this.flushPending();
+        } else {
+          console.error("[RelayConnection] AUTH rejected:", reason);
+        }
+        return;
       }
+
+      // Non-auth OK: resolve/reject any waiting publishAndWait caller.
+      const cb = this.okCallbacks.get(eventId);
+      if (cb) cb(accepted, reason);
       return;
     }
 

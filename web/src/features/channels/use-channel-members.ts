@@ -145,7 +145,7 @@ export function useChannelMembers(groupId: string | null): {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
-  /** Remove a member from the channel by publishing kind:9001. */
+  /** Remove a member from the channel by publishing kind:9001. Throws if relay rejects. */
   const kickMember = useCallback(
     async (targetPubkey: string) => {
       if (!connection) throw new Error("Not connected to relay.");
@@ -158,7 +158,8 @@ export function useChannelMembers(groupId: string | null): {
         tags: [["h", groupId], ["p", targetPubkey]],
         content: "",
       });
-      connection.publish(signed);
+      // publishAndWait surfaces relay OK false (permission error, etc.) as a thrown Error.
+      await connection.publishAndWait(signed);
     },
     [connection, groupId],
   );

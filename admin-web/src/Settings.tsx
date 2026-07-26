@@ -108,17 +108,40 @@ export function Settings() {
     setRestartCountdown(null);
     try {
       await post<{ ok: boolean }>("/restart", {});
-      // Relay will shut down shortly — start a countdown then reload.
-      let secs = 8;
+      // Relay will shut down in ~300ms. Poll until it's back up, then reload.
+      // We wait at least 2 seconds before polling so we don't catch the relay
+      // before it has had a chance to shut down.
+      let secs = 15; // max wait
       setRestartCountdown(secs);
-      countdownRef.current = setInterval(() => {
+      let relayDown = false;
+      countdownRef.current = setInterval(async () => {
         secs -= 1;
+        setRestartCountdown(secs);
+
+        // After 2s the relay should be down; start probing for it to come back.
+        if (secs <= 13) {
+          try {
+            const r = await fetch("/assets/relay-info.json", { cache: "no-store" });
+            if (r.ok) {
+              if (relayDown) {
+                // Relay is back up — reload now.
+                clearInterval(countdownRef.current!);
+                countdownRef.current = null;
+                window.location.reload();
+                return;
+              }
+            } else {
+              relayDown = true;
+            }
+          } catch {
+            relayDown = true;
+          }
+        }
+
         if (secs <= 0) {
           clearInterval(countdownRef.current!);
           countdownRef.current = null;
           window.location.reload();
-        } else {
-          setRestartCountdown(secs);
         }
       }, 1000);
     } catch (err: unknown) {

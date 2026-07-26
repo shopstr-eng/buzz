@@ -419,6 +419,16 @@ _wait_for_relay() {
 }
 
 while true; do
+  # Source the admin-configured AI provider settings before starting the relay
+  # binary so it inherits BUZZ_AGENT_PROVIDER in its environment.  This lets
+  # the relay's /settings/agent-provider endpoint compute restart_required
+  # correctly (comparing its own env against the saved file) from the very
+  # first boot — without this, restart_required is always true on the initial
+  # start because _start_acp (which sources .env.agent) runs after the relay.
+  if [[ -f "${REPO_ROOT}/.env.agent" ]]; then
+    set -a; source "${REPO_ROOT}/.env.agent"; set +a
+  fi
+
   if [[ -x "$RELAY_BIN" ]]; then
     echo "==> Using pre-built binary: ${RELAY_BIN}"
     "$RELAY_BIN" &

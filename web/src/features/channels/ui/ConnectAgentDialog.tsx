@@ -255,7 +255,7 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
               <p className="text-xs text-amber-800 dark:text-amber-200">
                 <span className="font-semibold">No AI provider configured.</span>{" "}
                 The agent will be added to this channel, but it cannot respond until a provider is set up.
-                Go to <span className="font-semibold">Admin → Settings → AI Provider</span> and restart the relay.
+                Go to <span className="font-semibold">Admin → Settings → AI Provider</span> to configure one.
               </p>
             </div>
           )}

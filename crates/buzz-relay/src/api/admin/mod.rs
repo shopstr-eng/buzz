@@ -852,7 +852,33 @@ async fn set_agent_provider(
     }
 
     write_env_file(&vars)?;
+    patch_relay_info_provider_configured(vars.contains_key(KEY_PROVIDER));
     Ok(Json(build_provider_settings(&vars)))
+}
+
+/// Best-effort: update `provider_configured` in relay-info.json so the web UI
+/// reflects the new state immediately without requiring a relay restart.
+fn patch_relay_info_provider_configured(configured: bool) {
+    const RELAY_INFO_PATH: &str = "web/dist/assets/relay-info.json";
+    let raw = match std::fs::read_to_string(RELAY_INFO_PATH) {
+        Ok(s) => s,
+        Err(_) => return, // file may not exist in dev; ignore
+    };
+    let mut value: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "provider_configured".to_string(),
+            serde_json::Value::Bool(configured),
+        );
+    }
+    let updated = match serde_json::to_string(&value) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let _ = std::fs::write(RELAY_INFO_PATH, updated);
 }
 
 // ── Relay restart ─────────────────────────────────────────────────────────

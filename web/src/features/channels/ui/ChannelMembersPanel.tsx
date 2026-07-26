@@ -447,7 +447,8 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
         {providerConfigured === false && (
           <p className="px-2 text-[10px] leading-tight text-amber-600/80 dark:text-amber-400/80">
             No AI provider configured. Set one up in{" "}
-            <span className="font-semibold">Admin → Settings → AI Provider</span>.
+            <span className="font-semibold">Admin → Settings → AI Provider</span>{" "}
+            — no relay restart needed.
           </p>
         )}
       </div>
