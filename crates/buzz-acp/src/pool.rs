@@ -451,6 +451,7 @@ impl ChannelInfoResolver {
                     PromptChannelInfo {
                         name: info.name,
                         channel_type: info.channel_type,
+                        model: info.model,
                     },
                 ))
             })
@@ -1479,7 +1480,7 @@ pub async fn run_prompt_task(
                 // preset resets desired_model to the ACP default rather than leaking a
                 // previous channel's model into this session (cross-channel isolation).
                 if !agent.model_overridden {
-                    if let Some(ci) = ctx.channel_info.get(cid) {
+                    if let Some(ci) = ctx.channel_info.resolve(*cid).await {
                         agent.desired_model = ci.model.clone();
                     }
                 }
@@ -2283,6 +2284,7 @@ pub(crate) async fn fetch_channel_info(
                 Some(PromptChannelInfo {
                     name: name.unwrap_or("unknown").to_string(),
                     channel_type,
+                    model: None,
                 })
             }
             Ok(Err(e)) => {

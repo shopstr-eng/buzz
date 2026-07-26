@@ -995,6 +995,8 @@ pub struct ContextMessage {
 pub struct PromptChannelInfo {
     pub name: String,
     pub channel_type: String,
+    /// Desired LLM model ID from the channel's kind:39000 `model` tag.
+    pub model: Option<String>,
 }
 
 /// Minimal profile fields needed to label users in ACP prompts.
@@ -2976,6 +2978,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "engineering".into(),
             channel_type: "stream".into(),
+            model: None,
         };
 
         let prompt = format_prompt(
@@ -3007,6 +3010,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "DM".into(),
             channel_type: "dm".into(),
+            model: None,
         };
 
         let prompt = format_prompt(
@@ -3117,6 +3121,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "DM".into(),
             channel_type: "dm".into(),
+            model: None,
         };
         let ctx = ConversationContext::Dm {
             messages: vec![ContextMessage {
@@ -3373,6 +3378,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "DM".into(),
             channel_type: "dm".into(),
+            model: None,
         };
         // Thread context fetched (as the fetch path does for DM replies).
         let ctx = ConversationContext::Thread {
@@ -3430,6 +3436,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "DM".into(),
             channel_type: "dm".into(),
+            model: None,
         };
 
         // No context fetched — hints only.
@@ -3925,6 +3932,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "DM".into(),
             channel_type: "dm".into(),
+            model: None,
         };
 
         let prompt = format_prompt(
@@ -3988,6 +3996,7 @@ mod tests {
         let ci = PromptChannelInfo {
             name: "DM".into(),
             channel_type: "dm".into(),
+            model: None,
         };
 
         let prompt = format_prompt(
