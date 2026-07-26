@@ -2,16 +2,15 @@
  * Dialog to connect an AI agent to an existing channel.
  *
  * Preset mode  — picks a built-in AI model; publishes kind:9002 to update the
- *                channel's model/credentials so the ACP can provision it.
+ *                channel's model so the ACP can provision it.  API keys are
+ *                supplied automatically by the relay's keyless integrations.
  *
  * Custom mode  — accepts any Nostr pubkey (hex or npub); publishes kind:9000
- *                to add that pubkey as a channel member with the "agent" role.
+ *                to add that pubkey as a channel member with the "member" role.
  */
 
 import { useState } from "react";
-import {
-  X, Bot, KeyRound, Eye, EyeOff, Sparkles, UserPlus,
-} from "lucide-react";
+import { X, Bot, Sparkles, UserPlus } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
@@ -20,7 +19,6 @@ import {
   KIND_ADD_MEMBER,
   AI_MODELS,
   type ModelPreset,
-  type CredentialField,
 } from "../types";
 
 interface Props {
@@ -82,13 +80,6 @@ function ModelCard({
         <span className="rounded bg-black/5 px-1.5 py-0.5 text-[10px] font-medium text-black/50 dark:bg-white/10 dark:text-white/50">
           {preset.provider}
         </span>
-        {preset.credentials?.length ? (
-          <span className="flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400">
-            <KeyRound className="h-2.5 w-2.5" /> key required
-          </span>
-        ) : (
-          <span className="text-[10px] text-emerald-600 dark:text-emerald-400">no setup</span>
-        )}
       </div>
       <div
         className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
@@ -101,46 +92,6 @@ function ModelCard({
   );
 }
 
-function SecretInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: CredentialField;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const [visible, setVisible] = useState(false);
-  return (
-    <div>
-      <label className="mb-1.5 block text-xs font-semibold text-black/60 dark:text-white/60">
-        {field.label} <span className="text-red-500">*</span>
-      </label>
-      <div className="relative">
-        <input
-          type={visible ? "text" : "password"}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder ?? ""}
-          autoComplete="off"
-          spellCheck={false}
-          className="w-full rounded-md border border-black/15 bg-white py-2 pl-3 pr-9 font-mono text-sm text-black placeholder-black/25 outline-none focus:border-black/40 dark:border-white/15 dark:bg-[#222] dark:text-white dark:placeholder-white/25 dark:focus:border-white/40"
-        />
-        <button
-          type="button"
-          onClick={() => setVisible((v) => !v)}
-          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-black/30 transition-colors hover:text-black/60 dark:text-white/30 dark:hover:text-white/60"
-        >
-          {visible ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-        </button>
-      </div>
-      {field.hint && (
-        <p className="mt-1 text-[11px] text-black/40 dark:text-white/40">{field.hint}</p>
-      )}
-    </div>
-  );
-}
-
 /* ── Main dialog ─────────────────────────────────────────────────────────── */
 
 export function ConnectAgentDialog({ groupId, onClose }: Props) {
@@ -150,10 +101,6 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
   // Preset state
   const [selectedModel, setSelectedModel] = useState<ModelPreset | null>(null);
   const [modelName, setModelName] = useState("");
-  const [credentials, setCredentials] = useState<Record<string, string>>({});
-  function setCredential(key: string, value: string) {
-    setCredentials((prev) => ({ ...prev, [key]: value }));
-  }
 
   // Custom state
   const [pubkeyInput, setPubkeyInput] = useState("");
@@ -163,12 +110,6 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-
-  const needsCredentials =
-    tab === "preset" && Boolean(selectedModel?.credentials?.length);
-  const credentialsFilled =
-    !needsCredentials ||
-    (selectedModel?.credentials ?? []).every((f) => credentials[f.key]?.trim());
 
   async function handleConnect() {
     if (!connection) { setError("Not connected to relay."); return; }
@@ -192,17 +133,11 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
         // Include the specific model name if the user supplied or overrode it.
         const resolvedModel = modelName.trim() || selectedModel.defaultModel;
         if (resolvedModel) metaTags.push(["agent_config", "MODEL_NAME", resolvedModel]);
-        for (const [key, value] of Object.entries(credentials)) {
-          if (value.trim()) metaTags.push(["agent_config", key, value.trim()]);
-        }
+
         const metaSigned = await signFn({ kind: KIND_EDIT_METADATA, created_at: now, tags: metaTags, content: "" });
         connection.publish(metaSigned);
 
-        // 2. Add the ACP worker as a channel member via kind:9000 so it shows up
-        //    in the members panel and admin page. The pubkey is written to
-        //    /assets/relay-info.json by the startup script at boot time.
-        //    Role must be a valid NIP-29 MemberRole: "owner" | "admin" | "member" | "bot".
-        //    We use "member" so the relay accepts it; isAgent detection comes from kind:10100.
+        // 2. Add the ACP worker as a channel member via kind:9000.
         let acpPubkey: string | null = null;
         try {
           const resp = await fetch("/assets/relay-info.json");
@@ -211,28 +146,22 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
             acpPubkey = info.acp_pubkey ?? null;
           }
         } catch {
-          // fetch can fail in preview/mock mode — non-fatal, model tag was still set.
+          // Non-fatal — model tag was still set.
         }
 
         if (acpPubkey) {
-          const memberTags: string[][] = [
-            ["h", groupId],
-            ["p", acpPubkey],
-            ["role", "member"],
-          ];
           const memberSigned = await signFn({
             kind: KIND_ADD_MEMBER,
             created_at: now + 1,
-            tags: memberTags,
+            tags: [["h", groupId], ["p", acpPubkey], ["role", "member"]],
             content: "",
           });
           connection.publish(memberSigned);
         } else {
-          // Surface to user so they know member-add didn't fire.
           setError(
             "Agent model set, but could not add the agent as a channel member " +
-            "(relay-info.json unavailable). Refresh the page and try again, " +
-            "or add the agent manually via the Custom pubkey tab.",
+            "(relay-info.json unavailable). Refresh and try again, or add the agent " +
+            "manually via the Custom pubkey tab.",
           );
           setSubmitting(false);
           return;
@@ -240,14 +169,12 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
       } else {
         const pubkey = parsePubkey(pubkeyInput);
         if (!pubkey) { setError("Enter a valid hex pubkey or npub."); return; }
-        // Add the external agent pubkey as a channel member via kind:9000.
-        // Role "member" is the safest valid NIP-29 MemberRole for external agents.
-        const tags: string[][] = [
-          ["h", groupId],
-          ["p", pubkey],
-          ["role", "member"],
-        ];
-        const signed = await signFn({ kind: KIND_ADD_MEMBER, created_at: now, tags, content: "" });
+        const signed = await signFn({
+          kind: KIND_ADD_MEMBER,
+          created_at: now,
+          tags: [["h", groupId], ["p", pubkey], ["role", "member"]],
+          content: "",
+        });
         connection.publish(signed);
       }
 
@@ -262,7 +189,7 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
   const connectDisabled =
     submitting ||
     success ||
-    (tab === "preset" ? !selectedModel || !credentialsFilled : !pubkeyValid);
+    (tab === "preset" ? !selectedModel : !pubkeyValid);
 
   return (
     <div
@@ -312,7 +239,7 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
               <div className="flex items-start gap-2.5 rounded-lg bg-violet-50 px-3 py-2.5 dark:bg-violet-900/20">
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-600 dark:text-violet-400" />
                 <p className="text-xs text-violet-800 dark:text-violet-200">
-                  Select a model to activate in this channel. Credentials are stored privately on the relay.
+                  Select a model to activate in this channel. API keys are provided automatically by the relay.
                 </p>
               </div>
 
@@ -326,13 +253,12 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
                       const next = selectedModel?.id === preset.id ? null : preset;
                       setSelectedModel(next);
                       setModelName(next?.defaultModel ?? "");
-                      setCredentials({});
                     }}
                   />
                 ))}
               </div>
 
-              {/* Model name override — shown once a preset is selected */}
+              {/* Model name override */}
               {selectedModel && (
                 <div className="border-t border-black/10 pt-3 dark:border-white/10">
                   <label className="mb-1.5 block text-xs font-semibold text-black/60 dark:text-white/60">
@@ -349,26 +275,6 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
                   <p className="mt-1 text-[11px] text-black/40 dark:text-white/40">
                     Override the default model identifier sent to the agent.
                   </p>
-                </div>
-              )}
-
-              {/* Credential inputs for selected model */}
-              {selectedModel?.credentials?.length && (
-                <div className="space-y-3 border-t border-black/10 pt-3 dark:border-white/10">
-                  <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 dark:bg-amber-900/20">
-                    <KeyRound className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-                    <p className="text-[11px] text-amber-700 dark:text-amber-300">
-                      {selectedModel.name} requires an API key to run.
-                    </p>
-                  </div>
-                  {selectedModel.credentials.map((field) => (
-                    <SecretInput
-                      key={field.key}
-                      field={field}
-                      value={credentials[field.key] ?? ""}
-                      onChange={(v) => setCredential(field.key, v)}
-                    />
-                  ))}
                 </div>
               )}
             </>

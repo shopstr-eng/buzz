@@ -10,7 +10,7 @@ description: What was implemented and what still remains vs the desktop Buzz app
 - **Slash command hints** — `MessageComposer` detects `/` prefix and shows a picker with `/run`, `/review`, `/help`, `/approve`, `/cancel`, `/summary`. Works alongside `@` mention picker.
 - **Workflow channel chat** — `WorkflowChannelView` gained a "Chat" tab (via `AgentChatPanel` inner component) using `useMessages` + `useSendMessage` + `useReactions` + `MessageList` + `MessageComposer`. Has a banner nudging users to @mention agents and use slash commands.
 - **Historical workflow runs** — `use-workflow-runs.ts` split into a history subscription (`until: now, limit: 500`, self-closing after EOSE) + live subscription (`since: now`). Previously only live events were visible.
-- **buzz-cli built + wired as MCP server** — `cargo build -p buzz-cli --release` succeeded. `BUZZ_ACP_MCP_COMMAND` in `start-replit.sh` defaults to `target/release/buzz-cli`, giving the ACP agent `buzz messages send`, `buzz workflows list`, etc. as tools.
+- **buzz-cli built + wired as MCP server** — `cargo build -p buzz-cli --release` succeeded. The crate is `buzz-cli` but it produces binary `target/release/buzz` (not `buzz-cli`). `BUZZ_ACP_MCP_COMMAND` in `start-replit.sh` defaults to `target/release/buzz`. `build_rust_bin_if_missing buzz buzz-cli` is called at script top.
 
 ## ACP agent control commands (NOT slash commands)
 The ACP monitors kind:9 for `!rotate`, `!cancel`, `!shutdown` from the owner pubkey. These are `!` prefix, not `/` prefix. The `/` slash commands in `MessageComposer` are user prompts forwarded to the LLM agent as content.

@@ -44,15 +44,6 @@ export const KIND_ADD_MEMBER = 9000;
 export const KIND_REMOVE_MEMBER = 9001;
 export const KIND_EDIT_METADATA = 9002;
 
-/** A single credential field required to activate a model. */
-export interface CredentialField {
-  /** Environment-variable-style key stored as an agent_config tag. */
-  key: string;
-  label: string;
-  placeholder?: string;
-  hint?: string;
-}
-
 /** AI model presets for workflow channels */
 export interface ModelPreset {
   id: string;
@@ -64,8 +55,6 @@ export interface ModelPreset {
    * The user can override this in the connect dialog.
    */
   defaultModel?: string;
-  /** If present, the user must supply these before the channel is created. */
-  credentials?: CredentialField[];
 }
 
 export const AI_MODELS: ModelPreset[] = [
@@ -75,13 +64,6 @@ export const AI_MODELS: ModelPreset[] = [
     provider: "Anthropic",
     description: "Anthropic's Claude assistant.",
     defaultModel: "claude-opus-4-5",
-    credentials: [
-      {
-        key: "ANTHROPIC_API_KEY",
-        label: "Anthropic API key",
-        placeholder: "sk-ant-api03-…",
-      },
-    ],
   },
   {
     id: "codex-acp",
@@ -89,12 +71,5 @@ export const AI_MODELS: ModelPreset[] = [
     provider: "OpenAI",
     description: "OpenAI's Codex coding agent.",
     defaultModel: "gpt-4o",
-    credentials: [
-      {
-        key: "OPENAI_API_KEY",
-        label: "OpenAI API key",
-        placeholder: "sk-proj-…",
-      },
-    ],
   },
 ];
