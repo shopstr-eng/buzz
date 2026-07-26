@@ -70,27 +70,6 @@ export interface ModelPreset {
 
 export const AI_MODELS: ModelPreset[] = [
   {
-    id: "buzz-ai",
-    name: "Buzz AI",
-    provider: "Block",
-    description: "Block's built-in AI — no extra setup needed.",
-  },
-  {
-    id: "goose-acp",
-    name: "Goose",
-    provider: "Block",
-    description: "Block's open-source coding agent. Needs an Anthropic key.",
-    defaultModel: "claude-opus-4-5",
-    credentials: [
-      {
-        key: "ANTHROPIC_API_KEY",
-        label: "Anthropic API key",
-        placeholder: "sk-ant-api03-…",
-        hint: "Goose uses Claude under the hood.",
-      },
-    ],
-  },
-  {
     id: "claude",
     name: "Claude",
     provider: "Anthropic",
