@@ -135,7 +135,8 @@ build_rust_bin_if_missing() {
 }
 build_rust_bin_if_missing buzz-acp   buzz-acp
 build_rust_bin_if_missing buzz-agent buzz-agent
-build_rust_bin_if_missing buzz-cli   buzz-cli
+# buzz-cli is built inside _start_acp (after the relay is already serving)
+# so it doesn't block the startup healthcheck.
 
 # ---------------------------------------------------------------------------
 # 3. Run migrations (idempotent — safe to run on every restart)
@@ -329,6 +330,15 @@ trap '_cleanup' SIGTERM SIGINT
 _start_acp() {
   [[ -z "$ACP_PRIVATE_KEY" ]] && return
   [[ ! -x "$ACP_BIN" ]] && { echo "==> Warning: buzz-acp binary not found — ACP workers disabled." >&2; return; }
+
+  # Build buzz-cli here (after the relay is already up and passing healthchecks)
+  # rather than at script start where it would block port 5000 from opening.
+  local CLI_BIN="${REPO_ROOT}/target/release/buzz-cli"
+  if [[ ! -x "$CLI_BIN" ]]; then
+    echo "==> buzz-cli not pre-built — compiling now (relay is already serving)..."
+    cargo build -p buzz-cli --release --ignore-rust-version 2>&1
+    echo "==> buzz-cli build complete."
+  fi
 
   local bind_port
   bind_port=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
