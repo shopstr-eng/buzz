@@ -9,8 +9,8 @@
  *                to add that pubkey as a channel member with the "member" role.
  */
 
-import { useState } from "react";
-import { X, Bot, Sparkles, UserPlus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, Bot, Sparkles, UserPlus, AlertTriangle } from "lucide-react";
 import { nip19 } from "nostr-tools";
 import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
@@ -110,6 +110,20 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Provider availability — fetched from relay-info.json on mount.
+  // null = still loading, true/false = resolved.
+  const [providerConfigured, setProviderConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/assets/relay-info.json")
+      .then((r) => r.ok ? r.json() : null)
+      .then((info: { provider_configured?: boolean } | null) => {
+        if (!cancelled) setProviderConfigured(info?.provider_configured ?? true);
+      })
+      .catch(() => { if (!cancelled) setProviderConfigured(true); /* assume ok on error */ });
+    return () => { cancelled = true; };
+  }, []);
 
   async function handleConnect() {
     if (!connection) { setError("Not connected to relay."); return; }
@@ -234,6 +248,18 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
 
         {/* Body */}
         <div className="space-y-3 p-5">
+          {/* Provider warning — shown when relay reports no AI provider configured. */}
+          {providerConfigured === false && (
+            <div className="flex items-start gap-2.5 rounded-lg bg-amber-50 px-3 py-2.5 dark:bg-amber-900/20">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                <span className="font-semibold">No AI provider configured.</span>{" "}
+                The agent will be added to this channel, but it cannot respond until a provider is set up.
+                Go to <span className="font-semibold">Admin → Settings → AI Provider</span> and restart the relay.
+              </p>
+            </div>
+          )}
+
           {tab === "preset" ? (
             <>
               <div className="flex items-start gap-2.5 rounded-lg bg-violet-50 px-3 py-2.5 dark:bg-violet-900/20">

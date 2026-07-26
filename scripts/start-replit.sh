@@ -241,8 +241,18 @@ if [[ -n "$ACP_PRIVATE_KEY" ]]; then
     # The web UI fetches /assets/relay-info.json to learn the ACP pubkey before
     # publishing kind:9000 to add the agent as a channel member.
     if [[ -d web/dist/assets ]]; then
-      printf '{"acp_pubkey":"%s"}\n' "$ACP_PUBKEY" > web/dist/assets/relay-info.json
-      echo "==> ACP pubkey written to web/dist/assets/relay-info.json"
+      # Check whether an AI provider is configured so the web UI can warn
+      # users before they try to @mention the agent and see nothing.
+      _PROVIDER_CONFIGURED="false"
+      if [[ -f "${REPO_ROOT}/.env.agent" ]] && grep -q "^BUZZ_AGENT_PROVIDER=" "${REPO_ROOT}/.env.agent"; then
+        _PROVIDER_CONFIGURED="true"
+      fi
+      if [[ -n "${BUZZ_AGENT_PROVIDER:-}" ]]; then
+        _PROVIDER_CONFIGURED="true"
+      fi
+      printf '{"acp_pubkey":"%s","provider_configured":%s}\n' \
+        "$ACP_PUBKEY" "$_PROVIDER_CONFIGURED" > web/dist/assets/relay-info.json
+      echo "==> ACP pubkey written to web/dist/assets/relay-info.json (provider_configured=${_PROVIDER_CONFIGURED})"
     fi
   else
     echo "==> Warning: could not derive ACP pubkey — skipping member registration." >&2

@@ -12,7 +12,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   X, Bot, Crown, ShieldCheck, UserRound, Zap,
   MoreHorizontal, ShieldPlus, ShieldMinus, UserMinus,
-  Loader2,
+  Loader2, AlertTriangle,
 } from "lucide-react";
 import { useChannelMembers, type ChannelMember } from "../use-channel-members";
 import { ConnectAgentDialog } from "./ConnectAgentDialog";
@@ -304,6 +304,19 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
   const { members, isLoading, kickMember, changeRole } = useChannelMembers(groupId);
   const [showConnectAgent, setShowConnectAgent] = useState(false);
 
+  // Check whether the relay has an AI provider configured.
+  const [providerConfigured, setProviderConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/assets/relay-info.json")
+      .then((r) => r.ok ? r.json() : null)
+      .then((info: { provider_configured?: boolean } | null) => {
+        if (!cancelled) setProviderConfigured(info?.provider_configured ?? true);
+      })
+      .catch(() => { if (!cancelled) setProviderConfigured(true); });
+    return () => { cancelled = true; };
+  }, []);
+
   // Fetch kind:0 / kind:10100 profiles for all members.
   const memberPubkeys = useMemo(() => members.map((m) => m.pubkey), [members]);
   const profiles = useProfiles(memberPubkeys);
@@ -414,7 +427,7 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
       </div>
 
       {/* Footer */}
-      <div className="shrink-0 space-y-1.5 border-t border-black/10 px-3 py-2.5 dark:border-white/10">
+      <div className="shrink-0 space-y-1 border-t border-black/10 px-3 py-2.5 dark:border-white/10">
         <button
           type="button"
           onClick={() => setShowConnectAgent(true)}
@@ -422,7 +435,21 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
         >
           <Zap className="h-3 w-3 text-violet-500/70" />
           Connect agent
+          {providerConfigured === false && (
+            <span
+              className="ml-auto"
+              title="No AI provider configured — agents won't respond until one is set up in Admin → Settings"
+            >
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+            </span>
+          )}
         </button>
+        {providerConfigured === false && (
+          <p className="px-2 text-[10px] leading-tight text-amber-600/80 dark:text-amber-400/80">
+            No AI provider configured. Set one up in{" "}
+            <span className="font-semibold">Admin → Settings → AI Provider</span>.
+          </p>
+        )}
       </div>
 
       {showConnectAgent && (
