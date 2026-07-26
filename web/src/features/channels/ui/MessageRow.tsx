@@ -4,6 +4,7 @@ import type { ChatMessage } from "../types";
 import type { EmojiReactions } from "../use-reactions";
 import { QUICK_EMOJIS } from "../use-reactions";
 import { relativeTime } from "@/shared/lib/relative-time";
+import type { Profile } from "@/shared/hooks/use-profiles";
 
 interface Props {
   message: ChatMessage;
@@ -18,7 +19,11 @@ interface Props {
   /** Called when user clicks the Reply button */
   onReply?: () => void;
   /** The message this message is replying to, for inline context */
-  replyToMessage?: { content: string; pubkey: string } | null;
+  replyToMessage?: { content: string; pubkey: string; senderName?: string } | null;
+  /** Resolved kind:0 / kind:10100 profile for this message's author */
+  profile?: Profile;
+  /** Resolved profile for the replied-to message's author */
+  replyToProfile?: Profile;
 }
 
 /** Colourful deterministic avatar background from pubkey */
@@ -36,6 +41,43 @@ function avatarColor(pubkey: string): string {
 
 function truncatePubkey(pubkey: string): string {
   return `${pubkey.slice(0, 4)}…${pubkey.slice(-4)}`;
+}
+
+/** Avatar: picture if available, otherwise coloured initial */
+function Avatar({
+  pubkey,
+  profile,
+  size = "md",
+}: {
+  pubkey: string;
+  profile?: Profile;
+  size?: "sm" | "md";
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const bg = avatarColor(pubkey);
+  const cls =
+    size === "sm"
+      ? "h-4 w-4 rounded-full text-[8px] font-bold text-white"
+      : "h-8 w-8 rounded-full text-xs font-semibold text-white";
+
+  if (profile?.picture && !imgFailed) {
+    return (
+      <img
+        src={profile.picture}
+        alt=""
+        className={`${cls} object-cover`}
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center ${cls}`}
+      style={{ backgroundColor: bg }}
+    >
+      {(profile?.name?.[0] ?? pubkey[0])?.toUpperCase() ?? "?"}
+    </div>
+  );
 }
 
 /**
@@ -76,8 +118,19 @@ function ContentWithMentions({ content }: { content: string }) {
 }
 
 /** Inline reply-to quote banner */
-function ReplyContext({ content, pubkey }: { content: string; pubkey: string }) {
+function ReplyContext({
+  content,
+  pubkey,
+  senderName,
+  profile,
+}: {
+  content: string;
+  pubkey: string;
+  senderName?: string;
+  profile?: Profile;
+}) {
   const color = avatarColor(pubkey);
+  const label = senderName ?? profile?.name ?? truncatePubkey(pubkey);
   return (
     <div
       className="mb-1 flex items-start gap-1.5 rounded border-l-2 bg-black/[0.03] px-2 py-1 dark:bg-white/[0.04]"
@@ -85,7 +138,7 @@ function ReplyContext({ content, pubkey }: { content: string; pubkey: string }) 
     >
       <span className="min-w-0 truncate text-[11px] text-black/50 dark:text-white/50">
         <span className="font-semibold" style={{ color }}>
-          {truncatePubkey(pubkey)}
+          {label}
         </span>{" "}
         {content.slice(0, 100)}{content.length > 100 ? "…" : ""}
       </span>
@@ -150,12 +203,15 @@ export function MessageRow({
   onAddReaction,
   onReply,
   replyToMessage,
+  profile,
+  replyToProfile,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const isMe = myPubkey === message.pubkey;
   const bg = useMemo(() => avatarColor(message.pubkey), [message.pubkey]);
-  const initial = message.pubkey[0]?.toUpperCase() ?? "?";
-  const shortKey = truncatePubkey(message.pubkey);
+  const displayName = isMe
+    ? "You"
+    : (profile?.name ?? truncatePubkey(message.pubkey));
   const timeStr = useMemo(() => relativeTime(message.createdAt), [message.createdAt]);
   const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/.test(message.content);
 
@@ -168,12 +224,7 @@ export function MessageRow({
       {/* Avatar column */}
       <div className="w-8 shrink-0">
         {showHeader ? (
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white"
-            style={{ backgroundColor: bg }}
-          >
-            {initial}
-          </div>
+          <Avatar pubkey={message.pubkey} profile={profile} />
         ) : null}
       </div>
 
@@ -181,8 +232,12 @@ export function MessageRow({
       <div className="min-w-0 flex-1">
         {showHeader && (
           <div className="flex items-baseline gap-2">
-            <span className="text-sm font-semibold" style={{ color: isMe ? "#3b9dd3" : bg }}>
-              {isMe ? "You" : shortKey}
+            <span
+              className="text-sm font-semibold"
+              style={{ color: isMe ? "#3b9dd3" : bg }}
+              title={message.pubkey}
+            >
+              {displayName}
             </span>
             <span className="text-[11px] text-black/35 dark:text-white/35">{timeStr}</span>
           </div>
@@ -190,7 +245,12 @@ export function MessageRow({
 
         {/* Reply context */}
         {replyToMessage && (
-          <ReplyContext content={replyToMessage.content} pubkey={replyToMessage.pubkey} />
+          <ReplyContext
+            content={replyToMessage.content}
+            pubkey={replyToMessage.pubkey}
+            senderName={replyToMessage.senderName}
+            profile={replyToProfile}
+          />
         )}
 
         <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
@@ -203,43 +263,44 @@ export function MessageRow({
         )}
       </div>
 
-      {/* Hover action bar — reply + react */}
-      {(onReply || onAddReaction) && (
-        <div className="absolute right-4 top-0 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-black/10 bg-white p-0.5 shadow-sm group-hover:flex dark:border-white/10 dark:bg-[#252525]">
-          {onReply && (
+      {/* Hover toolbar */}
+      <div className="absolute right-4 top-0 hidden -translate-y-1/2 items-center gap-0.5 rounded-lg border border-black/10 bg-white p-0.5 shadow-sm group-hover:flex dark:border-white/10 dark:bg-[#222]">
+        {onAddReaction && (
+          <div className="relative">
             <button
               type="button"
-              onClick={onReply}
-              title="Reply"
-              className="rounded p-1 text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"
+              onClick={() => setPickerOpen((o) => !o)}
+              className="rounded p-1.5 text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"
+              title="React"
             >
-              <CornerUpLeft className="h-3.5 w-3.5" />
+              <Smile className="h-3.5 w-3.5" />
             </button>
-          )}
-          {onAddReaction && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setPickerOpen((o) => !o)}
-                title="React"
-                className="rounded p-1 text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"
+            {pickerOpen && (
+              <div
+                className="absolute right-0 top-full z-10 mt-1"
+                onMouseLeave={() => setPickerOpen(false)}
               >
-                <Smile className="h-3.5 w-3.5" />
-              </button>
-              {pickerOpen && (
-                <div className="absolute bottom-full right-0 mb-1 z-20">
-                  <QuickReactPicker
-                    onSelect={(emoji) => {
-                      onAddReaction(emoji);
-                      setPickerOpen(false);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                <QuickReactPicker
+                  onSelect={(e) => {
+                    onAddReaction(e);
+                    setPickerOpen(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {onReply && (
+          <button
+            type="button"
+            onClick={onReply}
+            className="rounded p-1.5 text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"
+            title="Reply"
+          >
+            <CornerUpLeft className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

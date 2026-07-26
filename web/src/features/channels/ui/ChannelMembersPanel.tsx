@@ -1,13 +1,14 @@
 /**
  * Right-side slide panel showing who is in the current channel.
  * Members come from kind:39002; agents are identified by kind:10100.
+ * Profiles (display names, avatars) come from kind:0 / kind:10100.
  *
  * Owners and admins see inline action buttons for kicking and role changes.
  * The relay enforces server-side authorisation; we just shape the UI to what
  * the signed-in user is likely allowed to do.
  */
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   X, Bot, Crown, ShieldCheck, UserRound, Zap,
   MoreHorizontal, ShieldPlus, ShieldMinus, UserMinus,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { useChannelMembers, type ChannelMember } from "../use-channel-members";
 import { ConnectAgentDialog } from "./ConnectAgentDialog";
+import { useProfiles, type Profile } from "@/shared/hooks/use-profiles";
 
 // Deterministic avatar colour from pubkey.
 const AVATAR_PALETTE = [
@@ -34,6 +36,43 @@ function RoleBadge({ role }: { role: ChannelMember["role"] }) {
   if (role === "admin")
     return <ShieldCheck className="h-3 w-3 shrink-0 text-blue-500" aria-label="Admin" />;
   return null;
+}
+
+/** Small avatar: picture if available, coloured initial otherwise. */
+function MemberAvatar({
+  member,
+  profile,
+}: {
+  member: ChannelMember;
+  profile?: Profile;
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const bg = avatarColor(member.pubkey);
+
+  if (profile?.picture && !imgFailed) {
+    return (
+      <img
+        src={profile.picture}
+        alt=""
+        className="h-6 w-6 shrink-0 rounded-full object-cover"
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+      style={{ backgroundColor: bg }}
+      title={member.pubkey}
+    >
+      {member.isAgent ? (
+        <Bot className="h-3.5 w-3.5" />
+      ) : (
+        (profile?.name?.[0] ?? member.pubkey[0]).toUpperCase()
+      )}
+    </div>
+  );
 }
 
 // ── Action menu ──────────────────────────────────────────────────────────────
@@ -96,7 +135,7 @@ function ActionMenu({ member, myRole, onKick, onChangeRole, onClose }: ActionMen
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
         >
           <UserMinus className="h-3.5 w-3.5" />
-          Remove from channel
+          {member.isAgent ? "Disconnect agent" : "Remove from channel"}
         </button>
       )}
     </div>
@@ -107,6 +146,7 @@ function ActionMenu({ member, myRole, onKick, onChangeRole, onClose }: ActionMen
 
 interface MemberRowProps {
   member: ChannelMember;
+  profile?: Profile;
   /** The signed-in user's role in this channel — null if not a member. */
   myRole: "owner" | "admin" | "member" | null;
   isSelf: boolean;
@@ -114,8 +154,9 @@ interface MemberRowProps {
   onChangeRole: (pubkey: string, role: "admin" | "member") => Promise<void>;
 }
 
-function MemberRow({ member, myRole, isSelf, onKick, onChangeRole }: MemberRowProps) {
+function MemberRow({ member, profile, myRole, isSelf, onKick, onChangeRole }: MemberRowProps) {
   const short = `${member.pubkey.slice(0, 7)}…${member.pubkey.slice(-4)}`;
+  const displayName = profile?.name ?? short;
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [acting, setActing] = useState(false);
@@ -159,7 +200,7 @@ function MemberRow({ member, myRole, isSelf, onKick, onChangeRole }: MemberRowPr
     return (
       <div className="flex items-center gap-1 rounded-md px-2 py-1.5">
         <span className="min-w-0 flex-1 truncate text-xs text-red-600 dark:text-red-400">
-          Remove {short}?
+          {member.isAgent ? "Disconnect" : "Remove"} {displayName}?
         </span>
         <button
           type="button"
@@ -168,7 +209,7 @@ function MemberRow({ member, myRole, isSelf, onKick, onChangeRole }: MemberRowPr
           className="flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 hover:bg-red-200 disabled:opacity-50 dark:bg-red-900/40 dark:text-red-300 dark:hover:bg-red-900/60"
         >
           {acting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : null}
-          {acting ? "…" : "Remove"}
+          {acting ? "…" : member.isAgent ? "Disconnect" : "Remove"}
         </button>
         <button
           type="button"
@@ -185,24 +226,14 @@ function MemberRow({ member, myRole, isSelf, onKick, onChangeRole }: MemberRowPr
   return (
     <div className="group relative flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
       {/* Avatar */}
-      <div
-        className="relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-        style={{ backgroundColor: avatarColor(member.pubkey) }}
-        title={member.pubkey}
-      >
-        {member.isAgent ? (
-          <Bot className="h-3.5 w-3.5" />
-        ) : (
-          member.pubkey[0].toUpperCase()
-        )}
-      </div>
+      <MemberAvatar member={member} profile={profile} />
 
       {/* Label */}
       <span
         className="min-w-0 flex-1 truncate text-xs text-black/70 dark:text-white/70"
         title={member.pubkey}
       >
-        {short}
+        {displayName}
       </span>
 
       {/* Badges */}
@@ -273,6 +304,10 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
   const { members, isLoading, kickMember, changeRole } = useChannelMembers(groupId);
   const [showConnectAgent, setShowConnectAgent] = useState(false);
 
+  // Fetch kind:0 / kind:10100 profiles for all members.
+  const memberPubkeys = useMemo(() => members.map((m) => m.pubkey), [members]);
+  const profiles = useProfiles(memberPubkeys);
+
   const myRole = myPubkey
     ? (members.find((m) => m.pubkey === myPubkey)?.role ?? null)
     : null;
@@ -333,6 +368,7 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
                   <MemberRow
                     key={m.pubkey}
                     member={m}
+                    profile={profiles.get(m.pubkey)}
                     myRole={myRole}
                     isSelf={m.pubkey === myPubkey}
                     onKick={kickMember}
@@ -348,6 +384,7 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
                   <MemberRow
                     key={m.pubkey}
                     member={m}
+                    profile={profiles.get(m.pubkey)}
                     myRole={myRole}
                     isSelf={m.pubkey === myPubkey}
                     onKick={kickMember}
@@ -363,6 +400,7 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
                   <MemberRow
                     key={m.pubkey}
                     member={m}
+                    profile={profiles.get(m.pubkey)}
                     myRole={myRole}
                     isSelf={m.pubkey === myPubkey}
                     onKick={kickMember}

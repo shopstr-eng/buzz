@@ -1,11 +1,18 @@
 import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { BookMarked, Hash, Lock, Wifi, WifiOff, Loader, LogOut, Zap, MessageSquare, Plus } from "lucide-react";
+import {
+  BookMarked, Hash, Lock, Wifi, WifiOff, Loader, LogOut,
+  Zap, MessageSquare, Plus, Pencil,
+} from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../use-channels";
 import type { Channel, ChannelType } from "../types";
 import { CreateChannelDialog } from "./CreateChannelDialog";
+import { ProfileEditDialog } from "./ProfileEditDialog";
+import { useProfiles } from "@/shared/hooks/use-profiles";
 import buzzAppIcon from "@/assets/app-icon@3x.png";
+
+const EMPTY_PUBKEYS: string[] = [];
 
 function ConnectionBadge() {
   const { connectionState } = useRelay();
@@ -61,6 +68,17 @@ export function ChannelSidebar() {
   const { location } = useRouterState();
   const reposActive = location.pathname.startsWith("/repos");
   const [showCreate, setShowCreate] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+
+  // Fetch own profile for display name in the footer.
+  const selfPubkeys = identity ? [identity.pubkey] : EMPTY_PUBKEYS;
+  const profiles = useProfiles(selfPubkeys);
+  const myProfile = identity ? profiles.get(identity.pubkey) : undefined;
+
+  const shortPubkey = identity
+    ? `${identity.pubkey.slice(0, 8)}…${identity.pubkey.slice(-4)}`
+    : null;
+  const displayName = myProfile?.name ?? shortPubkey;
 
   return (
     <>
@@ -140,21 +158,36 @@ export function ChannelSidebar() {
         <div className="shrink-0 border-t border-black/10 px-3 py-2.5 dark:border-white/10">
           <ConnectionBadge />
           {identity && (
-            <div className="mt-1.5 flex items-center justify-between gap-2">
+            <div className="mt-1.5 flex items-center justify-between gap-1">
+              {/* Name / pubkey */}
               <span
-                className="min-w-0 truncate text-[11px] text-black/40 dark:text-white/40"
+                className="min-w-0 truncate text-[11px] text-black/50 dark:text-white/40"
                 title={identity.pubkey}
               >
-                {identity.pubkey.slice(0, 8)}…{identity.pubkey.slice(-4)}
+                {displayName}
               </span>
-              <button
-                type="button"
-                onClick={logout}
-                title="Sign out"
-                className="shrink-0 text-black/30 transition-colors hover:text-black/70 dark:text-white/30 dark:hover:text-white/70"
-              >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
+
+              {/* Edit profile + logout */}
+              <div className="flex shrink-0 items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfile(true)}
+                  title="Edit profile"
+                  aria-label="Edit profile"
+                  className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black/70 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/70"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  title="Sign out"
+                  aria-label="Sign out"
+                  className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black/70 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/70"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -162,6 +195,9 @@ export function ChannelSidebar() {
 
       {showCreate && (
         <CreateChannelDialog onClose={() => setShowCreate(false)} />
+      )}
+      {showEditProfile && (
+        <ProfileEditDialog onClose={() => setShowEditProfile(false)} />
       )}
     </>
   );

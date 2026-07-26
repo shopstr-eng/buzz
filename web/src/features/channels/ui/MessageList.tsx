@@ -2,6 +2,7 @@ import { useEffect, useRef, useMemo } from "react";
 import type { ChatMessage } from "../types";
 import type { ReactionsMap } from "../use-reactions";
 import { MessageRow } from "./MessageRow";
+import { useProfiles } from "@/shared/hooks/use-profiles";
 
 interface Props {
   messages: ChatMessage[];
@@ -28,7 +29,16 @@ export function MessageList({
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
 
-  // Build a lookup map for reply-to context
+  // Collect unique author pubkeys across all messages for profile subscription.
+  const authorPubkeys = useMemo(() => {
+    const seen = new Set<string>();
+    for (const msg of messages) seen.add(msg.pubkey);
+    return [...seen];
+  }, [messages]);
+
+  const profiles = useProfiles(authorPubkeys);
+
+  // Build a lookup map for reply-to context.
   const messagesById = useMemo(() => {
     const m = new Map<string, ChatMessage>();
     for (const msg of messages) m.set(msg.id, msg);
@@ -103,7 +113,21 @@ export function MessageList({
           prev.pubkey !== msg.pubkey ||
           msg.createdAt - prev.createdAt > 300;
 
-        const replyToMessage = msg.replyToId ? messagesById.get(msg.replyToId) ?? null : null;
+        const replyToMsg = msg.replyToId
+          ? messagesById.get(msg.replyToId) ?? null
+          : null;
+
+        const replyToProfile = replyToMsg
+          ? profiles.get(replyToMsg.pubkey)
+          : undefined;
+
+        const replyToContext = replyToMsg
+          ? {
+              content: replyToMsg.content,
+              pubkey: replyToMsg.pubkey,
+              senderName: replyToProfile?.name ?? undefined,
+            }
+          : null;
 
         return (
           <MessageRow
@@ -112,9 +136,13 @@ export function MessageList({
             myPubkey={myPubkey}
             showHeader={showHeader}
             reactions={reactions?.[msg.id]}
-            onAddReaction={onAddReaction ? (emoji) => onAddReaction(msg.id, emoji) : undefined}
+            onAddReaction={
+              onAddReaction ? (emoji) => onAddReaction(msg.id, emoji) : undefined
+            }
             onReply={onReply ? () => onReply(msg) : undefined}
-            replyToMessage={replyToMessage}
+            replyToMessage={replyToContext}
+            profile={profiles.get(msg.pubkey)}
+            replyToProfile={replyToProfile}
           />
         );
       })}

@@ -29,6 +29,7 @@ export interface ChatMessage {
 }
 
 /** Nostr event kinds used by Buzz chat */
+export const KIND_METADATA = 0;
 export const KIND_GROUP_METADATA = 39000;
 export const KIND_GROUP_ADMINS = 39001;
 export const KIND_GROUP_MEMBERS = 39002;
