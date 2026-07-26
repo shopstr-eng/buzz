@@ -90,6 +90,7 @@ function ChatChannelView({ channel }: Props) {
           reactions={reactions}
           onAddReaction={(msgId, emoji) => addReaction(msgId, emoji)}
           onReply={(msg) => setReplyTo(msg)}
+          memberProfiles={memberProfiles}
         />
 
         {/* Composer */}

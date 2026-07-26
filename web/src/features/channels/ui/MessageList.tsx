@@ -13,6 +13,10 @@ interface Props {
   reactions?: ReactionsMap;
   onAddReaction?: (messageId: string, emoji: string) => void;
   onReply?: (message: ChatMessage) => void;
+  /** Profiles for all channel members (kind:0 / kind:10100), pre-fetched by the
+   *  parent.  Merged with author-only profiles so agent names and @-mention chips
+   *  resolve even before the member has sent any messages. */
+  memberProfiles?: Map<string, import("@/shared/hooks/use-profiles").Profile>;
 }
 
 /** shortKey matches the format inserted by MessageComposer: 8hex + … + 4hex */
@@ -29,6 +33,7 @@ export function MessageList({
   reactions,
   onAddReaction,
   onReply,
+  memberProfiles,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,7 +46,19 @@ export function MessageList({
     return [...seen];
   }, [messages]);
 
-  const profiles = useProfiles(authorPubkeys);
+  const authorProfiles = useProfiles(authorPubkeys);
+
+  // Merge member profiles (all channel members, pre-fetched by the parent) with
+  // author-only profiles.  Author profiles win on conflict so a user's own sent
+  // messages always show their latest kind:0.  This ensures the agent's kind:10100
+  // name resolves in message headers and @mention chips even before the agent has
+  // sent its first message.
+  const profiles = useMemo(() => {
+    if (!memberProfiles?.size) return authorProfiles;
+    const merged = new Map(memberProfiles);
+    for (const [k, v] of authorProfiles) merged.set(k, v);
+    return merged;
+  }, [authorProfiles, memberProfiles]);
 
   // Build mention lookup: shortKey(pubkey) → display name.
   // Used by ContentWithMentions to replace @pubkey chips with real names.

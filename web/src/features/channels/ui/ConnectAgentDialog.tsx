@@ -170,7 +170,9 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
             tags: [["h", groupId], ["p", acpPubkey], ["role", "member"]],
             content: "",
           });
-          connection.publish(memberSigned);
+          // publishAndWait surfaces relay rejections (permission errors, etc.)
+          // so we don't silently show "success" when the member wasn't actually added.
+          await connection.publishAndWait(memberSigned);
         } else {
           setError(
             "Agent model set, but could not add the agent as a channel member " +
@@ -189,7 +191,7 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
           tags: [["h", groupId], ["p", pubkey], ["role", "member"]],
           content: "",
         });
-        connection.publish(signed);
+        await connection.publishAndWait(signed);
       }
 
       setSuccess(true);
