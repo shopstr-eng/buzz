@@ -15,6 +15,11 @@ interface Props {
   onReply?: (message: ChatMessage) => void;
 }
 
+/** shortKey matches the format inserted by MessageComposer: 8hex + … + 4hex */
+function shortKey(pubkey: string): string {
+  return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`;
+}
+
 export function MessageList({
   messages,
   myPubkey,
@@ -38,23 +43,28 @@ export function MessageList({
 
   const profiles = useProfiles(authorPubkeys);
 
-  // Build a lookup map for reply-to context.
+  // Build mention lookup: shortKey(pubkey) → display name.
+  // Used by ContentWithMentions to replace @pubkey chips with real names.
+  const mentionNames = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const [pubkey, profile] of profiles) {
+      if (profile.name) m.set(shortKey(pubkey), profile.name);
+    }
+    return m;
+  }, [profiles]);
+
   const messagesById = useMemo(() => {
     const m = new Map<string, ChatMessage>();
     for (const msg of messages) m.set(msg.id, msg);
     return m;
   }, [messages]);
 
-  // Auto-scroll to bottom when new messages arrive (only when already near bottom).
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-
     const newMessages = messages.length > prevLengthRef.current;
     prevLengthRef.current = messages.length;
-
     if (!newMessages) return;
-
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     if (distanceFromBottom < 200) {
@@ -121,14 +131,6 @@ export function MessageList({
           ? profiles.get(replyToMsg.pubkey)
           : undefined;
 
-        const replyToContext = replyToMsg
-          ? {
-              content: replyToMsg.content,
-              pubkey: replyToMsg.pubkey,
-              senderName: replyToProfile?.name ?? undefined,
-            }
-          : null;
-
         return (
           <MessageRow
             key={msg.id}
@@ -140,9 +142,18 @@ export function MessageList({
               onAddReaction ? (emoji) => onAddReaction(msg.id, emoji) : undefined
             }
             onReply={onReply ? () => onReply(msg) : undefined}
-            replyToMessage={replyToContext}
+            replyToMessage={
+              replyToMsg
+                ? {
+                    content: replyToMsg.content,
+                    pubkey: replyToMsg.pubkey,
+                    senderName: replyToProfile?.name ?? undefined,
+                  }
+                : null
+            }
             profile={profiles.get(msg.pubkey)}
             replyToProfile={replyToProfile}
+            mentionNames={mentionNames}
           />
         );
       })}

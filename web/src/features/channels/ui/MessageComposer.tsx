@@ -2,6 +2,7 @@ import { useRef, useState, useCallback } from "react";
 import { SendHorizonal, AtSign, X, CornerUpLeft, Zap } from "lucide-react";
 import type { ChannelMember } from "../use-channel-members";
 import type { ChatMessage } from "../types";
+import type { Profile } from "@/shared/hooks/use-profiles";
 
 interface Props {
   channelName: string;
@@ -9,6 +10,8 @@ interface Props {
   isSending: boolean;
   disabled?: boolean;
   members?: ChannelMember[];
+  /** Resolved kind:0/10100 profiles for channel members, keyed by pubkey. */
+  profiles?: Map<string, Profile>;
   /** Message being replied to — shows a dismissable banner above the input */
   replyTo?: ChatMessage | null;
   onClearReply?: () => void;
@@ -38,15 +41,12 @@ function getMentionAt(text: string, cursor: number): { start: number; query: str
 
 /** Scan backwards from cursor to find an active /slash-command query. */
 function getSlashAt(text: string, cursor: number): { start: number; query: string } | null {
-  // Allow "/cmd" or "@mention /cmd"
   const trimmed = text.slice(0, cursor);
   const slashIdx = trimmed.lastIndexOf("/");
   if (slashIdx === -1) return null;
-  // Only treat it as a slash command if the "/" is at the start or after whitespace or a mention
   const before = trimmed.slice(0, slashIdx);
   if (before.length > 0 && !/[\s\u2026]$/.test(before)) return null;
   const query = trimmed.slice(slashIdx + 1);
-  // Must be a simple word (no spaces after the slash)
   if (/\s/.test(query)) return null;
   return { start: slashIdx, query: query.toLowerCase() };
 }
@@ -84,6 +84,7 @@ export function MessageComposer({
   isSending,
   disabled,
   members = [],
+  profiles,
   replyTo,
   onClearReply,
   hasWorkflows,
@@ -115,7 +116,6 @@ export function MessageComposer({
     const newValue = e.target.value;
     setValue(newValue);
 
-    // Auto-grow up to ~6 lines
     const el = e.target;
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 144)}px`;
@@ -127,7 +127,13 @@ export function MessageComposer({
     if (mention && members.length > 0) {
       const q = mention.query.toLowerCase();
       const filtered = members
-        .filter((m) => m.pubkey.startsWith(q) || q === "")
+        .filter((m) => {
+          if (q === "") return true;
+          if (m.pubkey.toLowerCase().startsWith(q)) return true;
+          const name = profiles?.get(m.pubkey)?.name;
+          if (name && name.toLowerCase().startsWith(q)) return true;
+          return false;
+        })
         .slice(0, 8);
       if (filtered.length > 0) {
         setPicker({ ...mention, filtered });
@@ -154,43 +160,17 @@ export function MessageComposer({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Slash-command picker navigation
     if (slashPicker) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSlashIndex((i) => Math.min(i + 1, slashPicker.filtered.length - 1));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSlashIndex((i) => Math.max(i - 1, 0));
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        selectSlash(slashPicker.filtered[slashIndex]);
-        return;
-      }
+      if (e.key === "ArrowDown") { e.preventDefault(); setSlashIndex((i) => Math.min(i + 1, slashPicker.filtered.length - 1)); return; }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setSlashIndex((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectSlash(slashPicker.filtered[slashIndex]); return; }
       if (e.key === "Escape") { closePicker(); return; }
     }
 
-    // Mention picker navigation
     if (picker) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setPickerIndex((i) => Math.min(i + 1, picker.filtered.length - 1));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setPickerIndex((i) => Math.max(i - 1, 0));
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        selectMember(picker.filtered[pickerIndex]);
-        return;
-      }
+      if (e.key === "ArrowDown") { e.preventDefault(); setPickerIndex((i) => Math.min(i + 1, picker.filtered.length - 1)); return; }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setPickerIndex((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectMember(picker.filtered[pickerIndex]); return; }
       if (e.key === "Escape") { closePicker(); return; }
     }
 
@@ -224,7 +204,6 @@ export function MessageComposer({
     if (!slashPicker) return;
     const before = value.slice(0, slashPicker.start);
     const after = value.slice(slashPicker.start + 1 + slashPicker.query.length);
-    // Insert the command with a trailing space so the user can type the argument
     const inserted = `${cmd.cmd} `;
     const newValue = `${before}${inserted}${after}`;
     setValue(newValue);
@@ -241,6 +220,11 @@ export function MessageComposer({
 
   const hasContent = value.trim().length > 0;
   const showHints = members.some((m) => m.isAgent) || hasWorkflows;
+
+  // Resolve reply-to sender name from profiles.
+  const replyToName = replyTo
+    ? (profiles?.get(replyTo.pubkey)?.name ?? truncatePubkey(replyTo.pubkey))
+    : null;
 
   return (
     <div className="relative shrink-0 border-t border-black/10 px-4 py-3 dark:border-white/10">
@@ -280,28 +264,39 @@ export function MessageComposer({
       {/* Mention picker */}
       {picker && (
         <div className="absolute bottom-full left-4 right-4 mb-1 overflow-hidden rounded-lg border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-[#1E1E1E]">
-          {picker.filtered.map((m, idx) => (
-            <button
-              key={m.pubkey}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); selectMember(m); }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${
-                idx === pickerIndex
-                  ? "bg-violet-50 dark:bg-violet-900/20"
-                  : "hover:bg-black/5 dark:hover:bg-white/5"
-              }`}
-            >
-              <AtSign className="h-3 w-3 shrink-0 text-violet-500" />
-              <span className="font-mono text-black/70 dark:text-white/70">
-                {shortKey(m.pubkey)}
-              </span>
-              {m.isAgent && (
-                <span className="ml-auto rounded bg-violet-100 px-1 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
-                  Agent
-                </span>
-              )}
-            </button>
-          ))}
+          {picker.filtered.map((m, idx) => {
+            const profile = profiles?.get(m.pubkey);
+            const displayName = profile?.name;
+            return (
+              <button
+                key={m.pubkey}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); selectMember(m); }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors ${
+                  idx === pickerIndex
+                    ? "bg-violet-50 dark:bg-violet-900/20"
+                    : "hover:bg-black/5 dark:hover:bg-white/5"
+                }`}
+              >
+                <AtSign className="h-3 w-3 shrink-0 text-violet-500" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {displayName && (
+                    <span className="truncate font-medium text-black/85 dark:text-white/85">
+                      {displayName}
+                    </span>
+                  )}
+                  <span className={`font-mono text-black/40 dark:text-white/40 ${displayName ? "text-[10px]" : ""}`}>
+                    {shortKey(m.pubkey)}
+                  </span>
+                </div>
+                {m.isAgent && (
+                  <span className="ml-auto shrink-0 rounded bg-violet-100 px-1 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                    Agent
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -310,9 +305,7 @@ export function MessageComposer({
         <div className="mb-2 flex items-center gap-2 rounded-md bg-black/[0.04] px-3 py-1.5 dark:bg-white/[0.06]">
           <CornerUpLeft className="h-3 w-3 shrink-0 text-black/40 dark:text-white/40" />
           <span className="min-w-0 flex-1 truncate text-xs text-black/60 dark:text-white/60">
-            <span className="font-semibold">
-              {truncatePubkey(replyTo.pubkey)}
-            </span>
+            <span className="font-semibold">{replyToName}</span>
             {": "}
             {replyTo.content.slice(0, 80)}{replyTo.content.length > 80 ? "…" : ""}
           </span>

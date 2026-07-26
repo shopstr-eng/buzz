@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Hash, Lock, Users, Zap, MessageSquare } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useMessages } from "../use-messages";
 import { useSendMessage } from "../use-send-message";
 import { useChannelMembers } from "../use-channel-members";
 import { useReactions } from "../use-reactions";
+import { useProfiles } from "@/shared/hooks/use-profiles";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import { ChannelMembersPanel } from "./ChannelMembersPanel";
@@ -38,6 +39,10 @@ function ChatChannelView({ channel }: Props) {
   const { reactions, addReaction } = useReactions(channel.groupId, identity?.pubkey);
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+
+  // Fetch profiles for all members so the mention picker shows display names.
+  const memberPubkeys = useMemo(() => members.map((m) => m.pubkey), [members]);
+  const memberProfiles = useProfiles(memberPubkeys);
 
   const isReady = connectionState === "ready";
 
@@ -96,6 +101,7 @@ function ChatChannelView({ channel }: Props) {
           isSending={isSending}
           disabled={!isReady || !identity}
           members={members}
+          profiles={memberProfiles}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
         />

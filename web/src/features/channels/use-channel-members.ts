@@ -95,13 +95,21 @@ export function useChannelMembers(groupId: string | null): {
         // kind:39002 p-tags: ["p", pubkey, relay_url, role]
         const parsed: ChannelMember[] = ev.tags
           .filter((t) => t[0] === "p" && t[1])
-          .map((t) => ({
-            pubkey: t[1],
-            role: (["owner", "admin", "member"].includes(t[3])
-              ? t[3]
-              : "member") as ChannelMember["role"],
-            isAgent: agentPubkeysRef.current.has(t[1]),
-          }))
+          .map((t) => {
+            // NIP-29 p-tag: ["p", pubkey, relay_hint?, role?]
+            // relay_hint is optional — role may be at index 2 or 3.
+            const ROLES = ["owner", "admin", "member"];
+            const role = (
+              ROLES.includes(t[3]) ? t[3] :
+              ROLES.includes(t[2]) ? t[2] :
+              "member"
+            ) as ChannelMember["role"];
+            return {
+              pubkey: t[1],
+              role,
+              isAgent: agentPubkeysRef.current.has(t[1]),
+            };
+          })
           .sort((a, b) => roleSortOrder(a.role) - roleSortOrder(b.role));
 
         membersRef.current = parsed;

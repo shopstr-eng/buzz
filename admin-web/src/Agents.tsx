@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminRelayWs, relayWsUrlFromOrigin } from "./relay-ws";
 import type { NostrEvent } from "./relay-ws";
-import { post } from "./api";
+import { del, post } from "./api";
 
 const KIND_GROUP_METADATA = 39000;
 const KIND_GROUP_MEMBERS  = 39002;
@@ -243,6 +243,9 @@ export function Agents() {
   const [addTarget,  setAddTarget]  = useState<AgentRecord | null>(null);
   const [editTarget, setEditTarget] = useState<AgentRecord | null>(null);
   const [acpPubkey, setAcpPubkey]   = useState<string | null>(null);
+  const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null);
+  const [removing, setRemoving]     = useState(false);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const wsRef          = useRef<AdminRelayWs | null>(null);
   const agentsRef      = useRef<Map<string, AgentRecord>>(new Map());
@@ -404,6 +407,21 @@ export function Agents() {
     return () => unsub();
   }, [agents.size, handleKind0]); // re-run when agent count changes
 
+  async function removeFromRelay(pubkey: string) {
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      await del(`/members/${pubkey}`);
+      agentsRef.current.delete(pubkey);
+      setAgents(new Map(agentsRef.current));
+      setConfirmingRemove(null);
+    } catch (e) {
+      setRemoveError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   async function addToChannel(agentPubkey: string, channelId: string) {
     const ws = wsRef.current;
     if (!ws) throw new Error("Not connected to relay.");
@@ -461,6 +479,12 @@ export function Agents() {
           <h2>Could not connect to relay</h2>
           <p>{wsError}</p>
           <button type="button" onClick={() => location.reload()}>Retry</button>
+        </div>
+      )}
+
+      {removeError && (
+        <div className="state error" role="alert" style={{ marginBottom: "1rem" }}>
+          <p>Failed to remove agent: {removeError}</p>
         </div>
       )}
 
@@ -547,11 +571,42 @@ export function Agents() {
                       <button
                         type="button"
                         className="ch-btn-secondary ag-add-btn"
+                        style={{ marginRight: 6 }}
                         onClick={() => setAddTarget(agent)}
                         title="Add to channel"
                       >
                         + Add to channel
                       </button>
+                      {confirmingRemove === agent.pubkey ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            className="ch-btn-danger ag-add-btn"
+                            onClick={() => removeFromRelay(agent.pubkey)}
+                            disabled={removing}
+                          >
+                            {removing ? "Removing…" : "Confirm remove"}
+                          </button>
+                          <button
+                            type="button"
+                            className="ch-btn-secondary ag-add-btn"
+                            onClick={() => { setConfirmingRemove(null); setRemoveError(null); }}
+                            disabled={removing}
+                          >
+                            Cancel
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="ch-btn-secondary ag-add-btn"
+                          style={{ color: "#b91c1c" }}
+                          onClick={() => { setConfirmingRemove(agent.pubkey); setRemoveError(null); }}
+                          title="Remove agent from relay"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

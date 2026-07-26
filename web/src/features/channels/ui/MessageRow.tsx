@@ -8,15 +8,10 @@ import type { Profile } from "@/shared/hooks/use-profiles";
 
 interface Props {
   message: ChatMessage;
-  /** pubkey of the logged-in user */
   myPubkey?: string;
-  /** Whether to show the sender header (false when consecutive messages from same sender) */
   showHeader: boolean;
-  /** Reactions for this specific message */
   reactions?: EmojiReactions;
-  /** Called when user clicks a reaction emoji */
   onAddReaction?: (emoji: string) => void;
-  /** Called when user clicks the Reply button */
   onReply?: () => void;
   /** The message this message is replying to, for inline context */
   replyToMessage?: { content: string; pubkey: string; senderName?: string } | null;
@@ -24,9 +19,13 @@ interface Props {
   profile?: Profile;
   /** Resolved profile for the replied-to message's author */
   replyToProfile?: Profile;
+  /**
+   * Map from shortKey fragment (e.g. "abcdef01…cdef") to display name.
+   * Used by ContentWithMentions to replace pubkey chips with real names.
+   */
+  mentionNames?: Map<string, string>;
 }
 
-/** Colourful deterministic avatar background from pubkey */
 function avatarColor(pubkey: string): string {
   const colors = [
     "#e35b4e", "#e8864d", "#d4a017", "#4caf73",
@@ -81,12 +80,16 @@ function Avatar({
 }
 
 /**
- * Parse message content and highlight @mentions.
- * Mentions are inserted as `@{8hexchars}…{4hexchars}` by the composer picker,
- * or as `nostr:npub1…` for NIP-27 compatibility.
- * Both patterns are rendered as a violet chip.
+ * Render message content, replacing @mention pubkey chips with display names
+ * when a mentionNames map is supplied.
  */
-function ContentWithMentions({ content }: { content: string }) {
+function ContentWithMentions({
+  content,
+  mentionNames,
+}: {
+  content: string;
+  mentionNames?: Map<string, string>;
+}) {
   const MENTION_RE = /@([0-9a-f]{6,8})\u2026([0-9a-f]{3,6})|nostr:(npub1[a-z0-9]+)/gi;
 
   const parts: React.ReactNode[] = [];
@@ -94,25 +97,28 @@ function ContentWithMentions({ content }: { content: string }) {
   let match: RegExpExecArray | null;
 
   while ((match = MENTION_RE.exec(content)) !== null) {
-    if (match.index > last) {
-      parts.push(content.slice(last, match.index));
+    if (match.index > last) parts.push(content.slice(last, match.index));
+
+    let displayLabel: string;
+    if (match[3]) {
+      displayLabel = `@${match[3].slice(0, 10)}…`;
+    } else {
+      const fragment = `${match[1]}\u2026${match[2]}`;
+      const resolvedName = mentionNames?.get(fragment);
+      displayLabel = resolvedName ? `@${resolvedName}` : `@${match[1]}…${match[2]}`;
     }
-    const display = match[3]
-      ? `@${match[3].slice(0, 10)}…`
-      : `@${match[1]}…${match[2]}`;
+
     parts.push(
       <span
         key={match.index}
         className="inline-flex items-center rounded bg-violet-100 px-1 py-0.5 font-mono text-[11px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"
       >
-        {display}
+        {displayLabel}
       </span>,
     );
     last = match.index + match[0].length;
   }
-  if (last < content.length) {
-    parts.push(content.slice(last));
-  }
+  if (last < content.length) parts.push(content.slice(last));
 
   return <>{parts}</>;
 }
@@ -146,14 +152,7 @@ function ReplyContext({
   );
 }
 
-/** Reaction chip row beneath a message */
-function ReactionRow({
-  reactions,
-  onAdd,
-}: {
-  reactions: EmojiReactions;
-  onAdd: (emoji: string) => void;
-}) {
+function ReactionRow({ reactions, onAdd }: { reactions: EmojiReactions; onAdd: (emoji: string) => void }) {
   const entries = Object.entries(reactions).filter(([, v]) => v.count > 0);
   if (entries.length === 0) return null;
   return (
@@ -177,7 +176,6 @@ function ReactionRow({
   );
 }
 
-/** Floating quick-react emoji picker */
 function QuickReactPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
   return (
     <div className="flex items-center gap-0.5 rounded-lg border border-black/10 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#252525]">
@@ -205,6 +203,7 @@ export function MessageRow({
   replyToMessage,
   profile,
   replyToProfile,
+  mentionNames,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const isMe = myPubkey === message.pubkey;
@@ -243,7 +242,6 @@ export function MessageRow({
           </div>
         )}
 
-        {/* Reply context */}
         {replyToMessage && (
           <ReplyContext
             content={replyToMessage.content}
@@ -254,10 +252,11 @@ export function MessageRow({
         )}
 
         <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
-          {hasMention ? <ContentWithMentions content={message.content} /> : message.content}
+          {hasMention
+            ? <ContentWithMentions content={message.content} mentionNames={mentionNames} />
+            : message.content}
         </p>
 
-        {/* Reactions */}
         {reactions && onAddReaction && (
           <ReactionRow reactions={reactions} onAdd={onAddReaction} />
         )}
