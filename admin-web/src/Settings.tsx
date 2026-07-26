@@ -6,7 +6,7 @@
  * no key management needed. Usage is billed to the Replit account.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { post, request } from "./api";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -50,6 +50,12 @@ export function Settings() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
+  // Restart state
+  const [restarting, setRestarting] = useState(false);
+  const [restartError, setRestartError] = useState<string | null>(null);
+  const [restartCountdown, setRestartCountdown] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     request<AgentProviderConfig>("/settings/agent-provider")
       .then((cfg) => {
@@ -66,6 +72,11 @@ export function Settings() {
   useEffect(() => {
     setSaved(false);
   }, [provider, model, baseUrl]);
+
+  // Cleanup countdown on unmount
+  useEffect(() => () => {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+  }, []);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -88,6 +99,33 @@ export function Settings() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleRestart() {
+    setRestarting(true);
+    setRestartError(null);
+    setRestartCountdown(null);
+    try {
+      await post<{ ok: boolean }>("/restart", {});
+      // Relay will shut down shortly — start a countdown then reload.
+      let secs = 8;
+      setRestartCountdown(secs);
+      countdownRef.current = setInterval(() => {
+        secs -= 1;
+        if (secs <= 0) {
+          clearInterval(countdownRef.current!);
+          countdownRef.current = null;
+          window.location.reload();
+        } else {
+          setRestartCountdown(secs);
+        }
+      }, 1000);
+    } catch (err: unknown) {
+      setRestartError(
+        err instanceof Error ? err.message : "Failed to restart relay.",
+      );
+      setRestarting(false);
     }
   }
 
@@ -129,11 +167,20 @@ export function Settings() {
         </span>
       </header>
 
-      {config.restartRequired && (
+      {/* Restart required notice */}
+      {config.restartRequired && !restarting && (
         <div className="settings-notice settings-notice--warn">
           <strong>Restart required</strong> — the relay is running with a
           different provider than what's saved on disk. Restart it to apply the
           stored configuration.
+        </div>
+      )}
+
+      {/* Restarting feedback */}
+      {restarting && restartCountdown !== null && (
+        <div className="settings-notice settings-notice--info">
+          <strong>Relay is restarting…</strong> Page will refresh in{" "}
+          {restartCountdown}s.
         </div>
       )}
 
@@ -249,14 +296,14 @@ export function Settings() {
           <button
             type="submit"
             className="settings-save-btn"
-            disabled={saving}
+            disabled={saving || restarting}
           >
             {saving ? "Saving…" : "Save — applies on next restart"}
           </button>
 
           {saved && (
             <span className="settings-success" role="status">
-              ✓ Saved — restart the relay to activate.
+              ✓ Saved
             </span>
           )}
 
@@ -267,6 +314,34 @@ export function Settings() {
           )}
         </div>
       </form>
+
+      {/* Restart relay */}
+      <div className="settings-restart">
+        <div className="settings-restart-info">
+          <strong>Restart relay</strong>
+          <span>
+            Applies saved provider settings and reloads the agent. The relay
+            will be unavailable for a few seconds.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="settings-restart-btn"
+          onClick={handleRestart}
+          disabled={restarting}
+        >
+          {restarting
+            ? restartCountdown !== null
+              ? `Restarting… (${restartCountdown}s)`
+              : "Sending…"
+            : "Restart relay"}
+        </button>
+        {restartError && (
+          <span className="settings-error" role="alert">
+            {restartError}
+          </span>
+        )}
+      </div>
 
       {/* Current running state */}
       <div className="settings-current">

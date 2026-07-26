@@ -1664,6 +1664,70 @@ dd {
   color: #b91c1c;
 }
 
+/* Info notice variant (restart countdown) */
+.settings-notice--info {
+  background: rgba(37,99,235,.08);
+  color: #1e40af;
+  border: 1px solid rgba(37,99,235,.2);
+}
+
+/* Restart relay row */
+.settings-restart {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 560px;
+  margin-top: 2rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid rgba(0,0,0,.1);
+  border-radius: .6rem;
+  flex-wrap: wrap;
+}
+
+.settings-restart-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+  min-width: 200px;
+}
+
+.settings-restart-info strong {
+  font-size: .9rem;
+  font-weight: 600;
+  color: rgba(0,0,0,.85);
+}
+
+.settings-restart-info span {
+  font-size: .8rem;
+  color: rgba(0,0,0,.5);
+  line-height: 1.4;
+}
+
+.settings-restart-btn {
+  flex-shrink: 0;
+  padding: .45rem 1rem;
+  border-radius: .45rem;
+  border: 1px solid rgba(0,0,0,.2);
+  background: white;
+  font-size: .875rem;
+  font-weight: 500;
+  color: rgba(0,0,0,.8);
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  white-space: nowrap;
+}
+
+.settings-restart-btn:hover:not(:disabled) {
+  background: rgba(0,0,0,.05);
+  border-color: rgba(0,0,0,.3);
+}
+
+.settings-restart-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
 .settings-current {
   margin-top: 2.5rem;
   padding: 1.25rem;

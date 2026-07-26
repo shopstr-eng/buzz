@@ -49,6 +49,8 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
             "/settings/agent-provider",
             get(get_agent_provider).post(set_agent_provider),
         )
+        // Relay restart: gracefully shut down so the start script restarts it.
+        .route("/restart", post(restart_relay))
         .layer(middleware::from_fn(security_headers))
         .layer(RequestBodyLimitLayer::new(4096))
         .with_state(state)
@@ -851,6 +853,26 @@ async fn set_agent_provider(
 
     write_env_file(&vars)?;
     Ok(Json(build_provider_settings(&vars)))
+}
+
+// ── Relay restart ─────────────────────────────────────────────────────────
+
+/// POST /restart — respond immediately, then send SIGTERM to self so the
+/// start script's `while true` loop picks it up and restarts the relay.
+async fn restart_relay(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    authorize(&state, &headers)?;
+    let pid = std::process::id();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        tracing::info!(target: "buzz_relay::admin", "Relay restart requested via admin API — sending SIGTERM to self (pid {pid})");
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &pid.to_string()])
+            .status();
+    });
+    Ok(Json(serde_json::json!({ "ok": true, "message": "restarting" })))
 }
 
 #[cfg(test)]
