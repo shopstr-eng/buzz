@@ -160,6 +160,9 @@ function MemberRow({ member, profile, myRole, isSelf, onKick, onChangeRole }: Me
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [acting, setActing] = useState(false);
+  /** Set to true optimistically once the relay accepts the kick — row dims until
+   *  the 44101 notification arrives and removes it from the list. */
+  const [kicked, setKicked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canAct =
@@ -174,9 +177,12 @@ function MemberRow({ member, profile, myRole, isSelf, onKick, onChangeRole }: Me
     setError(null);
     try {
       await onKick(member.pubkey);
-      // List will refresh via 44100/44101 notification; no local state change needed.
+      // Relay accepted the event — show "removing" state while waiting for
+      // the 44101 notification to drop this row from the list.
+      setKicked(true);
+      setConfirming(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed.");
+      setError(e instanceof Error ? e.message : "Failed to remove member.");
       setConfirming(false);
     } finally {
       setActing(false);
@@ -194,6 +200,19 @@ function MemberRow({ member, profile, myRole, isSelf, onKick, onChangeRole }: Me
       setActing(false);
     }
   }, [onChangeRole, member.pubkey]);
+
+  // Optimistic "removing" state — relay accepted the kick, waiting for 44101.
+  if (kicked) {
+    return (
+      <div className="flex items-center gap-2 rounded-md px-2 py-1.5 opacity-40">
+        <MemberAvatar member={member} profile={profile} />
+        <span className="min-w-0 flex-1 truncate text-xs italic text-black/60 dark:text-white/60">
+          {displayName}
+        </span>
+        <Loader2 className="h-3 w-3 animate-spin shrink-0 text-black/30 dark:text-white/30" />
+      </div>
+    );
+  }
 
   // Inline kick confirmation state.
   if (confirming) {
