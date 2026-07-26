@@ -135,6 +135,7 @@ build_rust_bin_if_missing() {
 }
 build_rust_bin_if_missing buzz-acp   buzz-acp
 build_rust_bin_if_missing buzz-agent buzz-agent
+build_rust_bin_if_missing buzz-cli   buzz-cli
 
 # ---------------------------------------------------------------------------
 # 3. Run migrations (idempotent — safe to run on every restart)
@@ -355,6 +356,24 @@ _start_acp() {
     echo "==> Loaded AI provider config from .env.agent (provider=${BUZZ_AGENT_PROVIDER:-none})."
   fi
 
+  # buzz-agent uses OPENAI_COMPAT_API_KEY (not OPENAI_API_KEY) for the OpenAI
+  # provider.  Map the standard name if the compat key isn't already set, so
+  # Replit's native OpenAI integration works out of the box.
+  if [[ -z "${OPENAI_COMPAT_API_KEY:-}" ]] && [[ -n "${OPENAI_API_KEY:-}" ]]; then
+    export OPENAI_COMPAT_API_KEY="$OPENAI_API_KEY"
+    echo "==> Mapped OPENAI_API_KEY → OPENAI_COMPAT_API_KEY for buzz-agent."
+  fi
+  # Same for OpenAI base URL and model.
+  if [[ -z "${OPENAI_COMPAT_BASE_URL:-}" ]] && [[ -n "${OPENAI_API_BASE:-}" ]]; then
+    export OPENAI_COMPAT_BASE_URL="$OPENAI_API_BASE"
+  fi
+
+  # Validate: warn loudly when no provider is configured so failures are visible.
+  if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]]; then
+    echo "==> Warning: BUZZ_AGENT_PROVIDER is not set — buzz-agent will exit immediately." >&2
+    echo "==>          Go to Admin → Settings → AI Provider to configure a provider." >&2
+  fi
+
   BUZZ_PRIVATE_KEY="$ACP_PRIVATE_KEY" \
   BUZZ_RELAY_URL="$acp_relay_url" \
   BUZZ_ACP_NIP42_RELAY_URL="${relay_scheme}://127.0.0.1:${bind_port}" \
@@ -366,7 +385,7 @@ _start_acp() {
   BUZZ_ACP_LAZY_POOL="${BUZZ_ACP_LAZY_POOL:-true}" \
   BUZZ_ACP_RESPOND_TO="${BUZZ_ACP_RESPOND_TO:-anyone}" \
   BUZZ_ACP_MCP_COMMAND="${BUZZ_ACP_MCP_COMMAND:-${REPO_ROOT}/target/release/buzz-cli}" \
-  "$ACP_BIN" >>/tmp/buzz-acp.log 2>&1 &
+  "$ACP_BIN" 2>&1 &
 
   ACP_PID=$!
   echo $ACP_PID > /tmp/buzz-acp.pid

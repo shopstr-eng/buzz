@@ -8,17 +8,25 @@
  * member-removed notifications, which ARE fanned out globally).  Each notification
  * bumps a refetch key that tears down and rebuilds the 39002 subscription, pulling
  * the freshly-updated stored event.
+ *
+ * Mutation helpers kickMember / changeRole publish NIP-29 events (kind:9001 and
+ * kind:9000).  The relay enforces role-based authorisation server-side; the hook
+ * optimistically fires the event and lets the 44100/44101 notification path
+ * reconcile the member list when the relay accepts the change.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
 import {
   KIND_GROUP_MEMBERS,
   KIND_AGENT_PROFILE,
   KIND_MEMBER_ADDED_NOTIFICATION,
   KIND_MEMBER_REMOVED_NOTIFICATION,
+  KIND_ADD_MEMBER,
+  KIND_REMOVE_MEMBER,
 } from "./types";
 import type { NostrEvent } from "@/shared/lib/relay-connection";
+import { getSignFn } from "@/shared/lib/identity";
 
 export interface ChannelMember {
   pubkey: string;
@@ -33,6 +41,8 @@ function roleSortOrder(role: ChannelMember["role"]): number {
 export function useChannelMembers(groupId: string | null): {
   members: ChannelMember[];
   isLoading: boolean;
+  kickMember: (targetPubkey: string) => Promise<void>;
+  changeRole: (targetPubkey: string, role: "admin" | "member") => Promise<void>;
 } {
   const { connection, connectionState } = useRelay();
   const [members, setMembers] = useState<ChannelMember[]>([]);
@@ -125,5 +135,43 @@ export function useChannelMembers(groupId: string | null): {
     };
   }, [connection, connectionState, groupId, refetchKey]);
 
-  return { members, isLoading: !eoseReceived };
+  // ── Mutations ─────────────────────────────────────────────────────────────
+
+  /** Remove a member from the channel by publishing kind:9001. */
+  const kickMember = useCallback(
+    async (targetPubkey: string) => {
+      if (!connection) throw new Error("Not connected to relay.");
+      if (!groupId) throw new Error("No channel selected.");
+      const signFn = getSignFn();
+      if (!signFn) throw new Error("No signing key available.");
+      const signed = await signFn({
+        kind: KIND_REMOVE_MEMBER,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["h", groupId], ["p", targetPubkey]],
+        content: "",
+      });
+      connection.publish(signed);
+    },
+    [connection, groupId],
+  );
+
+  /** Promote or demote a member by publishing kind:9000 with the new role. */
+  const changeRole = useCallback(
+    async (targetPubkey: string, role: "admin" | "member") => {
+      if (!connection) throw new Error("Not connected to relay.");
+      if (!groupId) throw new Error("No channel selected.");
+      const signFn = getSignFn();
+      if (!signFn) throw new Error("No signing key available.");
+      const signed = await signFn({
+        kind: KIND_ADD_MEMBER,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["h", groupId], ["p", targetPubkey], ["role", role]],
+        content: "",
+      });
+      connection.publish(signed);
+    },
+    [connection, groupId],
+  );
+
+  return { members, isLoading: !eoseReceived, kickMember, changeRole };
 }

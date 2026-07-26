@@ -106,6 +106,7 @@ function ChatChannelView({ channel }: Props) {
         <ChannelMembersPanel
           groupId={channel.groupId}
           channelName={channel.name}
+          myPubkey={identity?.pubkey}
           onClose={() => setMembersPanelOpen(false)}
         />
       )}
