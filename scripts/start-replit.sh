@@ -18,6 +18,17 @@ export PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/home/runner/workspac
 # Disable git object-store conformance probe (requires S3 which isn't configured).
 export BUZZ_GIT_CONFORMANCE_PROBE="${BUZZ_GIT_CONFORMANCE_PROBE:-false}"
 
+# Replit-appropriate defaults. A fresh GitHub import into a new Replit app may
+# not carry this workspace's env vars, so default them here to keep behavior
+# identical. Any value set in the environment still wins.
+export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:5000}"
+export BUZZ_REQUIRE_AUTH_TOKEN="${BUZZ_REQUIRE_AUTH_TOKEN:-true}"
+export BUZZ_REQUIRE_RELAY_MEMBERSHIP="${BUZZ_REQUIRE_RELAY_MEMBERSHIP:-true}"
+export BUZZ_SERVE_GIT_WEB_GUI="${BUZZ_SERVE_GIT_WEB_GUI:-true}"
+export BUZZ_AUTO_MIGRATE="${BUZZ_AUTO_MIGRATE:-false}"
+export RUST_LOG="${RUST_LOG:-buzz_relay=info,buzz_db=info,tower_http=warn}"
+export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
+
 # Derive RELAY_URL from the current domain so the community row is seeded for
 # the host the Replit proxy actually sends in the Host header.
 # Both REPLIT_DEV_DOMAIN and REPLIT_DOMAINS can be set in a production VM —
@@ -144,6 +155,27 @@ echo "==> Running database migrations..."
 run_bin buzz-admin buzz-admin migrate
 
 # ---------------------------------------------------------------------------
+# 3b. One-shot data seed (workspace migration support).
+#     If a seed JSON exists (produced by an agent-side export of the old
+#     app's production data) AND this database has no channels yet, import
+#     it before any community seeding. VM deployments snapshot the workspace
+#     filesystem, so a gitignored backups/prod-seed.json ships in the image
+#     without ever touching the git repo. Guarded on an empty DB so it can
+#     never clobber real data.
+# ---------------------------------------------------------------------------
+SEED_FILE="${BUZZ_SEED_FILE:-backups/prod-seed.json}"
+if [[ -f "$SEED_FILE" ]] && command -v psql >/dev/null 2>&1; then
+  _CH_COUNT=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM channels;" 2>/dev/null || echo "err")
+  if [[ "$_CH_COUNT" == "0" ]]; then
+    echo "==> Empty relay DB and seed file present — importing ${SEED_FILE}..."
+    bash scripts/import-json-export.sh "$SEED_FILE" --yes \
+      || echo "==> WARNING: seed import failed — continuing with empty DB." >&2
+  else
+    echo "==> Seed file present but DB already has channels (${_CH_COUNT}) — skipping import."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 4. Seed community row from RELAY_URL (idempotent)
 # ---------------------------------------------------------------------------
 echo "==> Seeding community row (idempotent)..."
@@ -265,7 +297,7 @@ fi
 # Expose the ACP private key to the relay process so the admin API can sign
 # kind:0 / kind:10100 profile events on behalf of the ACP agent.
 export BUZZ_ACP_PRIVATE_KEY="${ACP_PRIVATE_KEY}"
-export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:3000}"
+export BUZZ_BIND_ADDR="${BUZZ_BIND_ADDR:-0.0.0.0:5000}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 
 if [[ -d web/dist ]]; then
