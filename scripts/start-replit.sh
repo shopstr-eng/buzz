@@ -29,6 +29,18 @@ export BUZZ_AUTO_MIGRATE="${BUZZ_AUTO_MIGRATE:-false}"
 export RUST_LOG="${RUST_LOG:-buzz_relay=info,buzz_db=info,tower_http=warn}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 
+# Auto-wire Replit's managed Anthropic integration: it injects
+# ANTHROPIC_API_KEY into the environment. If a key is present but no
+# provider is configured yet, default to anthropic so the keyless
+# integration works with zero manual wiring. An explicit
+# BUZZ_AGENT_PROVIDER (env or admin-saved .env.agent, sourced later)
+# always wins over this default.
+if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]] && [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  export BUZZ_AGENT_PROVIDER="anthropic"
+  export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-4-5}"
+  echo "==> ANTHROPIC_API_KEY detected — defaulting BUZZ_AGENT_PROVIDER=anthropic (model=${ANTHROPIC_MODEL})."
+fi
+
 # Derive RELAY_URL from the current domain so the community row is seeded for
 # the host the Replit proxy actually sends in the Host header.
 # Both REPLIT_DEV_DOMAIN and REPLIT_DOMAINS can be set in a production VM —
