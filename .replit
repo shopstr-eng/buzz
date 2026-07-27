@@ -29,7 +29,7 @@ ANTHROPIC_MODEL = "claude-opus-4-5"
 BUZZ_AGENT_PROVIDER = "anthropic"
 
 [deployment]
-deploymentTarget = "vm"
+deploymentTarget = "cloudrun"
 run = ["bash", "scripts/start-replit.sh"]
 build = ["bash", "scripts/prepare-deploy.sh"]
 
@@ -68,3 +68,7 @@ externalPort = 8080
 [[ports]]
 localPort = 9102
 externalPort = 3000
+
+[[ports]]
+localPort = 18327
+externalPort = 3001

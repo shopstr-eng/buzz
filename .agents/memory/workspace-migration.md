@@ -32,3 +32,9 @@ User explicitly declined pasting API keys — keyless/Replit-billed is a hard re
   new app BEFORE anyone connects — relay pubkey and agent membership rows derive from them.
 - Cutover order: snapshot prod right before DNS flip (messages between snapshot and flip are
   lost); old app stays intact as rollback until DNS verified.
+
+## Prod verification lessons (July 27, 2026)
+- The runbook's `curl -H "Host: buzz.shopstrmarkets.com" https://<app>.replit.app/` verification does NOT work: Replit's front proxy routes by Host header before reaching the app, returning 502 for unlinked domains. Verify prod state via read-only prod DB queries (database skill, environment: "production") instead, or /etc/hosts pinning from a local machine.
+- Autoscale (cloudrun) prod restarts have a multi-minute cold-boot window (Redis + migrations + seeding) during which all requests, including /admin/, return 500 (healthcheck failures visible in deployment logs). This is transient, not a defect.
+- `<app>.replit.app` host intentionally has no communities row → "no community is configured for this host" 404 on the temp URL is expected; data binds to buzz.shopstrmarkets.com only.
+- Seed import gotcha: import-json-export.sh uses ON CONFLICT DO NOTHING; if the target DB already has a community row for the same host under a DIFFERENT id, the seed's community row is skipped and all child rows FK-fail, aborting the transaction — and the fail-closed guard crash-loops the boot. Fix: remap seed community ids to the target DB's existing ids (match by host) before staging backups/prod-seed.json. Done July 27, 2026 for the staged seed (prod ids baked in).

@@ -1,49 +1,28 @@
 ---
-name: buzz-acp loopback auth quirks
-description: How to connect buzz-acp to a wss:// relay via ws:// loopback without auth failures, and the _wait_for_relay bash timing fix.
+name: buzz-acp-loopback-auth
+description: NIP-42/NIP-98 scheme mismatch when ACP connects via ws:// loopback to wss:// relay; port 8080 collision on restart.
 ---
 
-## Problem
-`buzz-acp` connects via `ws://127.0.0.1:5000` (plain loopback) to avoid TLS cert issues.
-The relay's `RELAY_URL` is `wss://...` which causes two independent auth failures:
+## NIP-42 loopback auth mismatch
 
-### NIP-42 scheme mismatch
-`nip42_expected_relay_url()` in the relay derives the expected auth URL as `{config_scheme}://{tenant.host()}`.
-With `RELAY_URL=wss://...`, scheme=`wss`, expected = `wss://127.0.0.1:5000`.
-ACP signs with `ws://127.0.0.1:5000` → relay rejects with "relay url mismatch".
+The ACP worker connects to the relay via `ws://127.0.0.1:5000` (plaintext loopback) but the relay's public `relay_url` is `wss://…replit.dev` (TLS). NIP-42 AUTH events are bound to the relay URL, so if the ACP signs against the loopback URL it will be rejected.
 
-### NIP-98 scheme mismatch
-`nip98_expected_url()` similarly derives `https://127.0.0.1:5000/query`.
-ACP's `RestClient` uses `relay_ws_to_http(ws://...)` = `http://...` for signing → relay returns 401.
-The actual TCP connection still goes to `http://` — only the signed URL in the event needs `https://`.
+**Fix carried in the repo:** `scripts/start-replit.sh` sets `RELAY_URL` to the loopback URL for the ACP subprocess, overriding the public URL just for that process. Do not change that override.
 
-## Fix
-Two new env vars in `crates/buzz-acp/src/relay.rs`:
-- `BUZZ_ACP_NIP42_RELAY_URL` — overrides the relay URL placed in NIP-42 AUTH events
-- `BUZZ_ACP_NIP98_BASE_URL` — overrides the base URL placed in NIP-98 signed events
+**Why:** Without the override, buzz-acp can connect but NIP-42 auth silently fails, which looks like the agent is running but produces no channel activity.
 
-`RestClient` was split into `base_url` (for NIP-98 signing) and `connect_base_url` (for actual HTTP connections).
+**How to apply:** If ACP auth breaks after a script change, check that the ACP subprocess still gets `RELAY_URL=ws://127.0.0.1:5000`.
 
-In `start-replit.sh`, set:
-```bash
-relay_scheme=$(echo "${RELAY_URL:-ws://...}" | cut -d: -f1)   # wss
-http_scheme=https  # when relay_scheme == wss
-BUZZ_ACP_NIP42_RELAY_URL="${relay_scheme}://127.0.0.1:${port}"
-BUZZ_ACP_NIP98_BASE_URL="${http_scheme}://127.0.0.1:${port}"
+---
+
+## Port 8080 collision on workflow restart
+
+When the Buzz Relay workflow is killed mid-run, the `buzz-relay` process may leave port 8080 (health probe) occupied. The next `start-replit.sh` run will fail at the very end with:
+
+```
+Error: Failed to bind health port 8080: Address already in use (os error 98)
 ```
 
-**Why:** The relay verifies auth URLs against the tenant host + config scheme. Loopback connections use a different scheme from the canonical relay URL. The env var overrides let ACP sign with what the relay expects while connecting via plain TCP.
+**Fix:** Simply restart the workflow a second time immediately. The orphan process will have been killed by then and port 8080 will be free.
 
-## _wait_for_relay bash timing fix
-The original `while ! bash -c "echo > /dev/tcp/..."` was intermittently treating the check as failing even when the port was open. The fix: use explicit `local rc=$?` pattern:
-```bash
-while true; do
-  bash -c "echo > /dev/tcp/127.0.0.1/${port}" 2>/dev/null
-  local rc=$?
-  [[ $rc -eq 0 ]] && return 0
-  sleep 0.5
-  tries=$((tries + 1))
-  [[ $tries -ge 60 ]] && return 1
-done
-```
-Also increased timeout from 10s to 30s (60 * 0.5s).
+**Why:** The workflow runner sends SIGTERM to the script but child processes spawned with `&` may outlive the script briefly. The health-port bind happens after all other initialization, so the relay otherwise starts cleanly.
