@@ -55,25 +55,34 @@ from `BUZZ_RELAY_PRIVATE_KEY`.
 
 ## Phase 3 — keyless AI (the reason for the move)
 
-In the NEW app, tell its Agent:
+In the NEW app, tell its Agent exactly this — keep it short and do **not**
+mention env-var names (naming `ANTHROPIC_API_KEY` steers Agent into the
+"paste a secret" flow instead of the integration flow):
 
-> Use Anthropic via Replit AI Integrations for this app (Replit-managed,
-> no API key). The app's agent binary reads `ANTHROPIC_API_KEY`,
-> `ANTHROPIC_BASE_URL` (optional override) and `ANTHROPIC_MODEL` from the
-> environment — map whatever the integration injects to those names in
-> `scripts/start-replit.sh` (see the existing OPENAI_API_KEY mapping there
-> as the pattern).
+> Add the Anthropic (Claude) integration to this app using Replit AI
+> Integrations — the Replit-managed, keyless option billed to my Replit
+> account. Do not ask me for an API key.
 
-Approve the **“Anthropic (Replit managed)”** card when it appears. Then set
-the provider so the worker starts:
+Approve the **“Anthropic (Replit managed)”** card when it appears.
 
-- `BUZZ_AGENT_PROVIDER=anthropic` and `ANTHROPIC_MODEL=claude-opus-4-5`
-  (already present for production in `.replit` `[userenv.production]`; for
-  dev either set them as env vars or save the provider in Admin → Settings).
+- If Agent asks you to paste an `ANTHROPIC_API_KEY` value instead of
+  showing the card: **decline the secret request** and reply
+  “No key — use Replit AI Integrations, the Replit-managed Anthropic
+  option.”
+- If it says the integration isn't available: managed AI requires a paid
+  plan (Core/Pro/Enterprise), and on Pro/Enterprise **organizations** an
+  org admin must enable AI integrations first.
 
-Verify: workflow logs show `Loaded AI provider config` /
-`BUZZ_AGENT_PROVIDER` set, and an @mention to the agent in a channel gets a
-reply.
+No wiring is needed afterwards: the integration injects `ANTHROPIC_API_KEY`
+into the app's environment, and `scripts/start-replit.sh` auto-detects it —
+defaulting `BUZZ_AGENT_PROVIDER=anthropic` and
+`ANTHROPIC_MODEL=claude-opus-4-5` (a provider explicitly saved in
+Admin → Settings still wins). Just restart the **Buzz Relay** workflow.
+The same auto-detection applies to the production deployment.
+
+Verify: workflow logs show
+`ANTHROPIC_API_KEY detected — defaulting BUZZ_AGENT_PROVIDER=anthropic`,
+and an @mention to the agent in a channel gets a reply.
 
 ## Phase 4 — development data (optional)
 
