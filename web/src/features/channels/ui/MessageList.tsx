@@ -1,6 +1,8 @@
 import { useEffect, useRef, useMemo } from "react";
 import type { ChatMessage } from "../types";
+import { KIND_SYSTEM_MESSAGE } from "../types";
 import type { ReactionsMap } from "../use-reactions";
+import type { CustomEmoji } from "../use-custom-emoji";
 import { MessageRow } from "./MessageRow";
 import { useProfiles } from "@/shared/hooks/use-profiles";
 
@@ -11,8 +13,16 @@ interface Props {
   canFetchOlder: boolean;
   onFetchOlder: () => void;
   reactions?: ReactionsMap;
-  onAddReaction?: (messageId: string, emoji: string) => void;
+  /** emoji is unicode or `:shortcode:`; emojiUrl set for custom emoji (NIP-30) */
+  onAddReaction?: (messageId: string, emoji: string, emojiUrl?: string) => void;
   onReply?: (message: ChatMessage) => void;
+  onEdit?: (message: ChatMessage) => void;
+  onDelete?: (message: ChatMessage) => void;
+  onOpenThread?: (message: ChatMessage) => void;
+  /** Community custom emoji (NIP-30) for the reaction picker */
+  customEmoji?: CustomEmoji[];
+  /** shortcode → url for rendering :shortcode: tokens */
+  customEmojiUrls?: Map<string, string>;
   /** Profiles for all channel members (kind:0 / kind:10100), pre-fetched by the
    *  parent.  Merged with author-only profiles so agent names and @-mention chips
    *  resolve even before the member has sent any messages. */
@@ -24,6 +34,58 @@ function shortKey(pubkey: string): string {
   return `${pubkey.slice(0, 8)}\u2026${pubkey.slice(-4)}`;
 }
 
+/** Centered system row (kind 40099): joins, leaves, channel events, tombstones. */
+function SystemMessageRow({
+  msg,
+  profiles,
+}: {
+  msg: ChatMessage;
+  profiles: Map<string, import("@/shared/hooks/use-profiles").Profile>;
+}) {
+  const name = (pk?: string) =>
+    pk ? (profiles.get(pk)?.name ?? `${pk.slice(0, 4)}\u2026${pk.slice(-4)}`) : "Someone";
+
+  let text: string;
+  try {
+    const p = JSON.parse(msg.content) as {
+      type?: string;
+      actor?: string;
+      target?: string;
+      public_reason?: string;
+    };
+    switch (p.type) {
+      case "member_added":
+      case "member_joined":
+      case "join":
+        text = `${name(p.target ?? p.actor)} joined the channel`;
+        break;
+      case "member_removed":
+      case "member_left":
+      case "leave":
+        text = `${name(p.target ?? p.actor)} left the channel`;
+        break;
+      case "channel_created":
+        text = `${name(p.actor)} created the channel`;
+        break;
+      case "message_deleted":
+        text = p.public_reason
+          ? `A message was removed by a moderator (${p.public_reason})`
+          : "A message was removed by a moderator";
+        break;
+      default:
+        text = typeof p.type === "string" ? p.type.replace(/_/g, " ") : msg.content;
+    }
+  } catch {
+    text = msg.content;
+  }
+
+  return (
+    <div className="px-4 py-1 text-center text-[11px] italic text-black/40 dark:text-white/40">
+      {text}
+    </div>
+  );
+}
+
 export function MessageList({
   messages,
   myPubkey,
@@ -33,6 +95,11 @@ export function MessageList({
   reactions,
   onAddReaction,
   onReply,
+  onEdit,
+  onDelete,
+  onOpenThread,
+  customEmoji,
+  customEmojiUrls,
   memberProfiles,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -134,10 +201,15 @@ export function MessageList({
       )}
 
       {messages.map((msg, idx) => {
+        if (msg.kind === KIND_SYSTEM_MESSAGE) {
+          return <SystemMessageRow key={msg.id} msg={msg} profiles={profiles} />;
+        }
+
         const prev = messages[idx - 1];
         const showHeader =
           !prev ||
           prev.pubkey !== msg.pubkey ||
+          prev.kind === KIND_SYSTEM_MESSAGE ||
           msg.createdAt - prev.createdAt > 300;
 
         const replyToMsg = msg.replyToId
@@ -156,9 +228,14 @@ export function MessageList({
             showHeader={showHeader}
             reactions={reactions?.[msg.id]}
             onAddReaction={
-              onAddReaction ? (emoji) => onAddReaction(msg.id, emoji) : undefined
+              onAddReaction ? (emoji, url) => onAddReaction(msg.id, emoji, url) : undefined
             }
+            customEmoji={customEmoji}
+            customEmojiUrls={customEmojiUrls}
             onReply={onReply ? () => onReply(msg) : undefined}
+            onEdit={onEdit ? () => onEdit(msg) : undefined}
+            onDelete={onDelete ? () => onDelete(msg) : undefined}
+            onOpenThread={onOpenThread ? () => onOpenThread(msg) : undefined}
             replyToMessage={
               replyToMsg
                 ? {

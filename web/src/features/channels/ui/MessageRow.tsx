@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
-import { CornerUpLeft, Smile } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Copy, CornerUpLeft, MessagesSquare, MoreHorizontal, Pencil, Smile, Trash2 } from "lucide-react";
 import type { ChatMessage } from "../types";
 import type { EmojiReactions } from "../use-reactions";
-import { QUICK_EMOJIS } from "../use-reactions";
+import type { CustomEmoji } from "../use-custom-emoji";
+import { EmojiPicker } from "./EmojiPicker";
+import { ProfilePopover } from "./ProfilePopover";
 import { relativeTime } from "@/shared/lib/relative-time";
 import type { Profile } from "@/shared/hooks/use-profiles";
 
@@ -11,8 +13,18 @@ interface Props {
   myPubkey?: string;
   showHeader: boolean;
   reactions?: EmojiReactions;
-  onAddReaction?: (emoji: string) => void;
+  onAddReaction?: (emoji: string, emojiUrl?: string) => void;
   onReply?: () => void;
+  /** Community custom emoji (NIP-30) for the picker */
+  customEmoji?: CustomEmoji[];
+  /** shortcode → url for rendering :shortcode: in content and reaction chips */
+  customEmojiUrls?: Map<string, string>;
+  /** Start editing this message (own messages only) */
+  onEdit?: () => void;
+  /** Delete this message (own messages only) */
+  onDelete?: () => void;
+  /** Open the thread rooted at this message */
+  onOpenThread?: () => void;
   /** The message this message is replying to, for inline context */
   replyToMessage?: { content: string; pubkey: string; senderName?: string } | null;
   /** Resolved kind:0 / kind:10100 profile for this message's author */
@@ -83,12 +95,45 @@ function Avatar({
  * Render message content, replacing @mention pubkey chips with display names
  * when a mentionNames map is supplied.
  */
+/** Replace :shortcode: tokens with custom emoji images (NIP-30). */
+function renderCustomEmojiTokens(
+  text: string,
+  customEmojiUrls?: Map<string, string>,
+): React.ReactNode[] {
+  if (!customEmojiUrls?.size) return [text];
+  const EMOJI_RE = /:([a-z0-9_+-]+):/g;
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = EMOJI_RE.exec(text)) !== null) {
+    const url = customEmojiUrls.get(match[1]);
+    if (!url) continue;
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    parts.push(
+      <img
+        key={match.index}
+        src={url}
+        alt={`:${match[1]}:`}
+        title={`:${match[1]}:`}
+        className="inline-block h-5 w-5 align-text-bottom object-contain"
+        loading="lazy"
+      />,
+    );
+    last = match.index + match[0].length;
+  }
+  if (last === 0) return [text];
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
 function ContentWithMentions({
   content,
   mentionNames,
+  customEmojiUrls,
 }: {
   content: string;
   mentionNames?: Map<string, string>;
+  customEmojiUrls?: Map<string, string>;
 }) {
   const MENTION_RE = /@([0-9a-f]{6,8})\u2026([0-9a-f]{3,6})|nostr:(npub1[a-z0-9]+)/gi;
 
@@ -97,7 +142,7 @@ function ContentWithMentions({
   let match: RegExpExecArray | null;
 
   while ((match = MENTION_RE.exec(content)) !== null) {
-    if (match.index > last) parts.push(content.slice(last, match.index));
+    if (match.index > last) parts.push(...renderCustomEmojiTokens(content.slice(last, match.index), customEmojiUrls));
 
     let displayLabel: string;
     if (match[3]) {
@@ -118,7 +163,7 @@ function ContentWithMentions({
     );
     last = match.index + match[0].length;
   }
-  if (last < content.length) parts.push(content.slice(last));
+  if (last < content.length) parts.push(...renderCustomEmojiTokens(content.slice(last), customEmojiUrls));
 
   return <>{parts}</>;
 }
@@ -152,9 +197,27 @@ function ReplyContext({
   );
 }
 
-function ReactionRow({ reactions, onAdd }: { reactions: EmojiReactions; onAdd: (emoji: string) => void }) {
+function ReactionRow({
+  reactions,
+  onAdd,
+  customEmojiUrls,
+}: {
+  reactions: EmojiReactions;
+  onAdd: (emoji: string) => void;
+  customEmojiUrls?: Map<string, string>;
+}) {
   const entries = Object.entries(reactions).filter(([, v]) => v.count > 0);
   if (entries.length === 0) return null;
+
+  const renderEmoji = (emoji: string) => {
+    const m = /^:([a-z0-9_+-]+):$/.exec(emoji);
+    const url = m ? customEmojiUrls?.get(m[1]) : undefined;
+    if (url) {
+      return <img src={url} alt={emoji} title={emoji} className="h-4 w-4 object-contain" loading="lazy" />;
+    }
+    return <span>{emoji}</span>;
+  };
+
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {entries.map(([emoji, { count, mine }]) => (
@@ -168,7 +231,7 @@ function ReactionRow({ reactions, onAdd }: { reactions: EmojiReactions; onAdd: (
               : "border-black/10 bg-black/[0.03] text-black/60 hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/60 dark:hover:bg-white/[0.08]"
           }`}
         >
-          <span>{emoji}</span>
+          {renderEmoji(emoji)}
           <span className="font-medium">{count}</span>
         </button>
       ))}
@@ -176,19 +239,88 @@ function ReactionRow({ reactions, onAdd }: { reactions: EmojiReactions; onAdd: (
   );
 }
 
-function QuickReactPicker({ onSelect }: { onSelect: (emoji: string) => void }) {
+/** Dropdown menu with copy/edit/delete actions (desktop-style context menu). */
+function MessageMenu({
+  canEdit,
+  onCopy,
+  onEdit,
+  onDelete,
+  onOpenThread,
+}: {
+  canEdit: boolean;
+  onCopy: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  onOpenThread?: () => void;
+}) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        // Parent closes the menu; just reset local confirm state.
+        setConfirmingDelete(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
+
+  const itemCls =
+    "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-black/80 hover:bg-black/5 dark:text-white/80 dark:hover:bg-white/10";
+
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-black/10 bg-white p-1 shadow-md dark:border-white/10 dark:bg-[#252525]">
-      {QUICK_EMOJIS.map((e) => (
-        <button
-          key={e}
-          type="button"
-          onMouseDown={(ev) => { ev.preventDefault(); onSelect(e); }}
-          className="rounded p-1 text-base leading-none hover:bg-black/5 dark:hover:bg-white/10"
-        >
-          {e}
+    <div ref={ref} className="w-44 overflow-hidden rounded-lg border border-black/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-[#252525]">
+      {onOpenThread && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onOpenThread(); }} className={itemCls}>
+          <MessagesSquare className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Open thread
         </button>
-      ))}
+      )}
+      <button type="button" onMouseDown={(e) => { e.preventDefault(); onCopy(); }} className={itemCls}>
+        <Copy className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+        Copy text
+      </button>
+      {canEdit && onEdit && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onEdit(); }} className={itemCls}>
+          <Pencil className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Edit message
+        </button>
+      )}
+      {canEdit && onDelete && !confirmingDelete && (
+        <button
+          type="button"
+          onMouseDown={(e) => { e.preventDefault(); setConfirmingDelete(true); }}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          Delete message
+        </button>
+      )}
+      {canEdit && onDelete && confirmingDelete && (
+        <div className="px-3 py-1.5">
+          <p className="mb-1.5 text-[11px] text-black/60 dark:text-white/60">
+            Delete this message?
+          </p>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); onDelete(); }}
+              className="rounded bg-red-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-red-700"
+            >
+              Delete
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); setConfirmingDelete(false); }}
+              className="rounded bg-black/5 px-2 py-1 text-[11px] text-black/60 hover:bg-black/10 dark:bg-white/10 dark:text-white/60 dark:hover:bg-white/15"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -200,12 +332,20 @@ export function MessageRow({
   reactions,
   onAddReaction,
   onReply,
+  onEdit,
+  onDelete,
+  onOpenThread,
+  customEmoji,
+  customEmojiUrls,
   replyToMessage,
   profile,
   replyToProfile,
   mentionNames,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const isMe = myPubkey === message.pubkey;
   const bg = useMemo(() => avatarColor(message.pubkey), [message.pubkey]);
   const displayName = isMe
@@ -213,6 +353,9 @@ export function MessageRow({
     : (profile?.name ?? truncatePubkey(message.pubkey));
   const timeStr = useMemo(() => relativeTime(message.createdAt), [message.createdAt]);
   const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/.test(message.content);
+  const hasCustomEmoji = customEmojiUrls?.size
+    ? /:[a-z0-9_+-]+:/.test(message.content)
+    : false;
 
   return (
     <div
@@ -221,9 +364,25 @@ export function MessageRow({
       } ${message.isPending ? "opacity-60" : ""}`}
     >
       {/* Avatar column */}
-      <div className="w-8 shrink-0">
+      <div className="relative w-8 shrink-0">
         {showHeader ? (
-          <Avatar pubkey={message.pubkey} profile={profile} />
+          <>
+            <button
+              type="button"
+              onClick={() => setPopoverOpen((o) => !o)}
+              className="block rounded-full transition-opacity hover:opacity-80"
+              title="View profile"
+            >
+              <Avatar pubkey={message.pubkey} profile={profile} />
+            </button>
+            {popoverOpen && (
+              <ProfilePopover
+                pubkey={message.pubkey}
+                profile={profile}
+                onClose={() => setPopoverOpen(false)}
+              />
+            )}
+          </>
         ) : null}
       </div>
 
@@ -239,6 +398,11 @@ export function MessageRow({
               {displayName}
             </span>
             <span className="text-[11px] text-black/35 dark:text-white/35">{timeStr}</span>
+            {message.editedAt && (
+              <span className="text-[11px] italic text-black/30 dark:text-white/30" title={relativeTime(message.editedAt)}>
+                (edited)
+              </span>
+            )}
           </div>
         )}
 
@@ -252,13 +416,18 @@ export function MessageRow({
         )}
 
         <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
-          {hasMention
-            ? <ContentWithMentions content={message.content} mentionNames={mentionNames} />
+          {hasMention || hasCustomEmoji
+            ? <ContentWithMentions content={message.content} mentionNames={mentionNames} customEmojiUrls={customEmojiUrls} />
             : message.content}
+          {message.editedAt && !showHeader && (
+            <span className="ml-1 text-[11px] italic text-black/30 dark:text-white/30">
+              (edited)
+            </span>
+          )}
         </p>
 
         {reactions && onAddReaction && (
-          <ReactionRow reactions={reactions} onAdd={onAddReaction} />
+          <ReactionRow reactions={reactions} onAdd={onAddReaction} customEmojiUrls={customEmojiUrls} />
         )}
       </div>
 
@@ -275,17 +444,18 @@ export function MessageRow({
               <Smile className="h-3.5 w-3.5" />
             </button>
             {pickerOpen && (
-              <div
-                className="absolute right-0 top-full z-10 mt-1"
-                onMouseLeave={() => setPickerOpen(false)}
-              >
-                <QuickReactPicker
-                  onSelect={(e) => {
-                    onAddReaction(e);
-                    setPickerOpen(false);
-                  }}
-                />
-              </div>
+              <>
+                <div className="fixed inset-0 z-10" onMouseDown={() => setPickerOpen(false)} />
+                <div className="absolute right-0 top-full z-20 mt-1">
+                  <EmojiPicker
+                    customEmoji={customEmoji}
+                    onSelect={(e, url) => {
+                      onAddReaction(e, url);
+                      setPickerOpen(false);
+                    }}
+                  />
+                </div>
+              </>
             )}
           </div>
         )}
@@ -299,7 +469,42 @@ export function MessageRow({
             <CornerUpLeft className="h-3.5 w-3.5" />
           </button>
         )}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((o) => !o)}
+            className="rounded p-1.5 text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white/70"
+            title="More"
+          >
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
+          {menuOpen && (
+            <>
+              {/* Click-outside backdrop */}
+              <div className="fixed inset-0 z-10" onMouseDown={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-full z-20 mt-1">
+                <MessageMenu
+                  canEdit={isMe}
+                  onCopy={() => {
+                    void navigator.clipboard?.writeText(message.content).catch(() => {});
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1500);
+                    setMenuOpen(false);
+                  }}
+                  onEdit={onEdit ? () => { onEdit(); setMenuOpen(false); } : undefined}
+                  onDelete={onDelete ? () => { onDelete(); setMenuOpen(false); } : undefined}
+                  onOpenThread={onOpenThread ? () => { onOpenThread(); setMenuOpen(false); } : undefined}
+                />
+              </div>
+            </>
+          )}
+        </div>
       </div>
+      {copied && (
+        <div className="absolute right-4 top-0 -translate-y-full rounded bg-black/80 px-2 py-0.5 text-[10px] text-white dark:bg-white/80 dark:text-black">
+          Copied
+        </div>
+      )}
     </div>
   );
 }

@@ -26,6 +26,8 @@ export interface ChatMessage {
   replyToId?: string;
   /** Whether this was published by the current user (optimistic) */
   isPending?: boolean;
+  /** created_at of the latest applied kind:40003 edit, if any */
+  editedAt?: number;
 }
 
 /** Nostr event kinds used by Buzz chat */
@@ -37,6 +39,13 @@ export const KIND_MEMBER_ADDED_NOTIFICATION = 44100;
 export const KIND_MEMBER_REMOVED_NOTIFICATION = 44101;
 export const KIND_STREAM_MSG = 9;
 export const KIND_STREAM_MSG_V2 = 40002;
+export const KIND_STREAM_MSG_EDIT = 40003;
+/** NIP-09 deletion */
+export const KIND_DELETION = 5;
+/** NIP-29 group-scoped deletion (mirrors the relay + desktop) */
+export const KIND_NIP29_DELETE = 9005;
+/** System rows (join/leave/channel-created/moderation tombstones) */
+export const KIND_SYSTEM_MESSAGE = 40099;
 export const KIND_CREATE_GROUP = 9007;
 export const KIND_AGENT_PROFILE = 10100;
 

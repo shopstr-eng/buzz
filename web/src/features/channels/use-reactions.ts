@@ -26,7 +26,8 @@ export function useReactions(
   myPubkey?: string,
 ): {
   reactions: ReactionsMap;
-  addReaction: (messageId: string, emoji: string) => Promise<void>;
+  /** emoji is unicode or `:shortcode:`; pass emojiUrl for custom emoji (NIP-30 tag) */
+  addReaction: (messageId: string, emoji: string, emojiUrl?: string) => Promise<void>;
 } {
   const { connection, connectionState } = useRelay();
   const [reactions, setReactions] = useState<ReactionsMap>({});
@@ -85,17 +86,24 @@ export function useReactions(
   }, [connection, connectionState, groupId, myPubkey]);
 
   const addReaction = useCallback(
-    async (messageId: string, emoji: string) => {
+    async (messageId: string, emoji: string, emojiUrl?: string) => {
       if (!connection || !groupId) return;
       const signFn = getSignFn();
       if (!signFn) return;
+      const tags: string[][] = [
+        ["e", messageId],
+        ["h", groupId],
+      ];
+      // NIP-30: custom emoji reactions carry the resolution tag so other
+      // clients can render the image (mirrors desktop).
+      if (emojiUrl) {
+        const shortcode = emoji.replace(/^:+|:+$/g, "");
+        tags.push(["emoji", shortcode, emojiUrl]);
+      }
       const signed = await signFn({
         kind: KIND_REACTION,
         created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ["e", messageId],
-          ["h", groupId],
-        ],
+        tags,
         content: emoji,
       });
       connection.publish(signed);

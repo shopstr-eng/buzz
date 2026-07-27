@@ -15,11 +15,20 @@ description: What was implemented and what still remains vs the desktop Buzz app
 ## ACP agent control commands (NOT slash commands)
 The ACP monitors kind:9 for `!rotate`, `!cancel`, `!shutdown` from the owner pubkey. These are `!` prefix, not `/` prefix. The `/` slash commands in `MessageComposer` are user prompts forwarded to the LLM agent as content.
 
+## Full parity analysis
+A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives at `docs/web-parity-analysis.md` (2026-07-27). Update it as gaps close.
+
+## Phase A done (2026-07-27) — key decisions
+- **Self-delete publishes kind 5** (not 9005) with `h+e` tags — matches desktop; 9005 is the moderation variant. Relay accepts both for ingest.
+- **Read state + pinned channels are web-local (localStorage)** — desktop's kind:30078 NIP-RS format is nip44-encrypted slot-merged blobs; cross-client sync is a follow-up, do NOT publish plaintext 30078 (would collide with desktop's blobs).
+- **Optimistic edits tracked in a set** — relay echo must always replace an optimistic edit regardless of clock skew (timestamp-compare only applies to confirmed edits).
+- Presence uses tab-visibility (web has no OS idle); user status kind 30315 d-tag `general`.
+
 ## Still needed for full parity
 - AI provider config: `BUZZ_AGENT_PROVIDER` + API key must be set as Replit secrets before the agent can respond to anything.
 - ACP must be added to at least one channel via Admin → Agents → Add to channel.
-- No emoji picker beyond the 6 quick-react emojis (full picker is a separate feature).
-- No notification badge for unread reactions.
+- Phases B–E from `docs/web-parity-analysis.md`: search, inbox/notifications, DMs, forum tab, job cards, moderation, agents screen, issues/PRs.
+- Phase A deltas: edit events don't re-emit mention p-tags (desktop does); unread badges cover last ~500 messages.
 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.

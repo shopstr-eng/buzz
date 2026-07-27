@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "IddnKWwyXj7By_GHd0C3R"
+uri = "file://docs/web-parity-analysis.md"
+type = "text"
+title = "Web ↔ Desktop Parity Analysis"

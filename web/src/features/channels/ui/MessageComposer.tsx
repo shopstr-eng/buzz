@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback } from "react";
-import { SendHorizonal, AtSign, X, CornerUpLeft, Zap } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { SendHorizonal, AtSign, X, CornerUpLeft, Zap, Pencil } from "lucide-react";
 import type { ChannelMember } from "../use-channel-members";
 import type { ChatMessage } from "../types";
 import type { Profile } from "@/shared/hooks/use-profiles";
@@ -15,8 +15,14 @@ interface Props {
   /** Message being replied to — shows a dismissable banner above the input */
   replyTo?: ChatMessage | null;
   onClearReply?: () => void;
+  /** Message being edited — pre-fills the input; send publishes a kind:40003 edit */
+  editing?: ChatMessage | null;
+  onClearEdit?: () => void;
+  onEditSave?: (messageId: string, content: string) => Promise<void>;
   /** When true, shows workflow-specific slash command hints */
   hasWorkflows?: boolean;
+  /** Fired on keystroke so the parent can broadcast typing indicators */
+  onTyping?: () => void;
 }
 
 function shortKey(pubkey: string) {
@@ -87,7 +93,11 @@ export function MessageComposer({
   profiles,
   replyTo,
   onClearReply,
+  editing,
+  onClearEdit,
+  onEditSave,
   hasWorkflows,
+  onTyping,
 }: Props) {
   const [value, setValue] = useState("");
   const [mentionedPubkeys, setMentionedPubkeys] = useState<Set<string>>(new Set());
@@ -99,9 +109,37 @@ export function MessageComposer({
 
   const closePicker = useCallback(() => { setPicker(null); setSlashPicker(null); }, []);
 
+  // Enter edit mode: pre-fill with the original content.
+  useEffect(() => {
+    if (editing) {
+      setValue(editing.content);
+      setMentionedPubkeys(new Set());
+      setPicker(null);
+      setSlashPicker(null);
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+      }
+    } else {
+      setValue("");
+    }
+  }, [editing]);
+
   async function handleSend() {
     const content = value.trim();
     if (!content || isSending || disabled) return;
+
+    if (editing && onEditSave) {
+      setValue("");
+      setPicker(null);
+      setSlashPicker(null);
+      if (textareaRef.current) textareaRef.current.style.height = "auto";
+      await onEditSave(editing.id, content);
+      onClearEdit?.();
+      return;
+    }
+
     const mentions = [...mentionedPubkeys];
     setValue("");
     setMentionedPubkeys(new Set());
@@ -115,6 +153,7 @@ export function MessageComposer({
   function handleInput(e: React.ChangeEvent<HTMLTextAreaElement>) {
     const newValue = e.target.value;
     setValue(newValue);
+    if (newValue.trim()) onTyping?.();
 
     const el = e.target;
     el.style.height = "auto";
@@ -172,6 +211,11 @@ export function MessageComposer({
       if (e.key === "ArrowUp")   { e.preventDefault(); setPickerIndex((i) => Math.max(i - 1, 0)); return; }
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); selectMember(picker.filtered[pickerIndex]); return; }
       if (e.key === "Escape") { closePicker(); return; }
+    }
+
+    if (e.key === "Escape" && editing) {
+      onClearEdit?.();
+      return;
     }
 
     if (e.key === "Enter" && !e.shiftKey) {
@@ -300,6 +344,25 @@ export function MessageComposer({
         </div>
       )}
 
+      {/* Editing banner */}
+      {editing && (
+        <div className="mb-2 flex items-center gap-2 rounded-md bg-violet-50 px-3 py-1.5 dark:bg-violet-900/20">
+          <Pencil className="h-3 w-3 shrink-0 text-violet-500" />
+          <span className="min-w-0 flex-1 truncate text-xs text-violet-700 dark:text-violet-300">
+            Editing message
+          </span>
+          {onClearEdit && (
+            <button
+              type="button"
+              onClick={onClearEdit}
+              className="shrink-0 text-violet-400 hover:text-violet-600 dark:hover:text-violet-200"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Reply-to banner */}
       {replyTo && (
         <div className="mb-2 flex items-center gap-2 rounded-md bg-black/[0.04] px-3 py-1.5 dark:bg-white/[0.06]">
@@ -328,7 +391,7 @@ export function MessageComposer({
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           onBlur={closePicker}
-          placeholder={`Message #${channelName}`}
+          placeholder={editing ? "Edit message…" : `Message #${channelName}`}
           rows={1}
           disabled={disabled || isSending}
           className="max-h-36 min-h-[1.5rem] flex-1 resize-none bg-transparent text-sm text-black placeholder:text-black/35 focus:outline-none disabled:opacity-50 dark:text-white dark:placeholder:text-white/35"

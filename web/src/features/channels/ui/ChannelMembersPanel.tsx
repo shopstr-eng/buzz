@@ -15,6 +15,7 @@ import {
   Loader2, AlertTriangle,
 } from "lucide-react";
 import { useChannelMembers, type ChannelMember } from "../use-channel-members";
+import { usePresenceMap } from "../use-presence";
 import { ConnectAgentDialog } from "./ConnectAgentDialog";
 import { useProfiles, type Profile } from "@/shared/hooks/use-profiles";
 
@@ -157,6 +158,8 @@ interface MemberRowProps {
 function MemberRow({ member, profile, myRole, isSelf, onKick, onChangeRole }: MemberRowProps) {
   const short = `${member.pubkey.slice(0, 7)}…${member.pubkey.slice(-4)}`;
   const displayName = profile?.name ?? short;
+  const presence = usePresenceMap();
+  const presenceStatus = presence.get(member.pubkey);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [acting, setActing] = useState(false);
@@ -244,8 +247,22 @@ function MemberRow({ member, profile, myRole, isSelf, onKick, onChangeRole }: Me
 
   return (
     <div className="group relative flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-black/5 dark:hover:bg-white/5">
-      {/* Avatar */}
-      <MemberAvatar member={member} profile={profile} />
+      {/* Avatar + presence dot */}
+      <div className="relative shrink-0">
+        <MemberAvatar member={member} profile={profile} />
+        {presenceStatus && (
+          <span
+            title={presenceStatus === "online" ? "Online" : presenceStatus === "away" ? "Away" : "Offline"}
+            className={`absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full ring-1 ring-white dark:ring-[#1A1A1A] ${
+              presenceStatus === "online"
+                ? "bg-emerald-500"
+                : presenceStatus === "away"
+                  ? "bg-amber-500"
+                  : "bg-black/30 dark:bg-white/30"
+            }`}
+          />
+        )}
+      </div>
 
       {/* Label */}
       <span

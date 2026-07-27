@@ -2,10 +2,16 @@ import { useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   BookMarked, Hash, Lock, Wifi, WifiOff, Loader, LogOut,
-  Zap, MessageSquare, Plus, Pencil,
+  Zap, MessageSquare, Plus, Pencil, Pin, PinOff,
 } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../use-channels";
+import { useReadState, type ChannelUnread } from "../use-read-state";
+import { usePinnedChannels } from "../use-pinned-channels";
+import { usePresenceLifecycle } from "../use-presence";
+import { useUserStatusLifecycle, useUserStatusMap } from "../use-user-status";
+import { SetStatusDialog } from "./SetStatusDialog";
+import { useCustomEmoji } from "../use-custom-emoji";
 import type { Channel, ChannelType } from "../types";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { ProfileEditDialog } from "./ProfileEditDialog";
@@ -42,33 +48,81 @@ function TypeIcon({ type, isPrivate }: { type: ChannelType; isPrivate: boolean }
   return <Hash className="h-3.5 w-3.5 shrink-0 opacity-60" />;
 }
 
-function ChannelItem({ channel }: { channel: Channel }) {
+function ChannelItem({
+  channel,
+  unread,
+  isPinned,
+  onTogglePin,
+}: {
+  channel: Channel;
+  unread?: ChannelUnread;
+  isPinned?: boolean;
+  onTogglePin?: () => void;
+}) {
   const { location } = useRouterState();
   const isActive = location.pathname === `/channels/${channel.groupId}`;
+  const hasUnread = !isActive && unread && unread.count > 0;
 
   return (
-    <Link
-      to="/channels/$groupId"
-      params={{ groupId: channel.groupId }}
-      className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
-        isActive
-          ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
-          : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
-      }`}
-    >
-      <TypeIcon type={channel.channelType} isPrivate={channel.isPrivate} />
-      <span className="min-w-0 flex-1 truncate">{channel.name}</span>
-    </Link>
+    <div className="group relative">
+      <Link
+        to="/channels/$groupId"
+        params={{ groupId: channel.groupId }}
+        className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+          isActive
+            ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+            : hasUnread
+              ? "font-semibold text-black hover:bg-black/5 dark:text-white dark:hover:bg-white/5"
+              : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+        }`}
+      >
+        <TypeIcon type={channel.channelType} isPrivate={channel.isPrivate} />
+        <span className="min-w-0 flex-1 truncate">{channel.name}</span>
+        {hasUnread && unread.mention && (
+          <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">
+            {unread.count > 99 ? "99+" : unread.count}
+          </span>
+        )}
+        {hasUnread && !unread.mention && (
+          <span className="ml-auto h-2 w-2 shrink-0 rounded-full bg-black/40 dark:bg-white/50" />
+        )}
+      </Link>
+      {onTogglePin && (
+        <button
+          type="button"
+          onClick={onTogglePin}
+          title={isPinned ? "Unpin channel" : "Pin channel"}
+          aria-label={isPinned ? "Unpin channel" : "Pin channel"}
+          className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 transition-opacity ${
+            isPinned
+              ? "text-black/40 opacity-100 dark:text-white/40"
+              : "text-black/30 opacity-0 group-hover:opacity-100 dark:text-white/30"
+          } hover:bg-black/10 dark:hover:bg-white/10 ${hasUnread ? "hidden group-hover:block" : ""}`}
+        >
+          {isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+        </button>
+      )}
+    </div>
   );
 }
 
 export function ChannelSidebar() {
   const { channels, isLoading } = useChannels();
+  const { unread } = useReadState();
+  const { pinned, togglePin } = usePinnedChannels();
   const { identity, logout } = useRelay();
   const { location } = useRouterState();
   const reposActive = location.pathname.startsWith("/repos");
   const [showCreate, setShowCreate] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSetStatus, setShowSetStatus] = useState(false);
+
+  // Global presence + user-status lifecycles (mounted once here).
+  usePresenceLifecycle();
+  const { publishStatus } = useUserStatusLifecycle();
+  const userStatuses = useUserStatusMap();
+  const { customEmoji } = useCustomEmoji();
+  const myStatus = identity ? userStatuses.get(identity.pubkey) : undefined;
 
   // Fetch own profile for display name in the footer.
   const selfPubkeys = identity ? [identity.pubkey] : EMPTY_PUBKEYS;
@@ -79,6 +133,9 @@ export function ChannelSidebar() {
     ? `${identity.pubkey.slice(0, 8)}…${identity.pubkey.slice(-4)}`
     : null;
   const displayName = myProfile?.name ?? shortPubkey;
+
+  const pinnedChannels = channels.filter((ch) => pinned.has(ch.groupId));
+  const unpinnedChannels = channels.filter((ch) => !pinned.has(ch.groupId));
 
   return (
     <>
@@ -147,8 +204,32 @@ export function ChannelSidebar() {
             </button>
           ) : (
             <div className="space-y-0.5">
-              {channels.map((ch) => (
-                <ChannelItem key={ch.groupId} channel={ch} />
+              {pinnedChannels.length > 0 && (
+                <>
+                  <div className="px-2 pb-0.5 pt-1 text-[10px] font-semibold uppercase tracking-widest text-black/30 dark:text-white/30">
+                    Pinned
+                  </div>
+                  {pinnedChannels.map((ch) => (
+                    <ChannelItem
+                      key={ch.groupId}
+                      channel={ch}
+                      unread={unread.get(ch.groupId)}
+                      isPinned
+                      onTogglePin={() => togglePin(ch.groupId)}
+                    />
+                  ))}
+                  <div className="px-2 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-widest text-black/30 dark:text-white/30">
+                    Channels
+                  </div>
+                </>
+              )}
+              {unpinnedChannels.map((ch) => (
+                <ChannelItem
+                  key={ch.groupId}
+                  channel={ch}
+                  unread={unread.get(ch.groupId)}
+                  onTogglePin={() => togglePin(ch.groupId)}
+                />
               ))}
             </div>
           )}
@@ -159,13 +240,26 @@ export function ChannelSidebar() {
           <ConnectionBadge />
           {identity && (
             <div className="mt-1.5 flex items-center justify-between gap-1">
-              {/* Name / pubkey */}
-              <span
-                className="min-w-0 truncate text-[11px] text-black/50 dark:text-white/40"
-                title={identity.pubkey}
+              {/* Name / pubkey + status */}
+              <button
+                type="button"
+                onClick={() => setShowSetStatus(true)}
+                title="Set a status"
+                className="min-w-0 flex-1 text-left"
               >
-                {displayName}
-              </span>
+                <span className="block truncate text-[11px] text-black/50 dark:text-white/40" title={identity.pubkey}>
+                  {displayName}
+                </span>
+                {myStatus && (myStatus.text || myStatus.emoji) ? (
+                  <span className="block truncate text-[10px] text-black/40 dark:text-white/30">
+                    {myStatus.emoji} {myStatus.text}
+                  </span>
+                ) : (
+                  <span className="block truncate text-[10px] text-black/25 hover:text-black/40 dark:text-white/25 dark:hover:text-white/40">
+                    + Set status
+                  </span>
+                )}
+              </button>
 
               {/* Edit profile + logout */}
               <div className="flex shrink-0 items-center gap-0.5">
@@ -198,6 +292,15 @@ export function ChannelSidebar() {
       )}
       {showEditProfile && (
         <ProfileEditDialog onClose={() => setShowEditProfile(false)} />
+      )}
+      {showSetStatus && (
+        <SetStatusDialog
+          currentText={myStatus?.text}
+          currentEmoji={myStatus?.emoji}
+          customEmoji={customEmoji}
+          onSave={publishStatus}
+          onClose={() => setShowSetStatus(false)}
+        />
       )}
     </>
   );
