@@ -27,16 +27,53 @@ This runbook covers those.
     the start script imports it automatically on first boot, then never again.
 - Latest `main` pushed to GitHub (`shopstr-eng/buzz`).
 
-## Phase 1 — create the new app
+## Phase 1 — create the new app (Agent-created, then clone Buzz into it)
 
-1. Replit → **Create App** → **Import from GitHub** → `shopstr-eng/buzz`.
-2. Do not let Agent "set up" the project from scratch — the repo already has
-   `.replit` (workflow **Buzz Relay**, VM deployment config, ports). If Agent
-   proposes a different run command, keep `bash scripts/start-replit.sh`.
-3. First run: the Rust build takes several minutes (release build of
-   relay + acp + agent + cli). Subsequent boots reuse `target/release`.
-   Note: cargo must run with `--ignore-rust-version` (already encoded in all
-   scripts) because Replit's toolchain is 1.88.
+Keyless AI Integrations only attach to apps **created by Agent** — a plain
+GitHub import is not eligible (verified July 2026). So the order is:
+integration first, repo second.
+
+1. Replit → **Create App** → describe a throwaway starter to Agent:
+
+   > Build a single-page app with one button that asks Claude for a haiku,
+   > using Replit's managed Anthropic integration (keyless, billed to my
+   > Replit account). Do not ask me for an API key.
+
+2. Approve the **“Anthropic (Replit managed)”** card when it appears.
+   - If Agent asks you to paste an `ANTHROPIC_API_KEY` value: decline and
+     reply “No key — use Replit AI Integrations, the Replit-managed
+     Anthropic option.”
+   - If it says managed AI isn't available: it requires a paid plan, and in
+     a Pro/Enterprise **organization** an org admin must first enable AI
+     Integrations in org settings (off by default). Fix that before doing
+     any migration work.
+3. **Prove it works**: click the button, get a haiku. This confirms
+   eligibility before any further effort.
+4. Replace the scaffold with Buzz. Tell the same Agent:
+
+   > Replace this entire scaffold with my real project. Clone
+   > https://github.com/shopstr-eng/buzz.git and make the workspace root an
+   > exact copy of that repo (including its `.replit`, `replit.nix`, and
+   > `.git`), deleting the scaffold files. Keep the Anthropic integration
+   > attached. Then read `REPLIT_MIGRATION.md` in the repo and follow it
+   > from Phase 2 — ask me for the secrets when you're ready.
+
+   Suggested commands for that agent (adapt as needed), run from the
+   workspace root:
+
+   ```bash
+   git clone https://github.com/shopstr-eng/buzz.git /tmp/buzz-src
+   find . -mindepth 1 -maxdepth 1 ! -name '.config' ! -name '.cache' ! -name '.upm' -exec rm -rf {} +
+   mv /tmp/buzz-src/* /tmp/buzz-src/.[!.]* . && rmdir /tmp/buzz-src
+   ```
+
+   If the clone needs auth (private repo), add `GITHUB_TOKEN` in the new
+   app's Secrets pane first and clone with it.
+5. First Buzz run: use the repo's **Buzz Relay** workflow
+   (`bash scripts/start-replit.sh`). The Rust release build takes several
+   minutes the first time; subsequent boots reuse `target/release`. All
+   cargo calls already use `--ignore-rust-version` (Replit's toolchain
+   is 1.88).
 
 ## Phase 2 — copy secrets (before anyone connects!)
 
@@ -55,34 +92,21 @@ from `BUZZ_RELAY_PRIVATE_KEY`.
 
 ## Phase 3 — keyless AI (the reason for the move)
 
-In the NEW app, tell its Agent exactly this — keep it short and do **not**
-mention env-var names (naming `ANTHROPIC_API_KEY` steers Agent into the
-"paste a secret" flow instead of the integration flow):
-
-> Add the Anthropic (Claude) integration to this app using Replit AI
-> Integrations — the Replit-managed, keyless option billed to my Replit
-> account. Do not ask me for an API key.
-
-Approve the **“Anthropic (Replit managed)”** card when it appears.
-
-- If Agent asks you to paste an `ANTHROPIC_API_KEY` value instead of
-  showing the card: **decline the secret request** and reply
-  “No key — use Replit AI Integrations, the Replit-managed Anthropic
-  option.”
-- If it says the integration isn't available: managed AI requires a paid
-  plan (Core/Pro/Enterprise), and on Pro/Enterprise **organizations** an
-  org admin must enable AI integrations first.
-
-No wiring is needed afterwards: the integration injects `ANTHROPIC_API_KEY`
-into the app's environment, and `scripts/start-replit.sh` auto-detects it —
-defaulting `BUZZ_AGENT_PROVIDER=anthropic` and
+The integration was already attached in Phase 1. The repo needs no manual
+wiring: `scripts/start-replit.sh` auto-detects `ANTHROPIC_API_KEY` in the
+environment and defaults `BUZZ_AGENT_PROVIDER=anthropic`,
 `ANTHROPIC_MODEL=claude-opus-4-5` (a provider explicitly saved in
-Admin → Settings still wins). Just restart the **Buzz Relay** workflow.
-The same auto-detection applies to the production deployment.
+Admin → Settings still wins). The same auto-detection applies to the
+production deployment.
 
-Verify: workflow logs show
-`ANTHROPIC_API_KEY detected — defaulting BUZZ_AGENT_PROVIDER=anthropic`,
-and an @mention to the agent in a channel gets a reply.
+- Restart the **Buzz Relay** workflow and look for
+  `ANTHROPIC_API_KEY detected — defaulting BUZZ_AGENT_PROVIDER=anthropic`
+  in the logs.
+- If that line does not appear, the integration injected different
+  variable names: ask the app's Agent to expose the managed Anthropic
+  credentials to the workflow environment as `ANTHROPIC_API_KEY` (and
+  `ANTHROPIC_BASE_URL` if it uses a custom endpoint).
+- Verify end-to-end: @mention the agent in a channel and get a reply.
 
 ## Phase 4 — development data (optional)
 
