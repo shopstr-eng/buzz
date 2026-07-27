@@ -29,10 +29,20 @@ export BUZZ_AUTO_MIGRATE="${BUZZ_AUTO_MIGRATE:-false}"
 export RUST_LOG="${RUST_LOG:-buzz_relay=info,buzz_db=info,tower_http=warn}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 
-# Auto-wire Replit's managed Anthropic integration: it injects
-# ANTHROPIC_API_KEY into the environment. If a key is present but no
-# provider is configured yet, default to anthropic so the keyless
-# integration works with zero manual wiring. An explicit
+# Auto-wire Replit's managed (keyless) Anthropic integration. Replit's AI
+# Integrations inject AI_INTEGRATIONS_ANTHROPIC_API_KEY / _BASE_URL, but
+# buzz-agent reads the standard ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL.
+# Map them when the standard names aren't already set.
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_API_KEY:-}" ]]; then
+  export ANTHROPIC_API_KEY="$AI_INTEGRATIONS_ANTHROPIC_API_KEY"
+  echo "==> Mapped AI_INTEGRATIONS_ANTHROPIC_API_KEY → ANTHROPIC_API_KEY for buzz-agent."
+fi
+if [[ -z "${ANTHROPIC_BASE_URL:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_BASE_URL:-}" ]]; then
+  export ANTHROPIC_BASE_URL="$AI_INTEGRATIONS_ANTHROPIC_BASE_URL"
+fi
+
+# If a key is present but no provider is configured yet, default to anthropic
+# so the keyless integration works with zero manual wiring. An explicit
 # BUZZ_AGENT_PROVIDER (env or admin-saved .env.agent, sourced later)
 # always wins over this default.
 if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]] && [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
@@ -62,6 +72,27 @@ elif [[ -n "${REPLIT_DOMAINS:-}" ]]; then
 elif [[ -n "${REPLIT_DEV_DOMAIN:-}" ]]; then
   export RELAY_URL="wss://${REPLIT_DEV_DOMAIN}"
   export BUZZ_MEDIA_BASE_URL="https://${REPLIT_DEV_DOMAIN}/media"
+fi
+
+# Public community hosts the ACP worker must serve. The relay is
+# host-tenant-bound (community resolved from the Host header), so one ACP
+# connection binds to exactly ONE community. We run one worker per public
+# host (custom domains, the .replit.app domain, or the dev domain) so the
+# agent is reachable in every community users actually connect to.
+ACP_HOSTS=""
+_acp_add_host() {
+  local h="$1"
+  [[ -z "$h" ]] && return
+  case " ${ACP_HOSTS} " in *" ${h} "*) return ;; esac
+  ACP_HOSTS="${ACP_HOSTS:+${ACP_HOSTS} }${h}"
+}
+if [[ -n "${BUZZ_CUSTOM_DOMAINS:-}" ]]; then
+  for _d in $(echo "${BUZZ_CUSTOM_DOMAINS}" | tr ',' ' '); do _acp_add_host "$_d"; done
+fi
+if [[ -n "${REPLIT_DOMAINS:-}" ]]; then
+  for _d in $(echo "${REPLIT_DOMAINS}" | tr ',' ' '); do _acp_add_host "$_d"; done
+elif [[ -n "${REPLIT_DEV_DOMAIN:-}" ]]; then
+  _acp_add_host "${REPLIT_DEV_DOMAIN}"
 fi
 
 # ---------------------------------------------------------------------------
@@ -159,6 +190,7 @@ build_rust_bin_if_missing() {
 build_rust_bin_if_missing buzz-acp   buzz-acp
 build_rust_bin_if_missing buzz-agent buzz-agent
 build_rust_bin_if_missing buzz buzz-cli
+build_rust_bin_if_missing buzz-dev-mcp buzz-dev-mcp
 
 # ---------------------------------------------------------------------------
 # 3. Run migrations (idempotent — safe to run on every restart)
@@ -276,14 +308,18 @@ if [[ -n "$ACP_PRIVATE_KEY" ]]; then
                run_bin buzz-admin buzz-admin derive-pubkey 2>/dev/null || true)
   if [[ -n "$ACP_PUBKEY" ]]; then
     echo "==> ACP worker pubkey: ${ACP_PUBKEY}"
-    # Register in the localhost community (127.0.0.1:<port>) — this is the community
-    # the ACP worker authenticates against when connecting via ws://127.0.0.1:<port>.
-    # buzz-admin resolves community from RELAY_URL, so we override it to the localhost URL.
+    # Register the ACP worker as a relay member in every community it serves.
+    # The relay is host-tenant-bound: one ACP worker connection binds to ONE
+    # community (by Host header), so we run one worker per public host (see
+    # _start_acp) plus the loopback community, and each needs membership.
+    # buzz-admin resolves community from RELAY_URL, so we override it per host.
     _BIND_PORT=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
-    RELAY_URL="ws://127.0.0.1:${_BIND_PORT}" \
-      run_bin buzz-admin buzz-admin add-member --pubkey "$ACP_PUBKEY" >/dev/null 2>&1 \
-      && echo "==> ACP worker registered as relay member (community: 127.0.0.1:${_BIND_PORT})." \
-      || echo "==> ACP worker member registration skipped (already exists or error)."
+    for _ACP_COMMUNITY_HOST in "127.0.0.1:${_BIND_PORT}" ${ACP_HOSTS:-}; do
+      RELAY_URL="ws://${_ACP_COMMUNITY_HOST}" \
+        run_bin buzz-admin buzz-admin add-member --pubkey "$ACP_PUBKEY" >/dev/null 2>&1 \
+        && echo "==> ACP worker registered as relay member (community: ${_ACP_COMMUNITY_HOST})." \
+        || echo "==> ACP worker member registration skipped (already exists or error): ${_ACP_COMMUNITY_HOST}"
+    done
 
     # Write the ACP pubkey into web/dist/assets/ so the relay's static file
     # handler (which only serves /assets/* paths) can serve it to the web UI.
@@ -372,7 +408,8 @@ STOPPING=false
 _cleanup() {
   STOPPING=true
   [[ -n "$RELAY_PID" ]] && kill -TERM "$RELAY_PID" 2>/dev/null || true
-  [[ -n "$ACP_PID"   ]] && kill -TERM "$ACP_PID"   2>/dev/null || true
+  # shellcheck disable=SC2086 — ACP_PID may hold multiple PIDs (one worker per host).
+  [[ -n "$ACP_PID"   ]] && kill -TERM $ACP_PID   2>/dev/null || true
   [[ -n "$WATCHER_PID" ]] && kill -TERM "$WATCHER_PID" 2>/dev/null || true
   rm -f /tmp/buzz-relay.pid /tmp/buzz-acp.pid
 }
@@ -388,6 +425,12 @@ trap '_cleanup' SIGTERM SIGINT
 _start_acp() {
   [[ -z "$ACP_PRIVATE_KEY" ]] && return
   [[ ! -x "$ACP_BIN" ]] && { echo "==> Warning: buzz-acp binary not found — ACP workers disabled." >&2; return; }
+
+  # Guard: the MCP command must exist or agent turns fail at runtime.
+  local mcp_cmd="${BUZZ_ACP_MCP_COMMAND:-${REPO_ROOT}/target/release/buzz-dev-mcp}"
+  if [[ ! -x "$mcp_cmd" ]]; then
+    echo "==> Warning: MCP command '$mcp_cmd' not found/executable — agent tool calls will fail. Build it with: cargo build --ignore-rust-version -p buzz-dev-mcp --release" >&2
+  fi
 
   local bind_port
   bind_port=$(echo "${BUZZ_BIND_ADDR:-0.0.0.0:5000}" | cut -d: -f2)
@@ -433,22 +476,47 @@ _start_acp() {
     echo "==>          Go to Admin → Settings → AI Provider to configure a provider." >&2
   fi
 
-  BUZZ_PRIVATE_KEY="$ACP_PRIVATE_KEY" \
-  BUZZ_RELAY_URL="$acp_relay_url" \
-  BUZZ_ACP_NIP42_RELAY_URL="${relay_scheme}://127.0.0.1:${bind_port}" \
-  BUZZ_ACP_NIP98_BASE_URL="${http_scheme}://127.0.0.1:${bind_port}" \
-  BUZZ_ACP_AGENT_OWNER="${RELAY_OWNER_PUBKEY:-}" \
-  BUZZ_ACP_AGENT_COMMAND="${BUZZ_ACP_AGENT_COMMAND:-${REPO_ROOT}/target/release/buzz-agent}" \
-  BUZZ_ACP_AGENT_ARGS="${BUZZ_ACP_AGENT_ARGS:-acp}" \
-  BUZZ_ACP_SUBSCRIBE="${BUZZ_ACP_SUBSCRIBE:-mentions}" \
-  BUZZ_ACP_LAZY_POOL="${BUZZ_ACP_LAZY_POOL:-true}" \
-  BUZZ_ACP_RESPOND_TO="${BUZZ_ACP_RESPOND_TO:-anyone}" \
-  BUZZ_ACP_MCP_COMMAND="${BUZZ_ACP_MCP_COMMAND:-${REPO_ROOT}/target/release/buzz}" \
-  "$ACP_BIN" 2>&1 &
+  # One worker per community host. The relay resolves the community from the
+  # Host header, so each worker connects over loopback but presents the public
+  # host via BUZZ_ACP_HOST_HEADER, binding it to that community. With no
+  # public hosts (pure-local dev), fall back to a single loopback worker.
+  local hosts="${ACP_HOSTS:-}"
+  [[ -z "$hosts" ]] && hosts="127.0.0.1:${bind_port}"
 
-  ACP_PID=$!
-  echo $ACP_PID > /tmp/buzz-acp.pid
-  echo "==> ACP worker started (PID ${ACP_PID})."
+  rm -f /tmp/buzz-acp.pid
+  local host
+  for host in $hosts; do
+    local host_header="" nip42_url="${relay_scheme}://127.0.0.1:${bind_port}" nip98_url="${http_scheme}://127.0.0.1:${bind_port}" mcp_relay_url=""
+    if [[ "$host" != "127.0.0.1:${bind_port}" ]]; then
+      host_header="$host"
+      nip42_url="${relay_scheme}://${host}"
+      nip98_url="${http_scheme}://${host}"
+      # The MCP server (buzz CLI) has no Host-header override, so point it at
+      # the public URL whose host resolves to this worker's community.
+      mcp_relay_url="${http_scheme}://${host}"
+    fi
+    echo "==> Starting ACP worker for community host '${host}' (relay=${acp_relay_url})..."
+    RUST_LOG="${BUZZ_ACP_RUST_LOG:-buzz_acp=info,buzz_agent=info}" \
+    BUZZ_PRIVATE_KEY="$ACP_PRIVATE_KEY" \
+    BUZZ_RELAY_URL="$acp_relay_url" \
+    BUZZ_ACP_HOST_HEADER="$host_header" \
+    BUZZ_ACP_MCP_RELAY_URL="$mcp_relay_url" \
+    BUZZ_ACP_NIP42_RELAY_URL="$nip42_url" \
+    BUZZ_ACP_NIP98_BASE_URL="$nip98_url" \
+    BUZZ_ACP_AGENT_OWNER="${RELAY_OWNER_PUBKEY:-}" \
+    BUZZ_ACP_AGENT_COMMAND="${BUZZ_ACP_AGENT_COMMAND:-${REPO_ROOT}/target/release/buzz-agent}" \
+    BUZZ_ACP_AGENT_ARGS="${BUZZ_ACP_AGENT_ARGS:-acp}" \
+    BUZZ_ACP_SUBSCRIBE="${BUZZ_ACP_SUBSCRIBE:-mentions}" \
+    BUZZ_ACP_LAZY_POOL="${BUZZ_ACP_LAZY_POOL:-true}" \
+    BUZZ_ACP_RESPOND_TO="${BUZZ_ACP_RESPOND_TO:-anyone}" \
+    BUZZ_ACP_MCP_COMMAND="${BUZZ_ACP_MCP_COMMAND:-${REPO_ROOT}/target/release/buzz-dev-mcp}" \
+    "$ACP_BIN" 2>&1 &
+
+    local pid=$!
+    ACP_PID="${ACP_PID:+${ACP_PID} }${pid}"
+    echo "$pid" >> /tmp/buzz-acp.pid
+    echo "==> ACP worker started (PID ${pid}, community host ${host})."
+  done
 }
 
 # Wait for the relay port to be ready before starting ACP.
@@ -491,8 +559,9 @@ while true; do
 
   # Kill any previous ACP worker before starting a fresh one.
   if [[ -n "$ACP_PID" ]]; then
-    kill -TERM "$ACP_PID" 2>/dev/null || true
-    wait "$ACP_PID" 2>/dev/null || true
+    # shellcheck disable=SC2086 — ACP_PID may hold multiple PIDs (one worker per host).
+    kill -TERM $ACP_PID 2>/dev/null || true
+    wait $ACP_PID 2>/dev/null || true
     ACP_PID=""
   fi
 
@@ -520,4 +589,5 @@ done
 
 # Clean up watcher and ACP if still running
 [[ -n "$WATCHER_PID"  ]] && kill -TERM "$WATCHER_PID"  2>/dev/null || true
-[[ -n "$ACP_PID"      ]] && kill -TERM "$ACP_PID"      2>/dev/null || true
+# shellcheck disable=SC2086 — ACP_PID may hold multiple PIDs (one worker per host).
+[[ -n "$ACP_PID"      ]] && kill -TERM $ACP_PID      2>/dev/null || true

@@ -49,6 +49,7 @@ build_rust_bin buzz-admin  buzz-admin
 build_rust_bin buzz-acp    buzz-acp
 build_rust_bin buzz-agent  buzz-agent
 build_rust_bin buzz-cli    buzz
+build_rust_bin buzz-dev-mcp buzz-dev-mcp
 
 # ---------------------------------------------------------------------------
 # 3. Strip target/ — keep only the pre-built release binaries
@@ -61,6 +62,7 @@ KEEP=(
   "target/release/buzz-acp"
   "target/release/buzz-agent"
   "target/release/buzz"
+  "target/release/buzz-dev-mcp"
 )
 
 TMP=$(mktemp -d)

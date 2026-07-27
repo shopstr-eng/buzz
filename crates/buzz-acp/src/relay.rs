@@ -85,6 +85,23 @@ fn nip98_base_url(ws_url: &str) -> String {
 ///
 /// If the env var is unset or empty the connection URL is used unchanged (the
 /// common case for non-loopback deployments).
+/// Optional `Host` header override for the WebSocket handshake and HTTP
+/// bridge requests.
+///
+/// The relay is host-tenant-bound: it resolves the community from the
+/// connection's `Host` header. A worker that reaches the relay via
+/// `ws://127.0.0.1:<port>` binds to the loopback community and can never see
+/// membership notifications or messages in the community users connect to via
+/// the public domain. `BUZZ_ACP_HOST_HEADER` lets operators keep the loopback
+/// transport (no egress / TLS dependency) while binding the worker to a
+/// specific community host. Unset or empty means no override (legacy
+/// behavior: Host derived from the connection URL).
+fn host_header_override() -> Option<String> {
+    std::env::var("BUZZ_ACP_HOST_HEADER")
+        .ok()
+        .filter(|s| !s.is_empty())
+}
+
 fn nip42_auth_relay_url(connect_url: &str) -> String {
     std::env::var("BUZZ_ACP_NIP42_RELAY_URL")
         .ok()
@@ -440,6 +457,11 @@ impl RestClient {
                 .post(&connect_url)
                 .header("Authorization", auth)
                 .header("Content-Type", "application/json");
+            if let Some(host) = host_header_override() {
+                // Bind bridge requests to the same community as the WS
+                // connection on host-tenant-bound relays.
+                req = req.header("Host", host);
+            }
             if let Some(ref tag) = auth_tag_header {
                 req = req.header("x-auth-tag", tag);
             }
@@ -3889,7 +3911,21 @@ async fn do_connect(
         .parse::<url::Url>()
         .map_err(|e| RelayError::Http(format!("invalid relay URL: {e}")))?;
 
-    let (ws, _response) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(parsed.as_str()))
+    // Build the handshake request explicitly so the Host header can be
+    // overridden (community binding on host-tenant-bound relays).
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let mut request = parsed
+        .as_str()
+        .into_client_request()
+        .map_err(|e| RelayError::Http(format!("invalid relay URL: {e}")))?;
+    if let Some(host) = host_header_override() {
+        let value = host
+            .parse()
+            .map_err(|e| RelayError::Http(format!("invalid BUZZ_ACP_HOST_HEADER: {e}")))?;
+        request.headers_mut().insert("Host", value);
+    }
+
+    let (ws, _response) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(request))
         .await
         .map_err(|_| RelayError::ConnectionClosed)? // timeout → treat as connection failure
         .map_err(|e| RelayError::WebSocket(Box::new(e)))?;

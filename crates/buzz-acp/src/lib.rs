@@ -4154,7 +4154,14 @@ fn build_mcp_servers(config: &Config) -> Vec<McpServer> {
             let mut env = vec![
                 EnvVar {
                     name: "BUZZ_RELAY_URL".into(),
-                    value: config.relay_url.clone(),
+                    // On host-tenant-bound relays the loopback connection URL
+                    // binds to the wrong community. BUZZ_ACP_MCP_RELAY_URL lets
+                    // operators point the MCP server at a URL whose host
+                    // matches the community this worker serves.
+                    value: std::env::var("BUZZ_ACP_MCP_RELAY_URL")
+                        .ok()
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or_else(|| config.relay_url.clone()),
                 },
                 EnvVar {
                     name: "BUZZ_PRIVATE_KEY".into(),
