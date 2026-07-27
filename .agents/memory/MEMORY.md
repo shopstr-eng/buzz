@@ -2,3 +2,4 @@
 - [buzz-acp loopback auth quirks](buzz-acp-loopback-auth.md) — NIP-42/NIP-98 scheme mismatch when ACP connects via ws:// loopback to wss:// relay; _wait_for_relay bash fix.
 - [Web UI parity gaps](web-ui-parity.md) — Feature gaps vs desktop: reactions, reply threading, slash commands, workflow channel chat, historical runs. All implemented; what remains.
 - [PromptChannelInfo model field](prompt-channel-info-model.md) — Upstream dropped model from PromptChannelInfo; our per-channel model code re-adds it. Must re-check on future upstream merges.
+- [Workspace migration to standard app](workspace-migration.md) — this workspace type can't use managed AI; repo carries migration tooling + one-shot prod seed; prod DB is read-only from tools.

@@ -168,8 +168,13 @@ if [[ -f "$SEED_FILE" ]] && command -v psql >/dev/null 2>&1; then
   _CH_COUNT=$(psql "$DATABASE_URL" -tAc "SELECT count(*) FROM channels;" 2>/dev/null || echo "err")
   if [[ "$_CH_COUNT" == "0" ]]; then
     echo "==> Empty relay DB and seed file present — importing ${SEED_FILE}..."
-    bash scripts/import-json-export.sh "$SEED_FILE" --yes \
-      || echo "==> WARNING: seed import failed — continuing with empty DB." >&2
+    if ! bash scripts/import-json-export.sh "$SEED_FILE" --yes; then
+      echo "==> FATAL: seed import failed. Refusing to start with an empty DB" >&2
+      echo "==> while a seed file is staged (a silent empty relay would accept" >&2
+      echo "==> new writes and defeat the migration). Fix or remove ${SEED_FILE}" >&2
+      echo "==> and restart. The import is transactional, so the DB is still empty." >&2
+      exit 1
+    fi
   else
     echo "==> Seed file present but DB already has channels (${_CH_COUNT}) — skipping import."
   fi

@@ -98,10 +98,24 @@ deployment and has real data (channels, members, messages).
    ships in the image.
 3. **Publish the new app** (VM deployment — config already in `.replit`):
    set `BUZZ_CUSTOM_DOMAINS=buzz.shopstrmarkets.com` in the new deployment's
-   production env. On first boot the empty prod DB triggers the one-shot
-   seed import; logs show `Empty relay DB and seed file present — importing`.
-4. **Verify on the temporary URL** (`<new-app>.replit.app`): admin login,
-   channels & membership present, agent replies.
+   production env **before the first boot** — the relay is host-tenant-bound,
+   and the imported data belongs to the `buzz.shopstrmarkets.com` community,
+   so RELAY_URL must match from the very first start. On first boot the empty
+   prod DB triggers the one-shot seed import; logs show
+   `Empty relay DB and seed file present — importing`. If the import fails
+   the deployment **exits on purpose** (fail-closed) rather than starting an
+   empty relay — check logs, fix, redeploy.
+4. **Verify before flipping DNS.** The browser UI on the temporary
+   `<new-app>.replit.app` URL will NOT show the migrated channels — the relay
+   resolves tenants by `Host` header, and the migrated data lives under the
+   custom-domain community. Verify instead with:
+   - Deployment logs: seed-import line + final row counts.
+   - Host-override curls against the temp URL, e.g.
+     `curl -s -H "Host: buzz.shopstrmarkets.com" -H "Accept: application/nostr+json" https://<new-app>.replit.app/`
+     (NIP-11 doc should show the relay owner pubkey).
+   - Optional full-UI check: point `buzz.shopstrmarkets.com` at the new
+     deployment's IP in your local `/etc/hosts` and use the real domain in
+     the browser before touching public DNS.
 5. **Move the domain**: old app → deployment settings → remove
    `buzz.shopstrmarkets.com`; new app → add it; update the DNS A/TXT records
    at the registrar to the values the new app shows. (Expect propagation

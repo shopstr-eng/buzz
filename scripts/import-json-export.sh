@@ -7,11 +7,17 @@
 #
 # Used for migrating relay data between Replit apps when only read-only SQL
 # access to the source database is available (agent-side export). Tables are
-# loaded in foreign-key-safe order inside one transaction; unknown/absent
-# tables are skipped; sequences are re-synced afterwards.
+# loaded in foreign-key-safe order inside one transaction; absent tables are
+# skipped; sequences (serial AND identity) are re-synced afterwards.
+#
+# Column lists are built from the live catalog, excluding GENERATED columns
+# (e.g. events.search_tsv) which must never be inserted explicitly. Tables
+# with GENERATED ALWAYS identity columns (e.g. delivery_log.id) get
+# OVERRIDING SYSTEM VALUE so original ids restore faithfully.
 #
 # Inserts use ON CONFLICT DO NOTHING, so pre-seeded rows (e.g. a community
-# row auto-created at boot) don't abort the import.
+# row auto-created at boot) don't abort the import. The whole load is one
+# transaction: on any error nothing is committed.
 #
 # Usage: bash scripts/import-json-export.sh <export.json> [--yes]
 set -euo pipefail
@@ -81,37 +87,65 @@ trap 'rm -f "$SQL_FILE"' EXIT
   # Read the JSON file into a psql variable (single-quoted literal semantics).
   echo "\\set j \`cat '${JSON_FILE}'\`"
   echo "BEGIN;"
-  for t in "${TABLES[@]}"; do
-    cat <<SQL
-INSERT INTO ${t}
-  SELECT * FROM jsonb_populate_recordset(
+} > "$SQL_FILE"
+
+for t in "${TABLES[@]}"; do
+  exists=$(psql "$DATABASE_URL" -tAc "SELECT to_regclass('public.${t}') IS NOT NULL;")
+  if [[ "$exists" != "t" ]]; then
+    echo "==> Table ${t} not in target schema — skipping." >&2
+    continue
+  fi
+  # Insertable columns: skip dropped and GENERATED (STORED) columns.
+  cols=$(psql "$DATABASE_URL" -tAc "
+    SELECT string_agg(quote_ident(attname), ', ' ORDER BY attnum)
+    FROM pg_attribute
+    WHERE attrelid = 'public.${t}'::regclass
+      AND attnum > 0 AND NOT attisdropped
+      AND attgenerated = '';")
+  if [[ -z "$cols" ]]; then
+    echo "==> Table ${t} has no insertable columns — skipping." >&2
+    continue
+  fi
+  # GENERATED ALWAYS identity columns need OVERRIDING SYSTEM VALUE to accept
+  # explicit ids from the export.
+  has_always_identity=$(psql "$DATABASE_URL" -tAc "
+    SELECT EXISTS (
+      SELECT 1 FROM pg_attribute
+      WHERE attrelid = 'public.${t}'::regclass
+        AND attnum > 0 AND NOT attisdropped
+        AND attidentity = 'a');")
+  overriding=""
+  [[ "$has_always_identity" == "t" ]] && overriding="OVERRIDING SYSTEM VALUE"
+  cat >> "$SQL_FILE" <<SQL
+INSERT INTO ${t} (${cols}) ${overriding}
+  SELECT ${cols} FROM jsonb_populate_recordset(
     NULL::public.${t},
     COALESCE((:'j'::jsonb)->'${t}', '[]'::jsonb))
 ON CONFLICT DO NOTHING;
 SQL
-  done
-  # Re-sync all owned sequences to MAX(column)+1 so future inserts don't
-  # collide with imported ids.
-  cat <<'SQL'
+done
+
+# Re-sync all serial ('a') and identity ('i') sequences to MAX(column)+1 so
+# future inserts don't collide with imported ids.
+cat >> "$SQL_FILE" <<'SQL'
 DO $$
 DECLARE r RECORD;
 BEGIN
   FOR r IN
-    SELECT seq.relname AS seqname, tab.relname AS tabname, attr.attname AS colname
+    SELECT seq.oid AS seqoid, tab.relname AS tabname, attr.attname AS colname
     FROM pg_class seq
-    JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype = 'a'
+    JOIN pg_depend dep ON dep.objid = seq.oid AND dep.deptype IN ('a', 'i')
     JOIN pg_class tab ON dep.refobjid = tab.oid
     JOIN pg_attribute attr ON attr.attrelid = tab.oid AND attr.attnum = dep.refobjsubid
     WHERE seq.relkind = 'S'
   LOOP
     EXECUTE format(
       'SELECT setval(%L, COALESCE((SELECT MAX(%I) FROM %I), 0) + 1, false)',
-      r.seqname, r.colname, r.tabname);
+      r.seqoid::regclass::text, r.colname, r.tabname);
   END LOOP;
 END $$;
 COMMIT;
 SQL
-} > "$SQL_FILE"
 
 echo "==> Importing ${JSON_FILE} ..."
 psql "$DATABASE_URL" -q -f "$SQL_FILE"
