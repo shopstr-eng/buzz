@@ -31,12 +31,19 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - **Replaceable-event ingestion: re-check d-tag version AFTER async decrypt** — older event finishing decrypt later must not overwrite newer state.
 - **Virtual route config**: `web/src/app/routes.ts` is the source of truth — new route files are ignored until registered there (routeTree won't regenerate otherwise).
 
+## Phase C done (2026-07-27) — key decisions
+- **Reports (1984) suppress relay fanout** — the relay persists them to `moderation_reports` but never fans out, so a web mod queue is impossible via subscription (desktop uses Tauri API). Web implements report submission + 9040–9043 commands only.
+- **publishAndWait emits EVENT itself** — never call `connection.publish()` and `publishAndWait()` on the same event (double-send). Use publishAndWait alone and roll back optimistic rows on rejection.
+- **Mixed-kind subscriptions deliver out of order** — aggregation across kinds (forum posts+comments) must cache children until parents arrive and dedupe by event id.
+- **Moderation commands are community-scoped (no h tag)** — tag shapes pinned by desktop `shared/api/moderation.ts`: timeout 9042 requires `["expiration", ts]`; timeout detection is reactive via OK false `restricted: you are timed out until <ts>`.
+
 ## Still needed for full parity
 - AI provider config: `BUZZ_AGENT_PROVIDER` + API key must be set as Replit secrets before the agent can respond to anything.
 - ACP must be added to at least one channel via Admin → Agents → Add to channel.
-- Phases C–E from `docs/web-parity-analysis.md`: forum tab, job cards, moderation, agents screen, issues/PRs.
+- Phases D–E from `docs/web-parity-analysis.md`: agents screen depth, workflow trace viewer, issues/PRs.
 - Phase A deltas: edit events don't re-emit mention p-tags (desktop does); unread badges cover last ~500 messages.
 - Phase B deltas: alerts fire on mentions only (not DM messages); DM creation takes pubkeys (no people-picker); inbox excludes approvals (46010) — the workflow channel already surfaces them.
+- Phase C deltas: no 45002 forum votes; no mod queue (see above); job cards are labeled rows without state aggregation; templates are web-local.
 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.

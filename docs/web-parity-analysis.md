@@ -150,12 +150,12 @@ _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay 
 4. DMs + `/messages/new` equivalent ✅ (kind 41010 open with p tags → relay idempotent participant-hash channels; sidebar "Direct messages" section; New message dialog accepts npub/hex). Delta: no people-picker — recipients entered as pubkey
 5. Reminders panel + "remind me" message action ✅ (kind 30300 NIP-44-to-self; `/channels/reminders`; presets 1h/3h/tomorrow/next week). Requires nsec login or NIP-07 extension with `window.nostr.nip44`
 
-**Phase C — channel extensions**
-1. Forum tab per channel (45001/45003) + post route
-2. Channel canvas
-3. Job cards (43001–43006) in timeline
-4. Moderation: report/timeout/ban/mod queue + composer timeout banner
-5. Channel templates
+**Phase C — channel extensions** ✅ DONE
+1. Forum tab per channel ✅ (45001 posts/45003 comments h-scoped; Chat/Forum tabs in channel view; reply counts order-independent). Deltas: no post route (inline thread view), no 45002 votes
+2. Channel canvas ✅ (kind 40100 markdown doc, latest-wins; Canvas tab on all non-DM channels; react-markdown render + edit)
+3. Job cards ✅ (43001–43006 in timeline ingest + violet label badges). Delta: rendered as labeled rows, no state aggregation into a single card
+4. Moderation ✅ (1984 report dialog; 9040–9043 ban/timeout commands admin-gated by member role; reactive timeout banner via `publishAndWait` rejection parsing). Delta: mod queue NOT feasible — reports suppress relay fanout, desktop reads them via Tauri API
+5. Channel templates ✅ (web-local localStorage `buzz.channelTemplates.v1`; picker in create dialog, save from settings dialog)
 
 **Phase D — agents & workflows depth**
 1. Agents screen: personas/teams (30175/30176), transcripts, metrics (44200), observer frames (24200) in channel

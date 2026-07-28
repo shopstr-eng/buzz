@@ -17,6 +17,10 @@ import { ChannelSettingsDialog } from "./ChannelSettingsDialog";
 import { ThreadPanel } from "./ThreadPanel";
 import { RemindMeDialog } from "../../reminders/ui/RemindMeDialog";
 import { useAddReminder } from "../../reminders/use-reminders";
+import { ReportDialog, TimeoutDialog } from "../../moderation/ui/ModerationDialogs";
+import { useModeration } from "../../moderation/use-moderation";
+import { ForumView } from "../../forum/ui/ForumView";
+import { CanvasView } from "../../canvas/ui/CanvasView";
 import { WorkflowChannelView } from "./WorkflowChannelView";
 import type { Channel, ChannelType, ChatMessage } from "../types";
 
@@ -49,13 +53,22 @@ function ChatChannelView({ channel }: Props) {
     fetchOlder,
     canFetchOlder,
   } = useMessages(channel.groupId);
-  const { send, isSending } = useSendMessage(channel.groupId, addOptimistic);
+  const { send, isSending, timeoutRejection } = useSendMessage(
+    channel.groupId,
+    addOptimistic,
+    applyLocalDelete,
+  );
   const { editMessage, deleteMessage } = useMessageActions(
     channel.groupId,
     applyLocalEdit,
     applyLocalDelete,
   );
   const { members } = useChannelMembers(channel.groupId);
+  const { submitReport, timeoutMember, banMember } = useModeration();
+  const [reportTarget, setReportTarget] = useState<ChatMessage | null>(null);
+  const [timeoutTarget, setTimeoutTarget] = useState<ChatMessage | null>(null);
+  const myRole = members.find((m) => m.pubkey === identity?.pubkey)?.role;
+  const canModerate = myRole === "owner" || myRole === "admin";
   const { reactions, addReaction } = useReactions(channel.groupId, identity?.pubkey);
   const { customEmoji, customEmojiUrls } = useCustomEmoji();
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
@@ -67,6 +80,11 @@ function ChatChannelView({ channel }: Props) {
   const [findQuery, setFindQuery] = useState("");
   const [remindTarget, setRemindTarget] = useState<ChatMessage | null>(null);
   const addReminder = useAddReminder();
+  const isForum = channel.channelType === "forum";
+  const hasCanvas = channel.channelType !== "dm";
+  type ChannelTab = "chat" | "forum" | "canvas";
+  const tabs: ChannelTab[] = ["chat", ...(isForum ? ["forum" as const] : []), ...(hasCanvas ? ["canvas" as const] : [])];
+  const [activeTab, setActiveTab] = useState<ChannelTab>("chat");
 
   // In-channel find bar: filters the loaded timeline client-side.
   const visibleMessages = useMemo(() => {
@@ -176,6 +194,30 @@ function ChatChannelView({ channel }: Props) {
           </div>
         )}
 
+        {/* Chat / Forum / Canvas tabs */}
+        {(isForum || hasCanvas) && (
+          <div className="flex shrink-0 gap-1 border-b border-black/10 px-4 py-1.5 dark:border-white/10">
+            {tabs.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setActiveTab(t)}
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+                  activeTab === t
+                    ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                    : "text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
+                }`}
+              >
+                {t === "chat" ? "Chat" : t === "forum" ? "Forum" : "Canvas"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {activeTab === "canvas" && hasCanvas ? (
+          <CanvasView channel={channel} />
+        ) : !isForum || activeTab === "chat" ? (
+          <>
         {/* Message timeline */}
         <MessageList
           messages={visibleMessages}
@@ -192,6 +234,15 @@ function ChatChannelView({ channel }: Props) {
           onDelete={(msg) => void deleteMessage(msg.id)}
           onOpenThread={(msg) => setThreadRoot(msg)}
           onRemind={(msg) => setRemindTarget(msg)}
+          canModerate={canModerate}
+          onReport={(msg) => setReportTarget(msg)}
+          onTimeout={(msg) => setTimeoutTarget(msg)}
+          onBan={(msg) => {
+            const name = memberProfiles.get(msg.pubkey)?.name ?? `${msg.pubkey.slice(0, 4)}…${msg.pubkey.slice(-4)}`;
+            if (window.confirm(`Ban ${name} from the community? This cannot be undone from the web UI.`)) {
+              void banMember(msg.pubkey).catch(() => {});
+            }
+          }}
           memberProfiles={memberProfiles}
         />
 
@@ -222,7 +273,12 @@ function ChatChannelView({ channel }: Props) {
           onClearEdit={() => setEditing(null)}
           onEditSave={editMessage}
           onTyping={notifyTyping}
+          timeoutRejection={timeoutRejection}
         />
+          </>
+        ) : (
+          <ForumView channel={channel} />
+        )}
       </div>
 
       {/* Thread drawer */}
@@ -266,6 +322,29 @@ function ChatChannelView({ channel }: Props) {
           groupId={channel.groupId}
           onSave={addReminder}
           onClose={() => setRemindTarget(null)}
+        />
+      )}
+
+      {/* Report dialog */}
+      {reportTarget && (
+        <ReportDialog
+          message={reportTarget}
+          onSubmit={(reportType, note) =>
+            submitReport(reportTarget.pubkey, reportTarget.id, reportType, note)
+          }
+          onClose={() => setReportTarget(null)}
+        />
+      )}
+
+      {/* Timeout dialog */}
+      {timeoutTarget && (
+        <TimeoutDialog
+          memberName={
+            memberProfiles.get(timeoutTarget.pubkey)?.name ??
+            `${timeoutTarget.pubkey.slice(0, 4)}…${timeoutTarget.pubkey.slice(-4)}`
+          }
+          onSubmit={(seconds, reason) => timeoutMember(timeoutTarget.pubkey, seconds, reason)}
+          onClose={() => setTimeoutTarget(null)}
         />
       )}
     </div>

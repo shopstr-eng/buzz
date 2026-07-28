@@ -9,18 +9,26 @@ import { useCallback, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
 import { KIND_STREAM_MSG, type ChatMessage } from "./types";
+import {
+  parseTimeoutRejection,
+  type TimeoutRejection,
+} from "../moderation/use-moderation";
 
 export function useSendMessage(
   groupId: string | null,
   addOptimistic: (msg: ChatMessage) => void,
+  removeOptimistic?: (messageId: string) => void,
 ): {
   send: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
   isSending: boolean;
   error: string | null;
+  /** Set when the relay rejected a send because the user is timed out. */
+  timeoutRejection: TimeoutRejection | null;
 } {
   const { connection, identity } = useRelay();
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [timeoutRejection, setTimeoutRejection] = useState<TimeoutRejection | null>(null);
 
   const send = useCallback(
     async (content: string, replyToId?: string, mentionPubkeys?: string[]) => {
@@ -64,7 +72,21 @@ export function useSendMessage(
           isPending: true,
         });
 
-        connection.publish(signed);
+        // Single publish: publishAndWait emits EVENT and resolves on the
+        // relay's OK. Reactive timeout detection (mirrors desktop): the relay
+        // refuses writes from timed-out members with "restricted: …".
+        void connection.publishAndWait(signed).catch((err: unknown) => {
+          // Roll back the optimistic row — rejected sends get no echo and
+          // would otherwise linger as pending forever.
+          removeOptimistic?.(signed.id);
+          const msg = err instanceof Error ? err.message : String(err);
+          const rejection = parseTimeoutRejection(msg);
+          if (rejection) {
+            setTimeoutRejection(rejection);
+          } else {
+            setError(msg);
+          }
+        });
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to send message.",
@@ -73,8 +95,8 @@ export function useSendMessage(
         setIsSending(false);
       }
     },
-    [connection, identity, groupId, addOptimistic],
+    [connection, identity, groupId, addOptimistic, removeOptimistic],
   );
 
-  return { send, isSending, error };
+  return { send, isSending, error, timeoutRejection };
 }

@@ -10,6 +10,8 @@ import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
 import { KIND_EDIT_METADATA, type Channel } from "../types";
 
+import { saveChannelTemplate } from "../use-channel-templates";
+
 interface Props {
   channel: Channel;
   onClose: () => void;
@@ -19,6 +21,7 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
   const { connection } = useRelay();
   const [name, setName] = useState(channel.name);
   const [about, setAbout] = useState(channel.about ?? "");
+  const [templateSaved, setTemplateSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,6 +102,23 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
           placeholder="What's this channel about?"
           className="mb-3 w-full resize-none rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-black placeholder:text-black/35 focus:border-black/30 focus:outline-none dark:border-white/15 dark:text-white dark:placeholder:text-white/35 dark:focus:border-white/30"
         />
+
+        <button
+          type="button"
+          onClick={() => {
+            saveChannelTemplate({
+              name: name.trim() || channel.name,
+              about: about.trim(),
+              channelType: channel.channelType,
+              isPrivate: channel.isPrivate,
+              ...(channel.model ? { model: channel.model } : {}),
+            });
+            setTemplateSaved(true);
+          }}
+          className="mb-3 w-full rounded-lg border border-black/10 px-3 py-1.5 text-xs text-black/60 hover:bg-black/5 dark:border-white/10 dark:text-white/60 dark:hover:bg-white/10"
+        >
+          {templateSaved ? "Saved as template ✓" : "Save as template"}
+        </button>
 
         {error && (
           <p className="mb-3 text-xs text-red-600 dark:text-red-400">{error}</p>

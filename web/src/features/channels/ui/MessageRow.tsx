@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlarmClock, Copy, CornerUpLeft, MessagesSquare, MoreHorizontal, Pencil, Smile, Trash2 } from "lucide-react";
+import { AlarmClock, Ban, Clock, Copy, CornerUpLeft, Flag, MessagesSquare, MoreHorizontal, Pencil, Smile, Trash2 } from "lucide-react";
+import { jobKindLabel } from "../types";
 import type { ChatMessage } from "../types";
 import type { EmojiReactions } from "../use-reactions";
 import type { CustomEmoji } from "../use-custom-emoji";
@@ -27,6 +28,14 @@ interface Props {
   onOpenThread?: () => void;
   /** Set a reminder anchored to this message */
   onRemind?: () => void;
+  /** Current user is a channel moderator (enables timeout/ban actions) */
+  canModerate?: boolean;
+  /** Report this message to moderators */
+  onReport?: () => void;
+  /** Time out the author (moderator) */
+  onTimeout?: () => void;
+  /** Ban the author (moderator) */
+  onBan?: () => void;
   /** The message this message is replying to, for inline context */
   replyToMessage?: { content: string; pubkey: string; senderName?: string } | null;
   /** Resolved kind:0 / kind:10100 profile for this message's author */
@@ -244,18 +253,26 @@ function ReactionRow({
 /** Dropdown menu with copy/edit/delete actions (desktop-style context menu). */
 function MessageMenu({
   canEdit,
+  canModerate,
   onCopy,
   onEdit,
   onDelete,
   onOpenThread,
   onRemind,
+  onReport,
+  onTimeout,
+  onBan,
 }: {
   canEdit: boolean;
+  canModerate: boolean;
   onCopy: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onOpenThread?: () => void;
   onRemind?: () => void;
+  onReport?: () => void;
+  onTimeout?: () => void;
+  onBan?: () => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -290,6 +307,24 @@ function MessageMenu({
         <button type="button" onMouseDown={(e) => { e.preventDefault(); onRemind(); }} className={itemCls}>
           <AlarmClock className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
           Remind me
+        </button>
+      )}
+      {onReport && !canEdit && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onReport(); }} className={itemCls}>
+          <Flag className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Report message
+        </button>
+      )}
+      {canModerate && !canEdit && onTimeout && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onTimeout(); }} className={itemCls}>
+          <Clock className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Time out user
+        </button>
+      )}
+      {canModerate && !canEdit && onBan && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onBan(); }} className={`${itemCls} text-red-600 dark:text-red-400`}>
+          <Ban className="h-3.5 w-3.5" />
+          Ban user
         </button>
       )}
       {canEdit && onEdit && (
@@ -346,6 +381,10 @@ export function MessageRow({
   onDelete,
   onOpenThread,
   onRemind,
+  canModerate,
+  onReport,
+  onTimeout,
+  onBan,
   customEmoji,
   customEmojiUrls,
   replyToMessage,
@@ -409,6 +448,11 @@ export function MessageRow({
               {displayName}
             </span>
             <span className="text-[11px] text-black/35 dark:text-white/35">{timeStr}</span>
+            {jobKindLabel(message.kind) && (
+              <span className="rounded-full bg-violet-100 px-1.5 py-px text-[10px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                {jobKindLabel(message.kind)}
+              </span>
+            )}
             {message.editedAt && (
               <span className="text-[11px] italic text-black/30 dark:text-white/30" title={relativeTime(message.editedAt)}>
                 (edited)
@@ -506,6 +550,10 @@ export function MessageRow({
                   onDelete={onDelete ? () => { onDelete(); setMenuOpen(false); } : undefined}
                   onOpenThread={onOpenThread ? () => { onOpenThread(); setMenuOpen(false); } : undefined}
                   onRemind={onRemind ? () => { onRemind(); setMenuOpen(false); } : undefined}
+                  canModerate={canModerate ?? false}
+                  onReport={onReport ? () => { onReport(); setMenuOpen(false); } : undefined}
+                  onTimeout={onTimeout ? () => { onTimeout(); setMenuOpen(false); } : undefined}
+                  onBan={onBan ? () => { onBan(); setMenuOpen(false); } : undefined}
                 />
               </div>
             </>

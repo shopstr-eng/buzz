@@ -23,6 +23,8 @@ interface Props {
   hasWorkflows?: boolean;
   /** Fired on keystroke so the parent can broadcast typing indicators */
   onTyping?: () => void;
+  /** Set when the relay rejected a send because the user is timed out */
+  timeoutRejection?: { expiresAtMs: number | null } | null;
 }
 
 function shortKey(pubkey: string) {
@@ -98,6 +100,7 @@ export function MessageComposer({
   onEditSave,
   hasWorkflows,
   onTyping,
+  timeoutRejection,
 }: Props) {
   const [value, setValue] = useState("");
   const [mentionedPubkeys, setMentionedPubkeys] = useState<Set<string>>(new Set());
@@ -272,6 +275,15 @@ export function MessageComposer({
 
   return (
     <div className="relative shrink-0 border-t border-black/10 px-4 py-3 dark:border-white/10">
+      {/* Timeout banner (reactive: set when the relay rejects a send) */}
+      {timeoutRejection && (
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+          {timeoutRejection.expiresAtMs
+            ? `You are timed out until ${new Date(timeoutRejection.expiresAtMs).toLocaleString()}. Your message was not sent.`
+            : "You are timed out in this community. Your message was not sent."}
+        </div>
+      )}
+
       {/* Slash-command picker */}
       {slashPicker && (
         <div className="absolute bottom-full left-4 right-4 mb-1 overflow-hidden rounded-lg border border-black/10 bg-white shadow-lg dark:border-white/10 dark:bg-[#1E1E1E]">

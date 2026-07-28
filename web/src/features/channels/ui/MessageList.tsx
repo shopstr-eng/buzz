@@ -20,6 +20,10 @@ interface Props {
   onDelete?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
   onRemind?: (message: ChatMessage) => void;
+  canModerate?: boolean;
+  onReport?: (message: ChatMessage) => void;
+  onTimeout?: (message: ChatMessage) => void;
+  onBan?: (message: ChatMessage) => void;
   /** Community custom emoji (NIP-30) for the reaction picker */
   customEmoji?: CustomEmoji[];
   /** shortcode → url for rendering :shortcode: tokens */
@@ -100,6 +104,10 @@ export function MessageList({
   onDelete,
   onOpenThread,
   onRemind,
+  canModerate,
+  onReport,
+  onTimeout,
+  onBan,
   customEmoji,
   customEmojiUrls,
   memberProfiles,
@@ -239,6 +247,10 @@ export function MessageList({
             onDelete={onDelete ? () => onDelete(msg) : undefined}
             onOpenThread={onOpenThread ? () => onOpenThread(msg) : undefined}
             onRemind={onRemind ? () => onRemind(msg) : undefined}
+            canModerate={canModerate}
+            onReport={onReport ? () => onReport(msg) : undefined}
+            onTimeout={onTimeout ? () => onTimeout(msg) : undefined}
+            onBan={onBan ? () => onBan(msg) : undefined}
             replyToMessage={
               replyToMsg
                 ? {

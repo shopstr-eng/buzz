@@ -17,6 +17,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
 import {
   KIND_DELETION,
+  KIND_JOB_ACCEPTED,
+  KIND_JOB_CANCEL,
+  KIND_JOB_ERROR,
+  KIND_JOB_PROGRESS,
+  KIND_JOB_REQUEST,
+  KIND_JOB_RESULT,
   KIND_NIP29_DELETE,
   KIND_STREAM_MSG,
   KIND_STREAM_MSG_EDIT,
@@ -36,6 +42,12 @@ const TIMELINE_KINDS = [
   KIND_SYSTEM_MESSAGE,
   KIND_DELETION,
   KIND_NIP29_DELETE,
+  KIND_JOB_REQUEST,
+  KIND_JOB_ACCEPTED,
+  KIND_JOB_PROGRESS,
+  KIND_JOB_RESULT,
+  KIND_JOB_CANCEL,
+  KIND_JOB_ERROR,
 ];
 
 function isDeletionKind(kind: number): boolean {

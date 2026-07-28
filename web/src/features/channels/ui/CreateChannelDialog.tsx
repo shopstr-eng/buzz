@@ -18,6 +18,10 @@ import {
   KIND_CREATE_GROUP, AI_MODELS,
   type ChannelType, type ModelPreset,
 } from "../types";
+import {
+  useChannelTemplates,
+  type ChannelTemplate,
+} from "../use-channel-templates";
 
 interface Props { onClose: () => void }
 
@@ -34,13 +38,38 @@ interface Step1Props {
   channelType: ChannelType; setChannelType: (v: ChannelType) => void;
   isPrivate: boolean; setIsPrivate: (v: boolean) => void;
   about: string; setAbout: (v: string) => void;
+  onApplyTemplate: (t: ChannelTemplate) => void;
   onCancel: () => void; onNext: () => void;
 }
 
-function Step1({ name, setName, channelType, setChannelType, isPrivate, setIsPrivate, about, setAbout, onCancel, onNext }: Step1Props) {
+function Step1({ name, setName, channelType, setChannelType, isPrivate, setIsPrivate, about, setAbout, onApplyTemplate, onCancel, onNext }: Step1Props) {
+  const { templates } = useChannelTemplates();
   return (
     <>
       <div className="space-y-4 p-5">
+        {templates.length > 0 && (
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-black/60 dark:text-white/60">
+              Apply a template
+            </label>
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const t = templates.find((x) => x.id === e.target.value);
+                if (t) onApplyTemplate(t);
+                e.target.value = "";
+              }}
+              className="w-full rounded-md border border-black/15 bg-white px-3 py-2 text-sm text-black outline-none dark:border-white/15 dark:bg-[#222] dark:text-white"
+            >
+              <option value="">Choose a template…</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.channelType})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-black/60 dark:text-white/60">
             Channel name <span className="text-red-500">*</span>
@@ -292,6 +321,15 @@ export function CreateChannelDialog({ onClose }: Props) {
             channelType={channelType} setChannelType={(v) => { setChannelType(v); setSelectedModel(null); }}
             isPrivate={isPrivate} setIsPrivate={setIsPrivate}
             about={about} setAbout={setAbout}
+            onApplyTemplate={(t) => {
+              setName(t.name);
+              setAbout(t.about);
+              setChannelType(t.channelType);
+              setIsPrivate(t.isPrivate);
+              setSelectedModel(
+                t.model ? (AI_MODELS.find((m) => m.name === t.model) ?? null) : null,
+              );
+            }}
             onCancel={onClose} onNext={handleStep1Next}
           />
         )}

@@ -51,6 +51,27 @@ export const KIND_SYSTEM_MESSAGE = 40099;
 export const KIND_CREATE_GROUP = 9007;
 /** Open/find a DM channel (idempotent participant-set lookup, relay-side) */
 export const KIND_DM_OPEN = 41010;
+
+/** Job lifecycle events, rendered as labeled timeline cards */
+export const KIND_JOB_REQUEST = 43001;
+export const KIND_JOB_ACCEPTED = 43002;
+export const KIND_JOB_PROGRESS = 43003;
+export const KIND_JOB_RESULT = 43004;
+export const KIND_JOB_CANCEL = 43005;
+export const KIND_JOB_ERROR = 43006;
+
+/** Short label for job lifecycle kinds (matches desktop headlines) */
+export function jobKindLabel(kind: number): string | null {
+  switch (kind) {
+    case KIND_JOB_REQUEST: return "Job requested";
+    case KIND_JOB_ACCEPTED: return "Job accepted";
+    case KIND_JOB_PROGRESS: return "Progress update";
+    case KIND_JOB_RESULT: return "Job result";
+    case KIND_JOB_CANCEL: return "Job cancelled";
+    case KIND_JOB_ERROR: return "Job failed";
+    default: return null;
+  }
+}
 export const KIND_AGENT_PROFILE = 10100;
 
 /** NIP-29 group management kinds */
