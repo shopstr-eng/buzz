@@ -8,15 +8,16 @@
  * - Live activity (24200): observer frames folded into a transcript-style feed.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign,
-  Plus, Pencil, Trash2,
+  Plus, Pencil, Trash2, Download, Upload,
 } from "lucide-react";
 import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-agents";
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
 import { useAgentPublishing } from "../use-agent-publishing";
+import { buildSnapshot, parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
 import { PersonaDialog } from "./PersonaDialog";
 import { TeamDialog } from "./TeamDialog";
 import { ManagedAgentDialog } from "./ManagedAgentDialog";
@@ -35,10 +36,12 @@ function PersonaCard({
   persona,
   onEdit,
   onDelete,
+  onExport,
 }: {
   persona: AgentPersona;
   onEdit: () => void;
   onDelete: () => void;
+  onExport: () => void;
 }) {
   return (
     <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#1A1A1A]">
@@ -61,6 +64,14 @@ function PersonaCard({
               .join(" · ") || "No runtime configured"}
           </p>
         </div>
+        <button
+          className={iconBtnCls}
+          onClick={onExport}
+          aria-label={`Export ${persona.displayName} as snapshot`}
+          title="Export .agent.json snapshot"
+        >
+          <Download className="h-3.5 w-3.5" />
+        </button>
         <button className={iconBtnCls} onClick={onEdit} aria-label={`Edit ${persona.displayName}`}>
           <Pencil className="h-3.5 w-3.5" />
         </button>
@@ -192,12 +203,48 @@ export function AgentsView() {
   const { personas, teams, agents, isLoading: dirLoading } = useAgentDirectory();
   const { metrics, decryptUnavailable } = useAgentMetrics();
   const { items: activity, isLoading: activityLoading } = useAgentActivity();
-  const { deletePersona, deleteTeam, deleteManagedAgent, error: publishError } = useAgentPublishing();
+  const { savePersona, deletePersona, deleteTeam, deleteManagedAgent, error: publishError } = useAgentPublishing();
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function confirmDelete(label: string, action: () => Promise<void>) {
     if (window.confirm(`Delete ${label}? This publishes a deletion event and cannot be undone.`)) {
       action().catch(() => {/* surfaced via publishError */});
+    }
+  }
+
+  /** Download a persona as a portable .agent.json snapshot (desktop contract). */
+  function handleExport(persona: AgentPersona): void {
+    const snapshot = buildSnapshot(persona);
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${persona.id}.agent.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  /**
+   * Import a snapshot as a NEW persona (fresh slug — imports never overwrite
+   * an existing persona, matching the desktop's always-mint rule).
+   */
+  async function handleImportFile(file: File): Promise<void> {
+    setImportError(null);
+    const parsed = parseSnapshot(await file.text());
+    if (!parsed.ok) {
+      setImportError(parsed.error);
+      return;
+    }
+    try {
+      await savePersona(
+        snapshotToPersonaInput(parsed.snapshot),
+        null,
+        personas.map((p) => p.id),
+      );
+    } catch {
+      // surfaced via publishError
     }
   }
 
@@ -213,9 +260,36 @@ export function AgentsView() {
           {publishError}
         </p>
       )}
+      {importError && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          Snapshot import failed: {importError}
+        </p>
+      )}
 
       <Section title="Personas" Icon={Bot} count={personas.length}
-        action={<NewButton label="New persona" onClick={() => setDialog({ type: "persona", existing: null })} />}
+        action={
+          <div className="flex items-center gap-1.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void handleImportFile(file);
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1 rounded-lg border border-black/15 px-2 py-1 text-[11px] font-medium text-black/60 hover:bg-black/5 dark:border-white/15 dark:text-white/60 dark:hover:bg-white/10"
+            >
+              <Upload className="h-3 w-3" />
+              Import
+            </button>
+            <NewButton label="New persona" onClick={() => setDialog({ type: "persona", existing: null })} />
+          </div>
+        }
         empty={dirLoading ? "Loading…" : "No personas yet — create your first one."}>
         {personas.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-2">
@@ -225,6 +299,7 @@ export function AgentsView() {
                 persona={p}
                 onEdit={() => setDialog({ type: "persona", existing: p })}
                 onDelete={() => confirmDelete(`persona "${p.displayName}"`, () => deletePersona(p.id))}
+                onExport={() => handleExport(p)}
               />
             ))}
           </div>
