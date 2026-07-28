@@ -50,8 +50,9 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - **PR/issue merge is impossible from web** — desktop merges via Tauri git command; web exposes close/reopen/draft/done only.
 
 ## Still needed for full parity
-- AI provider config: `BUZZ_AGENT_PROVIDER` + API key must be set as Replit secrets before the agent can respond to anything.
-- ACP must be added to at least one channel via Admin → Agents → Add to channel.
+- AI provider config: DONE — start script maps AI_INTEGRATIONS_ANTHROPIC_API_KEY → ANTHROPIC_API_KEY and defaults BUZZ_AGENT_PROVIDER=anthropic.
+- ACP channel membership: DONE in dev (agents channel, ACP joined, turns verified). Prod community (buzz.shopstrmarkets.com) needs the same join per channel if agents are wanted there.
+- Agents tab data sources (why sections can be empty despite correct wiring): personas/teams/managed agents (30175-30177) are desktop-published mirrors only — `buzz agents draft-*` opens forms in the owner's Desktop; web/CLI cannot create them. Usage (44200) publishes only when the agent backend emits a usage notification AND delta is reliable — buzz-agent can skip emission (lib.rs "nothing correct to emit"), then the section stays empty with no error. Live activity (24200) frames are ephemeral and only visible live while the tab is open; lookback never returns history.
 - Phases D–E from `docs/web-parity-analysis.md`: agents screen depth, workflow trace viewer, issues/PRs.
 - Phase A deltas: edit events don't re-emit mention p-tags (desktop does); unread badges cover last ~500 messages.
 - Phase B deltas: alerts fire on mentions only (not DM messages); DM creation takes pubkeys (no people-picker); inbox excludes approvals (46010) — the workflow channel already surfaces them.

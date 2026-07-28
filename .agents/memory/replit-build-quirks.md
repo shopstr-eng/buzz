@@ -77,3 +77,9 @@ The relay looks up its community by the host from `RELAY_URL`. A row must exist 
 3. Seed community row (psql)
 4. Derive `RELAY_OWNER_PUBKEY` (`buzz-admin --ignore-rust-version -q -- derive-pubkey`)
 5. Start relay (`buzz-relay --release --ignore-rust-version`)
+
+## Stale workflow generations crash-loop the relay (fixed in start script)
+A workflow restart can orphan an older copy of start-replit.sh whose relay still holds ports 5000/8080/9102. The new relay then panics at `metrics.rs` ("Address already in use") and the restart loop churns ~1/s while the stale relay keeps serving old code — you get multiple ACP generations and confusingly stale behavior.
+
+**Why:** happened 2026-07-28; the serving relay was a zombie from a previous generation while the current one panic-looped on the metrics port.
+**How to apply:** if logs show the metrics EADDRINUSE panic, check for multiple `target/release/buzz-relay` processes with different parent shells and kill the stale generation. start-replit.sh now pkills both binaries at startup, so recurrence means the guard was removed.
