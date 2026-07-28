@@ -30,6 +30,8 @@ import { RepoRefsSection } from "./RepoRefsSection";
 import { RepoTreeSection } from "./RepoTreeSection";
 import { RepoCommitsSection } from "./RepoCommitsSection";
 import { RepoReadmeSection } from "./RepoReadmeSection";
+import { RepoIssuesSection } from "./RepoIssuesSection";
+import { RepoPrsSection } from "./RepoPrsSection";
 
 function CopyableUrl({ url }: { url: string }) {
   const [copied, setCopied] = useState(false);
@@ -108,10 +110,13 @@ function BackToRepositories({
   );
 }
 
-type Tab = "code" | "commits";
+type Tab = "code" | "commits" | "issues" | "pulls";
 
 function RepoTabs({
   repoId,
+  owner,
+  repoName,
+  defaultBranch,
   treeEntries,
   treeLoading,
   commits,
@@ -121,6 +126,9 @@ function RepoTabs({
   preview,
 }: {
   repoId: string;
+  owner: string;
+  repoName: string;
+  defaultBranch: string;
   treeEntries: TreeEntry[] | undefined;
   treeLoading: boolean;
   commits: CommitInfo[] | undefined;
@@ -157,6 +165,32 @@ function RepoTabs({
         >
           Commits
         </button>
+        {!preview && (
+          <>
+            <button
+              type="button"
+              onClick={() => setTab("issues")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                tab === "issues"
+                  ? "border-b-2 border-black text-black dark:border-white dark:text-white"
+                  : "text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
+              }`}
+            >
+              Issues
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("pulls")}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                tab === "pulls"
+                  ? "border-b-2 border-black text-black dark:border-white dark:text-white"
+                  : "text-black/50 hover:text-black dark:text-white/50 dark:hover:text-white"
+              }`}
+            >
+              Pull requests
+            </button>
+          </>
+        )}
       </div>
 
       {/* Tab content */}
@@ -173,6 +207,12 @@ function RepoTabs({
       )}
       {tab === "commits" && (
         <RepoCommitsSection commits={commits} isLoading={commitsLoading} />
+      )}
+      {tab === "issues" && !preview && (
+        <RepoIssuesSection owner={owner} repoName={repoName} />
+      )}
+      {tab === "pulls" && !preview && (
+        <RepoPrsSection owner={owner} repoName={repoName} defaultBranch={defaultBranch} />
       )}
     </div>
   );
@@ -315,6 +355,9 @@ export function RepoDetailPage() {
         {/* Tabs */}
         <RepoTabs
           repoId={repoId}
+          owner={owner}
+          repoName={repoName}
+          defaultBranch={defaultRef}
           treeEntries={treeEntries}
           treeLoading={treeLoading}
           commits={commits}

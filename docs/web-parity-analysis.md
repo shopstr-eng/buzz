@@ -162,9 +162,9 @@ _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay 
 2. Workflow run trace viewer ✅ (46002–46004 folded into per-run step entries with monotonic guards + event-id dedupe; expandable trace per run row). YAML kept by decision (no visual form builder)
 3. Webhook header editor ✅ (js-yaml dialog over `call_webhook` step headers; warns that applying normalizes YAML/drops comments)
 
-**Phase E — projects depth**
-1. Issues (1621), PRs (1618), patches (1617), CI status (1630–1633)
-2. Diff viewer; contribution graph (optional)
+**Phase E — projects depth** ✅ DONE
+1. Issues ✅ (1621 list/detail/create + 1630–1633 status with author/owner trust rule + kind-1 comment threads); PRs ✅ (1618 list/detail/create with conversation+commits sub-tabs, 1619 updates filtered to trusted signers, 1630–1633 status, review marks + inline-comment chips); patches ✅ (1617 rendered with diff line coloring). CI: 1630–1633 are issue/PR status kinds (desktop's Checks tab is itself a placeholder — nothing to replicate). Deltas: no merge button (desktop merges via Tauri git); no inline-comment composer; status writes use monotonic created_at + id tie-breaks
+2. Diff viewer ✅ for standalone patches (line coloring). PR diffs need a git server path the web doesn't have — delta. Contribution graph: skipped (optional)
 
 **Explicitly out of scope for web:** voice huddle, tray/idle/prevent-sleep, managed local agents, mesh compute, local archive (desktop/Tauri-only).
 

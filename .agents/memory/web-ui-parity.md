@@ -43,6 +43,12 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - **Persona/team snapshots (30175/30176/30177) are backend-published read-only mirrors** — web displays them; creation stays desktop/admin. Compare created_at for latest-wins, not arrival order.
 - **js-yaml has no default export under rolldown** — use named imports `{ load, dump }`.
 
+## Phase E done (2026-07-27) — key decisions
+- **NIP-34 trust rule: root author or repo owner only** — status events (1630–1633) AND PR updates (1619) from any other signer must be ignored; the relay does not enforce this (desktop filters client-side via trustedUpdatesForPullRequest).
+- **Same-second lifecycle writes race on delivery order** — resolve ties deterministically (larger event id wins) and publish status events with monotonic created_at (last known + 1).
+- **clone tags can be multi-value** — parse tag.slice(1), not tag[1].
+- **PR/issue merge is impossible from web** — desktop merges via Tauri git command; web exposes close/reopen/draft/done only.
+
 ## Still needed for full parity
 - AI provider config: `BUZZ_AGENT_PROVIDER` + API key must be set as Replit secrets before the agent can respond to anything.
 - ACP must be added to at least one channel via Admin → Agents → Add to channel.
