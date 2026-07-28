@@ -1,30 +1,56 @@
 /**
- * Pinned/starred channels (web-local v1).
+ * Pinned/starred channels with cross-client sync (kind:30078 "channel-stars"
+ * slot, NIP-44 self-encrypted — desktop contract).
  *
- * The desktop stores pins/stars/sections in kind:30078 NIP-78 app data with
- * its own (encrypted) scheme; cross-client sync is a follow-up. For now pins
- * live in localStorage and pinned channels sort into their own sidebar section.
+ * The local module store stays the UI source of truth; use-sync-30078.ts
+ * merges remote entries (LWW per channel by updatedAt ms) and publishes
+ * local toggles. Pin decision timestamps persist in `buzz.pinTimes.v1` so
+ * LWW survives reloads.
  */
 
 import { useEffect, useState } from "react";
+import type { PinEntry } from "./lib/pins-sync";
 
-const LS_KEY = "buzz.pinnedChannels.v1";
+const LS_PINS = "buzz.pinnedChannels.v1";
+const LS_TIMES = "buzz.pinTimes.v1";
 
-function load(): string[] {
+function loadPinned(): string[] {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as string[];
-    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_PINS) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
   } catch {
     return [];
   }
 }
 
-let pinnedList: string[] = load();
+function loadTimes(): Record<string, number> {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(LS_TIMES) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+let pinnedList: string[] = loadPinned();
+let pinTimes: Record<string, number> = loadTimes();
 const listeners = new Set<() => void>();
 
-function emit() {
+function persist(): void {
+  try {
+    localStorage.setItem(LS_PINS, JSON.stringify(pinnedList));
+    localStorage.setItem(LS_TIMES, JSON.stringify(pinTimes));
+  } catch {
+    // quota — non-fatal
+  }
+}
+
+function emit(): void {
   for (const fn of listeners) fn();
 }
 
@@ -32,12 +58,50 @@ export function togglePinnedChannel(groupId: string): void {
   pinnedList = pinnedList.includes(groupId)
     ? pinnedList.filter((id) => id !== groupId)
     : [...pinnedList, groupId];
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(pinnedList));
-  } catch {
-    // quota — non-fatal
-  }
+  pinTimes = { ...pinTimes, [groupId]: Date.now() };
+  persist();
   emit();
+}
+
+/**
+ * Remote merge entrypoint (LWW per channel by updatedAt). Applies remote
+ * decisions newer than the local timestamp for that channel. Returns true
+ * when the visible pin set changed.
+ */
+export function applyRemotePins(remote: Record<string, PinEntry>): boolean {
+  let changed = false;
+  for (const [id, entry] of Object.entries(remote)) {
+    if ((pinTimes[id] ?? 0) >= entry.updatedAt) continue;
+    pinTimes = { ...pinTimes, [id]: entry.updatedAt };
+    const isPinned = pinnedList.includes(id);
+    if (entry.starred && !isPinned) pinnedList = [...pinnedList, id];
+    else if (!entry.starred && isPinned) pinnedList = pinnedList.filter((x) => x !== id);
+    else continue;
+    changed = true;
+  }
+  if (changed) {
+    persist();
+    emit();
+  }
+  return changed;
+}
+
+/** Snapshot for publishing: every channel with a known pin decision. */
+export function getPinsSnapshot(): Record<string, PinEntry> {
+  const out: Record<string, PinEntry> = {};
+  const ids = new Set([...Object.keys(pinTimes), ...pinnedList]);
+  for (const id of ids) {
+    out[id] = { starred: pinnedList.includes(id), updatedAt: pinTimes[id] ?? 0 };
+  }
+  return out;
+}
+
+/** Subscribe to pin changes (returns unsubscribe). */
+export function subscribePins(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 export function usePinnedChannels(): {
@@ -46,13 +110,7 @@ export function usePinnedChannels(): {
 } {
   const [, setTick] = useState(0);
 
-  useEffect(() => {
-    const fn = () => setTick((t) => t + 1);
-    listeners.add(fn);
-    return () => {
-      listeners.delete(fn);
-    };
-  }, []);
+  useEffect(() => subscribePins(() => setTick((t) => t + 1)), []);
 
   return { pinned: new Set(pinnedList), togglePin: togglePinnedChannel };
 }

@@ -1,11 +1,10 @@
 /**
- * Per-channel read state + unread/mention badges (web-local v1).
+ * Per-channel read state + unread/mention badges.
  *
- * The desktop client stores read state in encrypted NIP-RS blobs (kind:30078,
- * nip44-to-self, slot-merged). Reimplementing that encrypted cross-client
- * format is a separate project; this hook keeps read state in localStorage
- * and derives unread/mention badges from a single light subscription over
- * recent stream messages (kinds 9, 40002, no #h filter).
+ * Read state lives in localStorage as the UI source of truth; use-sync-30078.ts
+ * syncs it cross-client via encrypted NIP-RS slots (kind:30078, nip44-to-self,
+ * max-per-key merge — desktop contract). Badges derive from a single light
+ * subscription over recent stream messages (kinds 9, 40002, no #h filter).
  *
  * Badges cover the recent-activity window (last ~500 community messages).
  */
@@ -40,6 +39,19 @@ const listeners = new Set<() => void>();
 
 function emit() {
   for (const fn of listeners) fn();
+}
+
+/** Subscribe to read-state changes (returns unsubscribe). */
+export function subscribeReadState(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** Snapshot of channel-level read markers (for NIP-RS slot publishing). */
+export function getReadStateSnapshot(): Record<string, number> {
+  return { ...lastReadMap };
 }
 
 /** Mark a channel read up to timestamp `ts` (unix seconds). */

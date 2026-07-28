@@ -15,6 +15,7 @@ import { SetStatusDialog } from "./SetStatusDialog";
 import { useCustomEmoji } from "../use-custom-emoji";
 import { useNotificationAlerts } from "../../notifications/use-notification-alerts";
 import { NewDmDialog } from "../../dms/ui/NewDmDialog";
+import { useSync30078 } from "../use-sync-30078";
 import type { Channel, ChannelType } from "../types";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { ProfileEditDialog } from "./ProfileEditDialog";
@@ -212,6 +213,8 @@ export function ChannelSidebar() {
   // re-renders (a fresh array would retrigger the effect every render).
   const dmGroupIds = dmChannels.map((ch) => ch.groupId).sort().join(",");
   useNotificationAlerts(dmGroupIds);
+  // Cross-client read-state + pins sync (encrypted kind:30078), mounted once.
+  useSync30078();
   const { publishStatus } = useUserStatusLifecycle();
   const userStatuses = useUserStatusMap();
   const { customEmoji } = useCustomEmoji();
