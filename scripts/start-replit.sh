@@ -20,6 +20,14 @@ unset RUSTUP_TOOLCHAIN RUSTUP_HOME # prevent rustup from intercepting cargo call
 # hermit rustup shim (which routes to a broken rustc 1.95.0 in this container).
 export PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/home/runner/workspace/bin' | paste -sd ':')
 
+# Kill stale processes from previous workflow generations. A workflow restart
+# can orphan an older copy of this script whose relay still holds ports
+# 5000/8080/9102 — the new relay then panics on the metrics port (EADDRINUSE)
+# and the restart loop churns while the stale relay keeps serving old code.
+pkill -f 'target/release/buzz-relay' 2>/dev/null || true
+pkill -f 'target/release/buzz-acp' 2>/dev/null || true
+sleep 1
+
 # Disable git object-store conformance probe (requires S3 which isn't configured).
 export BUZZ_GIT_CONFORMANCE_PROBE="${BUZZ_GIT_CONFORMANCE_PROBE:-false}"
 
