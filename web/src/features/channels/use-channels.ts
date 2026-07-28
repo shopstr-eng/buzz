@@ -18,8 +18,12 @@ function eventToChannel(ev: NostrEvent): Channel | null {
   const isPrivate = ev.tags.some((t) => t[0] === "private");
   const channelType = (ev.tags.find((t) => t[0] === "t")?.[1] ?? "stream") as ChannelType;
   const model = ev.tags.find((t) => t[0] === "model")?.[1];
+  const participantPubkeys =
+    channelType === "dm"
+      ? ev.tags.filter((t) => t[0] === "p").map((t) => t[1])
+      : undefined;
 
-  return { groupId, name, about, picture, isPrivate, channelType, model };
+  return { groupId, name, about, picture, isPrivate, channelType, model, participantPubkeys };
 }
 
 export function useChannels(): {

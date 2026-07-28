@@ -11,6 +11,10 @@ import { Route as loginRouteImport } from "./routes/login";
 import { Route as reposRouteImport } from "./routes/repos";
 import { Route as channelsDotindexRouteImport } from "./routes/channels.index";
 import { Route as channelsDotgroupIdRouteImport } from "./routes/channels.$groupId";
+import { Route as channelsDothomeRouteImport } from "./routes/channels.home";
+import { Route as channelsDotremindersRouteImport } from "./routes/channels.reminders";
+import { Route as channelsDotsearchRouteImport } from "./routes/channels.search";
+import { Route as channelsDotsettingsRouteImport } from "./routes/channels.settings";
 import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
 import { Route as reposDotindexRouteImport } from "./routes/repos.index";
 import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
@@ -47,6 +51,26 @@ const channelsDotgroupIdRoute = channelsDotgroupIdRouteImport.update({
   path: "/$groupId",
   getParentRoute: () => channelsRoute,
 } as any);
+const channelsDothomeRoute = channelsDothomeRouteImport.update({
+  id: "/home",
+  path: "/home",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotremindersRoute = channelsDotremindersRouteImport.update({
+  id: "/reminders",
+  path: "/reminders",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotsearchRoute = channelsDotsearchRouteImport.update({
+  id: "/search",
+  path: "/search",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotsettingsRoute = channelsDotsettingsRouteImport.update({
+  id: "/settings",
+  path: "/settings",
+  getParentRoute: () => channelsRoute,
+} as any);
 const inviteDotcodeRoute = inviteDotcodeRouteImport.update({
   id: "/invite/$code",
   path: "/invite/$code",
@@ -81,6 +105,10 @@ export interface FileRoutesByFullPath {
   "/login": typeof loginRoute;
   "/repos": typeof reposRouteWithChildren;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
+  "/channels/home": typeof channelsDothomeRoute;
+  "/channels/reminders": typeof channelsDotremindersRoute;
+  "/channels/search": typeof channelsDotsearchRoute;
+  "/channels/settings": typeof channelsDotsettingsRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
   "/channels/": typeof channelsDotindexRoute;
@@ -92,6 +120,10 @@ export interface FileRoutesByTo {
   "/": typeof indexRoute;
   "/login": typeof loginRoute;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
+  "/channels/home": typeof channelsDothomeRoute;
+  "/channels/reminders": typeof channelsDotremindersRoute;
+  "/channels/search": typeof channelsDotsearchRoute;
+  "/channels/settings": typeof channelsDotsettingsRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
   "/channels": typeof channelsDotindexRoute;
@@ -106,6 +138,10 @@ export interface FileRoutesById {
   "/login": typeof loginRoute;
   "/repos": typeof reposRouteWithChildren;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
+  "/channels/home": typeof channelsDothomeRoute;
+  "/channels/reminders": typeof channelsDotremindersRoute;
+  "/channels/search": typeof channelsDotsearchRoute;
+  "/channels/settings": typeof channelsDotsettingsRoute;
   "/invite/$code": typeof inviteDotcodeRoute;
   "/repos/$repoId": typeof reposDotrepoIdRoute;
   "/channels/": typeof channelsDotindexRoute;
@@ -121,6 +157,10 @@ export interface FileRouteTypes {
     | "/login"
     | "/repos"
     | "/channels/$groupId"
+    | "/channels/home"
+    | "/channels/reminders"
+    | "/channels/search"
+    | "/channels/settings"
     | "/invite/$code"
     | "/repos/$repoId"
     | "/channels/"
@@ -132,6 +172,10 @@ export interface FileRouteTypes {
     | "/"
     | "/login"
     | "/channels/$groupId"
+    | "/channels/home"
+    | "/channels/reminders"
+    | "/channels/search"
+    | "/channels/settings"
     | "/invite/$code"
     | "/repos/$repoId"
     | "/channels"
@@ -145,6 +189,10 @@ export interface FileRouteTypes {
     | "/login"
     | "/repos"
     | "/channels/$groupId"
+    | "/channels/home"
+    | "/channels/reminders"
+    | "/channels/search"
+    | "/channels/settings"
     | "/invite/$code"
     | "/repos/$repoId"
     | "/channels/"
@@ -205,6 +253,34 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof channelsDotgroupIdRouteImport;
       parentRoute: typeof channelsRoute;
     };
+    "/channels/home": {
+      id: "/channels/home";
+      path: "/home";
+      fullPath: "/channels/home";
+      preLoaderRoute: typeof channelsDothomeRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/reminders": {
+      id: "/channels/reminders";
+      path: "/reminders";
+      fullPath: "/channels/reminders";
+      preLoaderRoute: typeof channelsDotremindersRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/search": {
+      id: "/channels/search";
+      path: "/search";
+      fullPath: "/channels/search";
+      preLoaderRoute: typeof channelsDotsearchRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/settings": {
+      id: "/channels/settings";
+      path: "/settings";
+      fullPath: "/channels/settings";
+      preLoaderRoute: typeof channelsDotsettingsRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
     "/invite/$code": {
       id: "/invite/$code";
       path: "/invite/$code";
@@ -245,11 +321,19 @@ declare module "@tanstack/react-router" {
 
 interface channelsRouteChildren {
   channelsDotgroupIdRoute: typeof channelsDotgroupIdRoute;
+  channelsDothomeRoute: typeof channelsDothomeRoute;
+  channelsDotremindersRoute: typeof channelsDotremindersRoute;
+  channelsDotsearchRoute: typeof channelsDotsearchRoute;
+  channelsDotsettingsRoute: typeof channelsDotsettingsRoute;
   channelsDotindexRoute: typeof channelsDotindexRoute;
 }
 
 const channelsRouteChildren: channelsRouteChildren = {
   channelsDotgroupIdRoute: channelsDotgroupIdRoute,
+  channelsDothomeRoute: channelsDothomeRoute,
+  channelsDotremindersRoute: channelsDotremindersRoute,
+  channelsDotsearchRoute: channelsDotsearchRoute,
+  channelsDotsettingsRoute: channelsDotsettingsRoute,
   channelsDotindexRoute: channelsDotindexRoute,
 };
 

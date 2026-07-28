@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Copy, CornerUpLeft, MessagesSquare, MoreHorizontal, Pencil, Smile, Trash2 } from "lucide-react";
+import { AlarmClock, Copy, CornerUpLeft, MessagesSquare, MoreHorizontal, Pencil, Smile, Trash2 } from "lucide-react";
 import type { ChatMessage } from "../types";
 import type { EmojiReactions } from "../use-reactions";
 import type { CustomEmoji } from "../use-custom-emoji";
@@ -25,6 +25,8 @@ interface Props {
   onDelete?: () => void;
   /** Open the thread rooted at this message */
   onOpenThread?: () => void;
+  /** Set a reminder anchored to this message */
+  onRemind?: () => void;
   /** The message this message is replying to, for inline context */
   replyToMessage?: { content: string; pubkey: string; senderName?: string } | null;
   /** Resolved kind:0 / kind:10100 profile for this message's author */
@@ -246,12 +248,14 @@ function MessageMenu({
   onEdit,
   onDelete,
   onOpenThread,
+  onRemind,
 }: {
   canEdit: boolean;
   onCopy: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   onOpenThread?: () => void;
+  onRemind?: () => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -282,6 +286,12 @@ function MessageMenu({
         <Copy className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
         Copy text
       </button>
+      {onRemind && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onRemind(); }} className={itemCls}>
+          <AlarmClock className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Remind me
+        </button>
+      )}
       {canEdit && onEdit && (
         <button type="button" onMouseDown={(e) => { e.preventDefault(); onEdit(); }} className={itemCls}>
           <Pencil className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
@@ -335,6 +345,7 @@ export function MessageRow({
   onEdit,
   onDelete,
   onOpenThread,
+  onRemind,
   customEmoji,
   customEmojiUrls,
   replyToMessage,
@@ -494,6 +505,7 @@ export function MessageRow({
                   onEdit={onEdit ? () => { onEdit(); setMenuOpen(false); } : undefined}
                   onDelete={onDelete ? () => { onDelete(); setMenuOpen(false); } : undefined}
                   onOpenThread={onOpenThread ? () => { onOpenThread(); setMenuOpen(false); } : undefined}
+                  onRemind={onRemind ? () => { onRemind(); setMenuOpen(false); } : undefined}
                 />
               </div>
             </>

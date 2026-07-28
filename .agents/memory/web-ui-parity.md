@@ -24,11 +24,19 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - **Optimistic edits tracked in a set** — relay echo must always replace an optimistic edit regardless of clock skew (timestamp-compare only applies to confirmed edits).
 - Presence uses tab-visibility (web has no OS idle); user status kind 30315 d-tag `general`.
 
+## Phase B done (2026-07-27) — key decisions
+- **DMs are kind 41010 open + p tags** (relay idempotent participant-hash channels surfaced as kind:39000 `t=dm` with `p` tags) — desktop's Tauri `open_dm` maps to the same relay command; no NIP-04/1059 anywhere.
+- **Reminders need NIP-44**: nsec login works locally; NIP-07 requires `window.nostr.nip44` (extension-optional) — gate features on `getNip44SelfAsync()`.
+- **Live-alert subscriptions must not depend on route state** — key the effect on connection/identity only and track pathname in a ref, or mentions get dropped in the teardown window on navigation.
+- **Replaceable-event ingestion: re-check d-tag version AFTER async decrypt** — older event finishing decrypt later must not overwrite newer state.
+- **Virtual route config**: `web/src/app/routes.ts` is the source of truth — new route files are ignored until registered there (routeTree won't regenerate otherwise).
+
 ## Still needed for full parity
 - AI provider config: `BUZZ_AGENT_PROVIDER` + API key must be set as Replit secrets before the agent can respond to anything.
 - ACP must be added to at least one channel via Admin → Agents → Add to channel.
-- Phases B–E from `docs/web-parity-analysis.md`: search, inbox/notifications, DMs, forum tab, job cards, moderation, agents screen, issues/PRs.
+- Phases C–E from `docs/web-parity-analysis.md`: forum tab, job cards, moderation, agents screen, issues/PRs.
 - Phase A deltas: edit events don't re-emit mention p-tags (desktop does); unread badges cover last ~500 messages.
+- Phase B deltas: alerts fire on mentions only (not DM messages); DM creation takes pubkeys (no people-picker); inbox excludes approvals (46010) — the workflow channel already surfaces them.
 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.

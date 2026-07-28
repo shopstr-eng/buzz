@@ -1,6 +1,6 @@
 /** Domain types for NIP-29 groups and chat messages. */
 
-export type ChannelType = "stream" | "forum" | "workflow";
+export type ChannelType = "stream" | "forum" | "workflow" | "dm";
 
 export interface Channel {
   /** The NIP-29 group ID — `d` tag on kind 39000 events. */
@@ -10,6 +10,8 @@ export interface Channel {
   picture?: string;
   isPrivate: boolean;
   channelType: ChannelType;
+  /** DM channels: all participant pubkeys (from kind:39000 p tags) */
+  participantPubkeys?: string[];
   /** Model ID for workflow channels (e.g. "claude-sonnet-4-20250514"). */
   model?: string;
   memberCount?: number;
@@ -47,6 +49,8 @@ export const KIND_NIP29_DELETE = 9005;
 /** System rows (join/leave/channel-created/moderation tombstones) */
 export const KIND_SYSTEM_MESSAGE = 40099;
 export const KIND_CREATE_GROUP = 9007;
+/** Open/find a DM channel (idempotent participant-set lookup, relay-side) */
+export const KIND_DM_OPEN = 41010;
 export const KIND_AGENT_PROFILE = 10100;
 
 /** NIP-29 group management kinds */

@@ -143,12 +143,12 @@ Legend: ✅ full parity · 🟡 partial · ❌ missing · 🖥️ desktop-native
 
 _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay tags (desktop does); unread badges cover the last ~500 community messages.
 
-**Phase B — app shell**
-1. Global search + in-channel find bar
-2. Home/inbox (mentions, approvals, reminders) + Pulse feed
-3. Notifications + sounds + settings screen (sections)
-4. DMs (kind 4/1059) + `/messages/new` equivalent
-5. Reminders panel + "remind me" message action
+**Phase B — app shell** ✅ DONE
+1. Global search + in-channel find bar ✅ (NIP-50 `search` filter at `/channels/search?q=`, sidebar box + client-side find bar)
+2. Home/inbox (mentions + Pulse feed) ✅ (kinds 9/40002 `#p:[me]`; kind 1 notes + composer). Approvals (46010) NOT included — workflow channel already surfaces them
+3. Notifications + sounds + settings ✅ (browser Notification + ping.mp3 on live mentions; `/channels/settings` toggles in localStorage `buzz.notifications.v1`). Delta: mentions only, not DM-message alerts
+4. DMs + `/messages/new` equivalent ✅ (kind 41010 open with p tags → relay idempotent participant-hash channels; sidebar "Direct messages" section; New message dialog accepts npub/hex). Delta: no people-picker — recipients entered as pubkey
+5. Reminders panel + "remind me" message action ✅ (kind 30300 NIP-44-to-self; `/channels/reminders`; presets 1h/3h/tomorrow/next week). Requires nsec login or NIP-07 extension with `window.nostr.nip44`
 
 **Phase C — channel extensions**
 1. Forum tab per channel (45001/45003) + post route

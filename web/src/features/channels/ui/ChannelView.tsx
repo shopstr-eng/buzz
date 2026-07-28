@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Hash, Lock, Settings, Users, Zap, MessageSquare } from "lucide-react";
+import { Hash, Lock, Search, Settings, Users, X, Zap, MessageSquare } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useMessages } from "../use-messages";
 import { useSendMessage } from "../use-send-message";
@@ -15,6 +15,8 @@ import { MessageComposer } from "./MessageComposer";
 import { ChannelMembersPanel } from "./ChannelMembersPanel";
 import { ChannelSettingsDialog } from "./ChannelSettingsDialog";
 import { ThreadPanel } from "./ThreadPanel";
+import { RemindMeDialog } from "../../reminders/ui/RemindMeDialog";
+import { useAddReminder } from "../../reminders/use-reminders";
 import { WorkflowChannelView } from "./WorkflowChannelView";
 import type { Channel, ChannelType, ChatMessage } from "../types";
 
@@ -61,6 +63,17 @@ function ChatChannelView({ channel }: Props) {
   const [editing, setEditing] = useState<ChatMessage | null>(null);
   const [threadRoot, setThreadRoot] = useState<ChatMessage | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [remindTarget, setRemindTarget] = useState<ChatMessage | null>(null);
+  const addReminder = useAddReminder();
+
+  // In-channel find bar: filters the loaded timeline client-side.
+  const visibleMessages = useMemo(() => {
+    const q = findQuery.trim().toLowerCase();
+    if (!findOpen || !q) return messages;
+    return messages.filter((m) => m.content.toLowerCase().includes(q));
+  }, [messages, findOpen, findQuery]);
   const typingPubkeys = useTypingIndicator(channel.groupId);
   const notifyTyping = useTypingBroadcast(channel.groupId);
 
@@ -112,6 +125,20 @@ function ChatChannelView({ channel }: Props) {
           </button>
           <button
             type="button"
+            onClick={() => { setFindOpen((o) => !o); setFindQuery(""); }}
+            title="Find in channel"
+            aria-label="Find in channel"
+            aria-pressed={findOpen}
+            className={`flex items-center rounded-md px-1.5 py-1 text-xs transition-colors ${
+              findOpen
+                ? "bg-black/10 text-black dark:bg-white/15 dark:text-white"
+                : "text-black/40 hover:bg-black/5 hover:text-black/70 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white/70"
+            }`}
+          >
+            <Search className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
             onClick={() => setSettingsOpen(true)}
             title="Channel settings"
             aria-label="Channel settings"
@@ -121,9 +148,37 @@ function ChatChannelView({ channel }: Props) {
           </button>
         </div>
 
+        {/* In-channel find bar */}
+        {findOpen && (
+          <div className="flex shrink-0 items-center gap-2 border-b border-black/10 px-4 py-2 dark:border-white/10">
+            <Search className="h-3.5 w-3.5 shrink-0 text-black/30 dark:text-white/30" />
+            <input
+              type="search"
+              value={findQuery}
+              onChange={(e) => setFindQuery(e.target.value)}
+              placeholder="Find in this channel…"
+              autoFocus
+              className="flex-1 bg-transparent text-xs text-black placeholder:text-black/35 focus:outline-none dark:text-white dark:placeholder:text-white/35"
+            />
+            {findQuery.trim() && (
+              <span className="text-[10px] text-black/40 dark:text-white/40">
+                {visibleMessages.length} match{visibleMessages.length === 1 ? "" : "es"}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => { setFindOpen(false); setFindQuery(""); }}
+              aria-label="Close find"
+              className="text-black/30 hover:text-black/60 dark:text-white/30 dark:hover:text-white/60"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Message timeline */}
         <MessageList
-          messages={messages}
+          messages={visibleMessages}
           myPubkey={identity?.pubkey}
           isLoading={isLoading}
           canFetchOlder={canFetchOlder}
@@ -136,6 +191,7 @@ function ChatChannelView({ channel }: Props) {
           onEdit={(msg) => { setEditing(msg); setReplyTo(null); }}
           onDelete={(msg) => void deleteMessage(msg.id)}
           onOpenThread={(msg) => setThreadRoot(msg)}
+          onRemind={(msg) => setRemindTarget(msg)}
           memberProfiles={memberProfiles}
         />
 
@@ -201,6 +257,16 @@ function ChatChannelView({ channel }: Props) {
       {/* Channel settings dialog */}
       {settingsOpen && (
         <ChannelSettingsDialog channel={channel} onClose={() => setSettingsOpen(false)} />
+      )}
+
+      {/* Remind me dialog */}
+      {remindTarget && (
+        <RemindMeDialog
+          message={remindTarget}
+          groupId={channel.groupId}
+          onSave={addReminder}
+          onClose={() => setRemindTarget(null)}
+        />
       )}
     </div>
   );

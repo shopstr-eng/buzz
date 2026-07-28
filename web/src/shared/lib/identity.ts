@@ -141,6 +141,12 @@ export function getSignFn():
 
 // ── byte helpers ─────────────────────────────────────────────────────────────
 
+/** Secret key bytes for the nsec identity (null for NIP-07 / logged out). */
+export function getSecretKeyBytes(): Uint8Array | null {
+  const hex = sessionStorage.getItem(KEY_NSEC);
+  return hex ? hexToBytes(hex) : null;
+}
+
 function hexToBytes(hex: string): Uint8Array {
   const len = hex.length;
   const bytes = new Uint8Array(len / 2);

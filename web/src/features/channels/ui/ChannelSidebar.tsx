@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  BookMarked, Hash, Lock, Wifi, WifiOff, Loader, LogOut,
-  Zap, MessageSquare, Plus, Pencil, Pin, PinOff,
+  AlarmClock, BookMarked, Hash, Home, Lock, MessageCircle, Settings, Wifi, WifiOff, Loader, LogOut,
+  Zap, MessageSquare, Plus, Pencil, Pin, PinOff, Search,
 } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../use-channels";
@@ -12,6 +12,8 @@ import { usePresenceLifecycle } from "../use-presence";
 import { useUserStatusLifecycle, useUserStatusMap } from "../use-user-status";
 import { SetStatusDialog } from "./SetStatusDialog";
 import { useCustomEmoji } from "../use-custom-emoji";
+import { useNotificationAlerts } from "../../notifications/use-notification-alerts";
+import { NewDmDialog } from "../../dms/ui/NewDmDialog";
 import type { Channel, ChannelType } from "../types";
 import { CreateChannelDialog } from "./CreateChannelDialog";
 import { ProfileEditDialog } from "./ProfileEditDialog";
@@ -42,10 +44,58 @@ function ConnectionBadge() {
 }
 
 function TypeIcon({ type, isPrivate }: { type: ChannelType; isPrivate: boolean }) {
+  if (type === "dm") return <MessageCircle className="h-3.5 w-3.5 shrink-0 opacity-60" />;
   if (isPrivate) return <Lock className="h-3.5 w-3.5 shrink-0 opacity-60" />;
   if (type === "workflow") return <Zap className="h-3.5 w-3.5 shrink-0 text-violet-500 opacity-70 dark:text-violet-400" />;
   if (type === "forum") return <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-60" />;
   return <Hash className="h-3.5 w-3.5 shrink-0 opacity-60" />;
+}
+
+/** DM sidebar item: label = other participants' names. */
+function DmItem({
+  channel,
+  unread,
+  myPubkey,
+  profiles,
+}: {
+  channel: Channel;
+  unread?: ChannelUnread;
+  myPubkey?: string;
+  profiles: Map<string, import("@/shared/hooks/use-profiles").Profile>;
+}) {
+  const { location } = useRouterState();
+  const isActive = location.pathname === `/channels/${channel.groupId}`;
+  const hasUnread = !isActive && unread && unread.count > 0;
+
+  const others = (channel.participantPubkeys ?? []).filter((pk) => pk !== myPubkey);
+  const label =
+    others.length === 0
+      ? "Just you"
+      : others
+          .map((pk) => profiles.get(pk)?.name ?? `${pk.slice(0, 4)}…${pk.slice(-4)}`)
+          .join(", ");
+
+  return (
+    <Link
+      to="/channels/$groupId"
+      params={{ groupId: channel.groupId }}
+      className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+        isActive
+          ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+          : hasUnread
+            ? "font-semibold text-black hover:bg-black/5 dark:text-white dark:hover:bg-white/5"
+            : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+      }`}
+    >
+      <TypeIcon type="dm" isPrivate={false} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {hasUnread && (
+        <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">
+          {unread.count > 99 ? "99+" : unread.count}
+        </span>
+      )}
+    </Link>
+  );
 }
 
 function ChannelItem({
@@ -106,6 +156,41 @@ function ChannelItem({
   );
 }
 
+/** Search box: Enter jumps to the global search page. */
+function SidebarSearch() {
+  const navigate = useNavigate();
+  const [value, setValue] = useState("");
+  const { location } = useRouterState();
+  const searchActive = location.pathname === "/channels/search";
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    void navigate({ to: "/channels/search", search: { q: value.trim() } });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mb-2">
+      <div
+        className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${
+          searchActive
+            ? "border-black/25 dark:border-white/25"
+            : "border-black/10 dark:border-white/10"
+        }`}
+      >
+        <Search className="h-3 w-3 shrink-0 text-black/30 dark:text-white/30" />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Search…"
+          aria-label="Search messages"
+          className="w-full bg-transparent text-xs text-black placeholder:text-black/35 focus:outline-none dark:text-white dark:placeholder:text-white/35"
+        />
+      </div>
+    </form>
+  );
+}
+
 export function ChannelSidebar() {
   const { channels, isLoading } = useChannels();
   const { unread } = useReadState();
@@ -116,9 +201,12 @@ export function ChannelSidebar() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showSetStatus, setShowSetStatus] = useState(false);
+  const [showNewDm, setShowNewDm] = useState(false);
 
   // Global presence + user-status lifecycles (mounted once here).
   usePresenceLifecycle();
+  // Mention alerts (browser notifications + sound), mounted once.
+  useNotificationAlerts();
   const { publishStatus } = useUserStatusLifecycle();
   const userStatuses = useUserStatusMap();
   const { customEmoji } = useCustomEmoji();
@@ -134,8 +222,16 @@ export function ChannelSidebar() {
     : null;
   const displayName = myProfile?.name ?? shortPubkey;
 
-  const pinnedChannels = channels.filter((ch) => pinned.has(ch.groupId));
-  const unpinnedChannels = channels.filter((ch) => !pinned.has(ch.groupId));
+  const dmChannels = channels.filter((ch) => ch.channelType === "dm");
+  const regularChannels = channels.filter((ch) => ch.channelType !== "dm");
+  const pinnedChannels = regularChannels.filter((ch) => pinned.has(ch.groupId));
+  const unpinnedChannels = regularChannels.filter((ch) => !pinned.has(ch.groupId));
+
+  // Profiles for DM participant labels.
+  const dmParticipantPubkeys = dmChannels.flatMap((ch) =>
+    (ch.participantPubkeys ?? []).filter((pk) => pk !== identity?.pubkey),
+  );
+  const dmProfiles = useProfiles(dmParticipantPubkeys);
 
   return (
     <>
@@ -155,6 +251,35 @@ export function ChannelSidebar() {
 
         {/* Nav */}
         <div className="flex-1 overflow-y-auto px-2 py-3">
+          {/* Global search */}
+          <SidebarSearch />
+
+          {/* Home link */}
+          <Link
+            to="/channels/home"
+            className={`mb-2 flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+              location.pathname === "/channels/home"
+                ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+                : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+            }`}
+          >
+            <Home className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            Home
+          </Link>
+
+          {/* Reminders link */}
+          <Link
+            to="/channels/reminders"
+            className={`mb-2 flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+              location.pathname === "/channels/reminders"
+                ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+                : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+            }`}
+          >
+            <AlarmClock className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            Reminders
+          </Link>
+
           {/* Repos link */}
           <Link
             to="/repos"
@@ -231,6 +356,31 @@ export function ChannelSidebar() {
                   onTogglePin={() => togglePin(ch.groupId)}
                 />
               ))}
+
+              {/* Direct messages section */}
+              <div className="mb-1 mt-3 flex items-center justify-between px-2">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-black/40 dark:text-white/40">
+                  Direct messages
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowNewDm(true)}
+                  title="New message"
+                  aria-label="New message"
+                  className="rounded p-0.5 text-black/30 transition-colors hover:bg-black/10 hover:text-black/70 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/70"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {dmChannels.map((ch) => (
+                <DmItem
+                  key={ch.groupId}
+                  channel={ch}
+                  unread={unread.get(ch.groupId)}
+                  myPubkey={identity?.pubkey}
+                  profiles={dmProfiles}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -261,8 +411,16 @@ export function ChannelSidebar() {
                 )}
               </button>
 
-              {/* Edit profile + logout */}
+              {/* Settings + edit profile + logout */}
               <div className="flex shrink-0 items-center gap-0.5">
+                <Link
+                  to="/channels/settings"
+                  title="Settings"
+                  aria-label="Settings"
+                  className="rounded p-1 text-black/30 transition-colors hover:bg-black/10 hover:text-black/70 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/70"
+                >
+                  <Settings className="h-3 w-3" />
+                </Link>
                 <button
                   type="button"
                   onClick={() => setShowEditProfile(true)}
@@ -302,6 +460,7 @@ export function ChannelSidebar() {
           onClose={() => setShowSetStatus(false)}
         />
       )}
+      {showNewDm && <NewDmDialog onClose={() => setShowNewDm(false)} />}
     </>
   );
 }

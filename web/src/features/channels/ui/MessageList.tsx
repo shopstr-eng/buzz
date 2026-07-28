@@ -19,6 +19,7 @@ interface Props {
   onEdit?: (message: ChatMessage) => void;
   onDelete?: (message: ChatMessage) => void;
   onOpenThread?: (message: ChatMessage) => void;
+  onRemind?: (message: ChatMessage) => void;
   /** Community custom emoji (NIP-30) for the reaction picker */
   customEmoji?: CustomEmoji[];
   /** shortcode → url for rendering :shortcode: tokens */
@@ -98,6 +99,7 @@ export function MessageList({
   onEdit,
   onDelete,
   onOpenThread,
+  onRemind,
   customEmoji,
   customEmojiUrls,
   memberProfiles,
@@ -236,6 +238,7 @@ export function MessageList({
             onEdit={onEdit ? () => onEdit(msg) : undefined}
             onDelete={onDelete ? () => onDelete(msg) : undefined}
             onOpenThread={onOpenThread ? () => onOpenThread(msg) : undefined}
+            onRemind={onRemind ? () => onRemind(msg) : undefined}
             replyToMessage={
               replyToMsg
                 ? {
