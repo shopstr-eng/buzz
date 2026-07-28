@@ -64,7 +64,7 @@ function ChatChannelView({ channel }: Props) {
     applyLocalDelete,
   );
   const { members } = useChannelMembers(channel.groupId);
-  const { submitReport, timeoutMember, banMember } = useModeration();
+  const { submitReport, timeoutMember, banMember, unbanMember, untimeoutMember } = useModeration();
   const [reportTarget, setReportTarget] = useState<ChatMessage | null>(null);
   const [timeoutTarget, setTimeoutTarget] = useState<ChatMessage | null>(null);
   const myRole = members.find((m) => m.pubkey === identity?.pubkey)?.role;
@@ -239,8 +239,20 @@ function ChatChannelView({ channel }: Props) {
           onTimeout={(msg) => setTimeoutTarget(msg)}
           onBan={(msg) => {
             const name = memberProfiles.get(msg.pubkey)?.name ?? `${msg.pubkey.slice(0, 4)}…${msg.pubkey.slice(-4)}`;
-            if (window.confirm(`Ban ${name} from the community? This cannot be undone from the web UI.`)) {
+            if (window.confirm(`Ban ${name} from the community?`)) {
               void banMember(msg.pubkey).catch(() => {});
+            }
+          }}
+          onUnban={(msg) => {
+            const name = memberProfiles.get(msg.pubkey)?.name ?? `${msg.pubkey.slice(0, 4)}…${msg.pubkey.slice(-4)}`;
+            if (window.confirm(`Lift the community ban for ${name}?`)) {
+              void unbanMember(msg.pubkey).catch(() => {});
+            }
+          }}
+          onUntimeout={(msg) => {
+            const name = memberProfiles.get(msg.pubkey)?.name ?? `${msg.pubkey.slice(0, 4)}…${msg.pubkey.slice(-4)}`;
+            if (window.confirm(`Lift the active timeout for ${name}?`)) {
+              void untimeoutMember(msg.pubkey).catch(() => {});
             }
           }}
           memberProfiles={memberProfiles}

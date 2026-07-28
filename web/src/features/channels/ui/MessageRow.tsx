@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlarmClock, Ban, Clock, Copy, CornerUpLeft, Flag, MessagesSquare, MoreHorizontal, Pencil, Smile, Trash2 } from "lucide-react";
+import { AlarmClock, Ban, Clock, Copy, CornerUpLeft, Flag, MessagesSquare, MoreHorizontal, Pencil, Smile, TimerOff, Trash2, UserCheck } from "lucide-react";
 import { jobKindLabel } from "../types";
 import type { ChatMessage } from "../types";
 import type { EmojiReactions } from "../use-reactions";
@@ -37,6 +37,10 @@ interface Props {
   onTimeout?: () => void;
   /** Ban the author (moderator) */
   onBan?: () => void;
+  /** Undo a community ban (moderator) */
+  onUnban?: () => void;
+  /** Lift an active timeout (moderator) */
+  onUntimeout?: () => void;
   /** The message this message is replying to, for inline context */
   replyToMessage?: { content: string; pubkey: string; senderName?: string } | null;
   /** Resolved kind:0 / kind:10100 profile for this message's author */
@@ -267,6 +271,8 @@ function MessageMenu({
   onReport,
   onTimeout,
   onBan,
+  onUnban,
+  onUntimeout,
 }: {
   canEdit: boolean;
   canModerate: boolean;
@@ -278,6 +284,8 @@ function MessageMenu({
   onReport?: () => void;
   onTimeout?: () => void;
   onBan?: () => void;
+  onUnban?: () => void;
+  onUntimeout?: () => void;
 }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -330,6 +338,18 @@ function MessageMenu({
         <button type="button" onMouseDown={(e) => { e.preventDefault(); onBan(); }} className={`${itemCls} text-red-600 dark:text-red-400`}>
           <Ban className="h-3.5 w-3.5" />
           Ban user
+        </button>
+      )}
+      {canModerate && !canEdit && onUnban && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onUnban(); }} className={itemCls}>
+          <UserCheck className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Unban user
+        </button>
+      )}
+      {canModerate && !canEdit && onUntimeout && (
+        <button type="button" onMouseDown={(e) => { e.preventDefault(); onUntimeout(); }} className={itemCls}>
+          <TimerOff className="h-3.5 w-3.5 text-black/40 dark:text-white/40" />
+          Lift timeout
         </button>
       )}
       {canEdit && onEdit && (
@@ -390,6 +410,8 @@ export function MessageRow({
   onReport,
   onTimeout,
   onBan,
+  onUnban,
+  onUntimeout,
   customEmoji,
   customEmojiUrls,
   replyToMessage,
@@ -559,6 +581,8 @@ export function MessageRow({
                   onReport={onReport ? () => { onReport(); setMenuOpen(false); } : undefined}
                   onTimeout={onTimeout ? () => { onTimeout(); setMenuOpen(false); } : undefined}
                   onBan={onBan ? () => { onBan(); setMenuOpen(false); } : undefined}
+                  onUnban={onUnban ? () => { onUnban(); setMenuOpen(false); } : undefined}
+                  onUntimeout={onUntimeout ? () => { onUntimeout(); setMenuOpen(false); } : undefined}
                 />
               </div>
             </>

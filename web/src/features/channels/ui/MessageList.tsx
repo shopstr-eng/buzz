@@ -26,6 +26,8 @@ interface Props {
   onReport?: (message: ChatMessage) => void;
   onTimeout?: (message: ChatMessage) => void;
   onBan?: (message: ChatMessage) => void;
+  onUnban?: (message: ChatMessage) => void;
+  onUntimeout?: (message: ChatMessage) => void;
   /** Community custom emoji (NIP-30) for the reaction picker */
   customEmoji?: CustomEmoji[];
   /** shortcode → url for rendering :shortcode: tokens */
@@ -110,6 +112,8 @@ export function MessageList({
   onReport,
   onTimeout,
   onBan,
+  onUnban,
+  onUntimeout,
   customEmoji,
   customEmojiUrls,
   memberProfiles,
@@ -265,6 +269,8 @@ export function MessageList({
             onReport={onReport ? () => onReport(msg) : undefined}
             onTimeout={onTimeout ? () => onTimeout(msg) : undefined}
             onBan={onBan ? () => onBan(msg) : undefined}
+            onUnban={onUnban ? () => onUnban(msg) : undefined}
+            onUntimeout={onUntimeout ? () => onUntimeout(msg) : undefined}
             replyToMessage={
               replyToMsg
                 ? {

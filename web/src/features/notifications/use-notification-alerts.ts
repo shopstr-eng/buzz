@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useRef } from "react";
-import { useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useRelay } from "@/shared/context/relay-context";
 import { KIND_STREAM_MSG, KIND_STREAM_MSG_V2 } from "../channels/types";
 import { getNotificationSettings } from "./use-notification-settings";
@@ -23,10 +23,16 @@ function playPing(): void {
   }
 }
 
-function notify(title: string, body: string): void {
+function notify(title: string, body: string, onClick?: () => void): void {
   if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
   try {
-    new Notification(title, { body: body.slice(0, 120), icon: "/favicon.ico" });
+    const n = new Notification(title, { body: body.slice(0, 120), icon: "/favicon.ico" });
+    if (onClick) {
+      n.onclick = () => {
+        window.focus();
+        onClick();
+      };
+    }
   } catch {
     // some browsers require a service worker — ignore
   }
@@ -37,6 +43,7 @@ export function useNotificationAlerts(): void {
   const { connection, connectionState, identity } = useRelay();
   const myPubkey = identity?.pubkey;
   const { location } = useRouterState();
+  const navigate = useNavigate();
 
   // Track the current path WITHOUT re-subscribing on every route change:
   // the subscription must stay stable so live mentions aren't dropped in
@@ -68,11 +75,15 @@ export function useNotificationAlerts(): void {
         if (sound) playPing();
         if (enabled) {
           const sender = `${ev.pubkey.slice(0, 4)}…${ev.pubkey.slice(-4)}`;
-          notify(`${sender} mentioned you`, ev.content);
+          notify(`${sender} mentioned you`, ev.content, () => {
+            if (groupId) {
+              void navigate({ to: "/channels/$groupId", params: { groupId } });
+            }
+          });
         }
       },
     );
 
     return unsub;
-  }, [connection, connectionState, myPubkey]);
+  }, [connection, connectionState, myPubkey, navigate]);
 }
