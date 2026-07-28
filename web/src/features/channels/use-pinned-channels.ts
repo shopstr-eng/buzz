@@ -69,20 +69,22 @@ export function togglePinnedChannel(groupId: string): void {
  * when the visible pin set changed.
  */
 export function applyRemotePins(remote: Record<string, PinEntry>): boolean {
+  let timesAdvanced = false;
   let changed = false;
   for (const [id, entry] of Object.entries(remote)) {
     if ((pinTimes[id] ?? 0) >= entry.updatedAt) continue;
     pinTimes = { ...pinTimes, [id]: entry.updatedAt };
+    timesAdvanced = true;
     const isPinned = pinnedList.includes(id);
     if (entry.starred && !isPinned) pinnedList = [...pinnedList, id];
     else if (!entry.starred && isPinned) pinnedList = pinnedList.filter((x) => x !== id);
     else continue;
     changed = true;
   }
-  if (changed) {
-    persist();
-    emit();
-  }
+  // Persist whenever timestamps advanced — even without a visible change —
+  // or a reload resurrects the stale local decision and breaks LWW.
+  if (timesAdvanced) persist();
+  if (changed) emit();
   return changed;
 }
 

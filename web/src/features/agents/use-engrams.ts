@@ -37,6 +37,9 @@ export function useEngrams(): { byAgent: Map<string, MemoryGraph>; isLoading: bo
     setByAgent(new Map());
     setIsLoading(true);
     const store = new EngramStore();
+    // Async decrypt completions from a torn-down effect (identity switch,
+    // unmount, reconnect) must not write into the new effect's state.
+    let disposed = false;
 
     function rebuild(): void {
       const entries = store.entries();
@@ -52,21 +55,28 @@ export function useEngrams(): { byAgent: Map<string, MemoryGraph>; isLoading: bo
       { kinds: [KIND_AGENT_ENGRAM], "#p": [me], limit: 500 },
       (ev: NostrEvent) => {
         void (async () => {
+          if (disposed) return;
           let plaintext: string;
           try {
             plaintext = await decryptor(ev.pubkey, ev.content);
           } catch {
             return; // undecryptable (not for us / wrong key) — ignore
           }
+          if (disposed) return;
           const body = parseEngramBody(plaintext);
           if (!body) return;
           if (store.apply(ev, body)) rebuild();
         })();
       },
-      () => setIsLoading(false),
+      () => {
+        if (!disposed) setIsLoading(false);
+      },
     );
 
-    return unsub;
+    return () => {
+      disposed = true;
+      unsub();
+    };
   }, [connection, connectionState, me]);
 
   return { byAgent, isLoading };

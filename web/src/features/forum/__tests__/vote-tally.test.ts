@@ -92,6 +92,22 @@ describe("VoteTally.applyDeletion", () => {
     expect(t.applyVote(vote("v1", ME, "post1", 100))).toBe(true);
     expect(t.summaryFor("post1").up).toBe(1);
   });
+
+  it("a non-author deletion AFTER a valid one cannot resurrect a replayed vote", () => {
+    const t = new VoteTally();
+    t.applyDeletion(retract(ME, "v1")); // valid author-matched retraction
+    t.applyDeletion(retract(OTHER, "v1")); // later non-author deletion, same vote id
+    expect(t.applyVote(vote("v1", ME, "post1", 100))).toBe(false);
+    expect(t.summaryFor("post1").up).toBe(0);
+  });
+
+  it("an author deletion arriving AFTER a non-author one still takes effect", () => {
+    const t = new VoteTally();
+    t.applyDeletion(retract(OTHER, "v1")); // non-author first
+    t.applyDeletion(retract(ME, "v1")); // author later
+    expect(t.applyVote(vote("v1", ME, "post1", 100))).toBe(false);
+    expect(t.summaryFor("post1").up).toBe(0);
+  });
 });
 
 describe("VoteTally.summaries", () => {

@@ -45,15 +45,15 @@ function parseDirection(content: string): VoteDirection | null {
 
 export class VoteTally {
   private byTarget = new Map<string, Map<string, VoteRecord>>();
-  /** vote event id → deletion author pubkey. */
-  private retracted = new Map<string, string>();
+  /** vote event id → set of deleter pubkeys (only the voter's own deletion suppresses). */
+  private retracted = new Map<string, Set<string>>();
 
   /** Returns true when any target's tally changed. */
   applyVote(ev: VoteEventLike): boolean {
     const dir = parseDirection(ev.content);
     const target = ev.tags.find((t) => t[0] === "e" && t[1])?.[1];
     if (!dir || !target) return false;
-    if (this.retracted.get(ev.id) === ev.pubkey) return false;
+    if (this.retracted.get(ev.id)?.has(ev.pubkey)) return false;
 
     let voters = this.byTarget.get(target);
     if (!voters) {
@@ -71,12 +71,23 @@ export class VoteTally {
     return true;
   }
 
-  /** Kind-5 retraction; only honored when authored by the vote's author. */
+  /**
+   * Kind-5 retraction; only honored when authored by the vote's author.
+   * Deleter pubkeys ACCUMULATE per vote id — a later non-author deletion
+   * must never displace a recorded author-matched one (which would let a
+   * replayed vote resurrect), and an author deletion arriving after a
+   * non-author one must still take effect.
+   */
   applyDeletion(ev: { pubkey: string; tags: string[][] }): boolean {
     let changed = false;
     for (const tag of ev.tags) {
       if (tag[0] !== "e" || !tag[1]) continue;
-      this.retracted.set(tag[1], ev.pubkey);
+      let deleters = this.retracted.get(tag[1]);
+      if (!deleters) {
+        deleters = new Set();
+        this.retracted.set(tag[1], deleters);
+      }
+      deleters.add(ev.pubkey);
       for (const voters of this.byTarget.values()) {
         const rec = voters.get(ev.pubkey);
         if (rec && rec.id === tag[1]) {
