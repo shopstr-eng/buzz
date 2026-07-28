@@ -11,7 +11,7 @@
 import { useRef, useState } from "react";
 import {
   Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign,
-  Plus, Pencil, Trash2, Download, Upload, Brain,
+  Plus, Pencil, Trash2, Download, Upload, Brain, Globe,
 } from "lucide-react";
 import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-agents";
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
@@ -20,6 +20,9 @@ import { useAgentPublishing } from "../use-agent-publishing";
 import { buildSnapshot, parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
 import { useEngrams } from "../use-engrams";
 import { MemorySection } from "./MemorySection";
+import { useAgentCatalog } from "../use-agent-catalog";
+import { catalogToPersonaInput, type CatalogPersona } from "../lib/agent-catalog";
+import { CatalogSection } from "./CatalogSection";
 import { PersonaDialog } from "./PersonaDialog";
 import { TeamDialog } from "./TeamDialog";
 import { ManagedAgentDialog } from "./ManagedAgentDialog";
@@ -213,6 +216,26 @@ export function AgentsView() {
   const agentNames = new Map(
     agents.filter((a) => a.name).map((a) => [a.pubkey, a.name as string]),
   );
+  const {
+    entries: catalogEntries,
+    copied: catalogCopied,
+    markCopied,
+    isLoading: catalogLoading,
+  } = useAgentCatalog();
+  const [addingCatalogId, setAddingCatalogId] = useState<string | null>(null);
+
+  /** Copy a shared catalog persona into the owner's private list (fresh slug). */
+  async function handleAddCatalog(entry: CatalogPersona): Promise<void> {
+    setAddingCatalogId(entry.coordinate);
+    try {
+      await savePersona(catalogToPersonaInput(entry), null, personas.map((p) => p.id));
+      markCopied(entry.coordinate);
+    } catch {
+      // surfaced via publishError
+    } finally {
+      setAddingCatalogId(null);
+    }
+  }
   const { savePersona, deletePersona, deleteTeam, deleteManagedAgent, error: publishError } = useAgentPublishing();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -313,6 +336,20 @@ export function AgentsView() {
               />
             ))}
           </div>
+        )}
+      </Section>
+
+      <Section title="Community catalog" Icon={Globe} count={catalogEntries.length}
+        empty={catalogLoading
+          ? "Loading shared agents…"
+          : "No shared agents yet. Personas members share to the catalog appear here."}>
+        {catalogEntries.length > 0 && (
+          <CatalogSection
+            entries={catalogEntries}
+            copied={catalogCopied}
+            addingId={addingCatalogId}
+            onAdd={(e) => void handleAddCatalog(e)}
+          />
         )}
       </Section>
 
