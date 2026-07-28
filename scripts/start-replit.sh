@@ -87,8 +87,13 @@ fi
 ACP_HOSTS=""
 _acp_add_host() {
   local h="$1"
-  [[ -z "$h" ]] && return
-  case " ${ACP_HOSTS} " in *" ${h} "*) return ;; esac
+  # Explicit `return 0` on both early paths: a bare `return` propagates $? of
+  # the failed [[ -z "$h" ]] test above, and under `set -e` that kills the
+  # whole script whenever a host is skipped (empty or duplicate). Production
+  # hits the duplicate path because REPLIT_DOMAINS there also contains the
+  # custom domain already added from BUZZ_CUSTOM_DOMAINS.
+  [[ -z "$h" ]] && return 0
+  case " ${ACP_HOSTS} " in *" ${h} "*) return 0 ;; esac
   ACP_HOSTS="${ACP_HOSTS:+${ACP_HOSTS} }${h}"
 }
 if [[ -n "${BUZZ_CUSTOM_DOMAINS:-}" ]]; then
