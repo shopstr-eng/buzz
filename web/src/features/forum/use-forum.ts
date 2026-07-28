@@ -1,12 +1,16 @@
 /**
  * Forum channels: kind 45001 posts + kind 45003 comments (Buzz-native,
- * h-scoped, MessagesWrite scope). Kind 45002 votes are not yet surfaced (delta).
+ * h-scoped, MessagesWrite scope). Kind 45002 votes: "+" / "-" content,
+ * latest-per-voter wins, retraction via kind 5 (see vote-tally.ts).
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
 import type { NostrEvent } from "@/shared/lib/relay-connection";
+import { VoteTally, type VoteSummary, type VoteDirection } from "./vote-tally";
+
+export type { VoteSummary, VoteDirection } from "./vote-tally";
 
 export const KIND_FORUM_POST = 45001;
 export const KIND_FORUM_VOTE = 45002;
@@ -159,10 +163,40 @@ export function useForumThread(
   return { comments, isLoading };
 }
 
+/**
+ * Live vote tallies for every post/comment in a forum channel, keyed by
+ * target event id. Subscribes to 45002 + kind-5 retractions (h-scoped).
+ */
+export function useForumVotes(groupId: string): Map<string, VoteSummary> {
+  const { connection, connectionState, identity } = useRelay();
+  const me = identity?.pubkey;
+  const [summaries, setSummaries] = useState<Map<string, VoteSummary>>(new Map());
+
+  useEffect(() => {
+    if (!connection || connectionState !== "ready") return;
+    setSummaries(new Map());
+    const tally = new VoteTally();
+
+    const unsub = connection.subscribe(
+      { kinds: [KIND_FORUM_VOTE, 5], "#h": [groupId], limit: 500 },
+      (ev: NostrEvent) => {
+        const changed = ev.kind === KIND_FORUM_VOTE ? tally.applyVote(ev) : tally.applyDeletion(ev);
+        if (changed) setSummaries(tally.summaries(me));
+      },
+    );
+
+    return unsub;
+  }, [connection, connectionState, groupId, me]);
+
+  return summaries;
+}
+
 /** Publish helpers. */
 export function useForumActions(groupId: string): {
   createPost: (content: string, mentionPubkeys?: string[]) => Promise<void>;
   createComment: (postId: string, content: string, mentionPubkeys?: string[]) => Promise<void>;
+  vote: (targetId: string, direction: VoteDirection) => Promise<void>;
+  retractVote: (voteEventId: string) => Promise<void>;
 } {
   const { connection } = useRelay();
 
@@ -198,5 +232,28 @@ export function useForumActions(groupId: string): {
     [publish],
   );
 
-  return { createPost, createComment };
+  const vote = useCallback(
+    (targetId: string, direction: VoteDirection) =>
+      publish(KIND_FORUM_VOTE, direction === "up" ? "+" : "-", [["e", targetId]]),
+    [publish],
+  );
+
+  // Retraction: kind 5 with exactly one e-tag (relay deletion validation).
+  const retractVote = useCallback(
+    async (voteEventId: string) => {
+      if (!connection) return;
+      const signFn = getSignFn();
+      if (!signFn) throw new Error("No signing key available. Please log in again.");
+      const signed = await signFn({
+        kind: 5,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["e", voteEventId]],
+        content: "",
+      });
+      connection.publish(signed);
+    },
+    [connection],
+  );
+
+  return { createPost, createComment, vote, retractVote };
 }
