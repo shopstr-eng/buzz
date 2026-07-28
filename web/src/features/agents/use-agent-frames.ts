@@ -124,6 +124,84 @@ function parseFrame(ev: NostrEvent): AgentActivityItem | null {
   return null;
 }
 
+export interface AgentWorkingEntry {
+  agentPubkey: string;
+  /** Last human-readable frame text (tool title, chunk, "Turn started"). */
+  text: string;
+  at: number;
+}
+
+const WORKING_TTL_MS = 45_000;
+
+/**
+ * "Agent is working" indicator state for ONE channel, derived live from
+ * observer frames (24200 are ephemeral — no lookback). A channel is working
+ * from the first prompt/message/tool frame until turn_ended for that turn,
+ * or until frames stop for WORKING_TTL_MS (missed turn_ended safety net).
+ */
+export function useAgentWorking(groupId: string): AgentWorkingEntry[] {
+  const { connection, connectionState, identity } = useRelay();
+  const owner = identity?.pubkey;
+  const [entries, setEntries] = useState<AgentWorkingEntry[]>([]);
+
+  useEffect(() => {
+    if (!connection || connectionState !== "ready" || !owner) return;
+
+    interface Active {
+      agentPubkey: string;
+      text: string;
+      at: number;
+    }
+    // turnId (or sessionId fallback) → latest frame state.
+    const active = new Map<string, Active>();
+
+    function snapshot(): void {
+      setEntries([...active.values()].sort((a, b) => b.at - a.at));
+    }
+
+    const unsub = connection.subscribe(
+      {
+        kinds: [KIND_AGENT_OBSERVER_FRAME],
+        "#p": [owner],
+        limit: 500,
+        since: Math.floor(Date.now() / 1000),
+      },
+      (ev: NostrEvent) => {
+        const item = parseFrame(ev);
+        if (!item) return;
+        const key = item.turnId ?? item.sessionId ?? `${item.agentPubkey}:default`;
+        if (item.kind === "turn_ended") {
+          // turn_ended frames may not carry channel_id — clear by key regardless.
+          if (active.delete(key)) snapshot();
+          return;
+        }
+        if (item.channelId !== groupId) return;
+        active.set(key, { agentPubkey: item.agentPubkey, text: item.text, at: item.at * 1000 });
+        snapshot();
+      },
+    );
+
+    const sweep = setInterval(() => {
+      const cutoff = Date.now() - WORKING_TTL_MS;
+      let changed = false;
+      for (const [k, v] of active) {
+        if (v.at < cutoff) {
+          active.delete(k);
+          changed = true;
+        }
+      }
+      if (changed) snapshot();
+    }, 10_000);
+
+    return () => {
+      unsub();
+      clearInterval(sweep);
+    };
+  }, [connection, connectionState, owner, groupId]);
+
+  return entries;
+}
+
 export function useAgentActivity(): {
   items: AgentActivityItem[];
   isLoading: boolean;

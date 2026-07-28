@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Hash, Lock, Search, Settings, Users, X, Zap, MessageSquare } from "lucide-react";
+import { Bot, Hash, Lock, Search, Settings, Users, X, Zap, MessageSquare } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useMessages } from "../use-messages";
 import { useSendMessage } from "../use-send-message";
@@ -20,6 +20,7 @@ import { useAddReminder } from "../../reminders/use-reminders";
 import { ReportDialog, TimeoutDialog } from "../../moderation/ui/ModerationDialogs";
 import { useModeration } from "../../moderation/use-moderation";
 import { ForumView } from "../../forum/ui/ForumView";
+import { useAgentWorking } from "../../agents/use-agent-frames";
 import { CanvasView } from "../../canvas/ui/CanvasView";
 import { WorkflowChannelView } from "./WorkflowChannelView";
 import type { Channel, ChannelType, ChatMessage } from "../types";
@@ -93,6 +94,7 @@ function ChatChannelView({ channel }: Props) {
     return messages.filter((m) => m.content.toLowerCase().includes(q));
   }, [messages, findOpen, findQuery]);
   const typingPubkeys = useTypingIndicator(channel.groupId);
+  const agentWorking = useAgentWorking(channel.groupId);
   const notifyTyping = useTypingBroadcast(channel.groupId);
 
   // Fetch profiles for all members so the mention picker shows display names.
@@ -266,6 +268,23 @@ function ChatChannelView({ channel }: Props) {
               .map((pk) => memberProfiles.get(pk)?.name ?? `${pk.slice(0, 4)}…${pk.slice(-4)}`)
               .join(", ")}
             {typingPubkeys.length === 1 ? " is typing…" : " are typing…"}
+          </div>
+        )}
+
+        {/* Agent working indicator (live observer frames, 24200) */}
+        {agentWorking.length > 0 && (
+          <div className="flex shrink-0 items-center gap-1.5 px-4 pb-1 text-[11px] italic text-violet-600 dark:text-violet-300">
+            <Bot className="h-3 w-3 shrink-0 animate-pulse" />
+            {agentWorking.length === 1 ? (
+              <>
+                Agent is working
+                {agentWorking[0].text && agentWorking[0].text !== "Turn started"
+                  ? ` — ${agentWorking[0].text.slice(0, 60)}`
+                  : "…"}
+              </>
+            ) : (
+              `${agentWorking.length} agents are working…`
+            )}
           </div>
         )}
 
