@@ -11,13 +11,15 @@
 import { useRef, useState } from "react";
 import {
   Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign,
-  Plus, Pencil, Trash2, Download, Upload,
+  Plus, Pencil, Trash2, Download, Upload, Brain,
 } from "lucide-react";
 import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-agents";
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
 import { useAgentPublishing } from "../use-agent-publishing";
 import { buildSnapshot, parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
+import { useEngrams } from "../use-engrams";
+import { MemorySection } from "./MemorySection";
 import { PersonaDialog } from "./PersonaDialog";
 import { TeamDialog } from "./TeamDialog";
 import { ManagedAgentDialog } from "./ManagedAgentDialog";
@@ -203,6 +205,14 @@ export function AgentsView() {
   const { personas, teams, agents, isLoading: dirLoading } = useAgentDirectory();
   const { metrics, decryptUnavailable } = useAgentMetrics();
   const { items: activity, isLoading: activityLoading } = useAgentActivity();
+  const { byAgent: memoryByAgent, isLoading: memoryLoading } = useEngrams();
+  const memoryTotal = [...memoryByAgent.values()].reduce(
+    (n, g) => n + g.reachable.size + g.orphans.length,
+    0,
+  );
+  const agentNames = new Map(
+    agents.filter((a) => a.name).map((a) => [a.pubkey, a.name as string]),
+  );
   const { savePersona, deletePersona, deleteTeam, deleteManagedAgent, error: publishError } = useAgentPublishing();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -397,6 +407,15 @@ export function AgentsView() {
           <div className="divide-y divide-black/5 rounded-lg border border-black/8 px-2 dark:divide-white/5 dark:border-white/8">
             {activity.map((item) => <ActivityRow key={item.id} item={item} />)}
           </div>
+        )}
+      </Section>
+
+      <Section title="Memory" Icon={Brain} count={memoryTotal}
+        empty={memoryLoading
+          ? "Decrypting engrams…"
+          : "No agent memories yet. Engrams appear as agents record what they learn."}>
+        {memoryTotal > 0 && (
+          <MemorySection byAgent={memoryByAgent} agentNames={agentNames} />
         )}
       </Section>
 
