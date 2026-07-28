@@ -6,6 +6,7 @@ import type { EmojiReactions } from "../use-reactions";
 import type { CustomEmoji } from "../use-custom-emoji";
 import { EmojiPicker } from "./EmojiPicker";
 import { ProfilePopover } from "./ProfilePopover";
+import { canonicalNpubKey } from "@/shared/lib/mention-npub";
 import { relativeTime } from "@/shared/lib/relative-time";
 import type { Profile } from "@/shared/hooks/use-profiles";
 
@@ -157,7 +158,11 @@ function ContentWithMentions({
 
     let displayLabel: string;
     if (match[3]) {
-      displayLabel = `@${match[3].slice(0, 10)}…`;
+      // nostr:npub1… — resolve to the profile name when mentionNames (keyed by
+      // lowercase npubEncode output in MessageList) has it; tokens may arrive
+      // in any case, so normalize before lookup. Fall back to a truncated npub.
+      const resolvedNpubName = mentionNames?.get(canonicalNpubKey(match[3]));
+      displayLabel = resolvedNpubName ? `@${resolvedNpubName}` : `@${match[3].slice(0, 10)}…`;
     } else {
       const fragment = `${match[1]}\u2026${match[2]}`;
       const resolvedName = mentionNames?.get(fragment);
@@ -402,7 +407,7 @@ export function MessageRow({
     ? "You"
     : (profile?.name ?? truncatePubkey(message.pubkey));
   const timeStr = useMemo(() => relativeTime(message.createdAt), [message.createdAt]);
-  const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/.test(message.content);
+  const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/i.test(message.content);
   const hasCustomEmoji = customEmojiUrls?.size
     ? /:[a-z0-9_+-]+:/.test(message.content)
     : false;

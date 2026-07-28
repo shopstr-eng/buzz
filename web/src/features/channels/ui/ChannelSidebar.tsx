@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { avatarColor } from "@/shared/lib/avatar-color";
 import {
   AlarmClock, BookMarked, Bot, Hash, Home, Lock, MessageCircle, Settings, Wifi, WifiOff, Loader, LogOut,
   Zap, MessageSquare, Plus, Pencil, Pin, PinOff, Search,
@@ -402,7 +403,9 @@ export function ChannelSidebar() {
         <div className="shrink-0 border-t border-black/10 px-3 py-2.5 dark:border-white/10">
           <ConnectionBadge />
           {identity && (
-            <div className="mt-1.5 flex items-center justify-between gap-1">
+            <div className="mt-1.5 flex items-center justify-between gap-1.5">
+              {/* Own avatar: profile picture with colored-initial fallback. */}
+              <FooterAvatar pubkey={identity.pubkey} name={myProfile?.name} picture={myProfile?.picture} />
               {/* Name / pubkey + status */}
               <button
                 type="button"
@@ -475,5 +478,41 @@ export function ChannelSidebar() {
       )}
       {showNewDm && <NewDmDialog onClose={() => setShowNewDm(false)} />}
     </>
+  );
+}
+
+/** Own-identity avatar for the sidebar footer: profile picture with a
+ *  declarative colored-initial fallback (resets when the picture URL changes
+ *  so a previously-failed image can recover). */
+function FooterAvatar({
+  pubkey,
+  name,
+  picture,
+}: {
+  pubkey: string;
+  name?: string | null;
+  picture?: string | null;
+}) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const [lastPicture, setLastPicture] = useState(picture);
+  if (picture !== lastPicture) {
+    setLastPicture(picture);
+    setImgFailed(false);
+  }
+  return (
+    <div
+      className="relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-semibold text-white"
+      style={{ backgroundColor: avatarColor(pubkey) }}
+    >
+      {(name?.[0] ?? pubkey[0]).toUpperCase()}
+      {picture && !imgFailed && (
+        <img
+          src={picture}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      )}
+    </div>
   );
 }

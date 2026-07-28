@@ -5,6 +5,8 @@ import type { ReactionsMap } from "../use-reactions";
 import type { CustomEmoji } from "../use-custom-emoji";
 import { MessageRow } from "./MessageRow";
 import { useProfiles } from "@/shared/hooks/use-profiles";
+import { nip19 } from "nostr-tools";
+import { NPUB_MENTION_RE, pubkeyFromNpubToken } from "@/shared/lib/mention-npub";
 
 interface Props {
   messages: ChatMessage[];
@@ -116,10 +118,18 @@ export function MessageList({
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
 
-  // Collect unique author pubkeys across all messages for profile subscription.
+  // Collect unique author pubkeys across all messages for profile subscription,
+  // plus pubkeys referenced by nostr:npub1… mention tokens in message content so
+  // those mentions can resolve to display names too.
   const authorPubkeys = useMemo(() => {
     const seen = new Set<string>();
-    for (const msg of messages) seen.add(msg.pubkey);
+    for (const msg of messages) {
+      seen.add(msg.pubkey);
+      for (const m of msg.content.matchAll(NPUB_MENTION_RE)) {
+        const pk = pubkeyFromNpubToken(m[1]);
+        if (pk) seen.add(pk);
+      }
+    }
     return [...seen];
   }, [messages]);
 
@@ -137,12 +147,16 @@ export function MessageList({
     return merged;
   }, [authorProfiles, memberProfiles]);
 
-  // Build mention lookup: shortKey(pubkey) → display name.
-  // Used by ContentWithMentions to replace @pubkey chips with real names.
+  // Build mention lookup: shortKey(pubkey) → display name, and npub → display
+  // name. Used by ContentWithMentions to replace @pubkey chips and
+  // nostr:npub1… tokens with real names.
   const mentionNames = useMemo(() => {
     const m = new Map<string, string>();
     for (const [pubkey, profile] of profiles) {
-      if (profile.name) m.set(shortKey(pubkey), profile.name);
+      if (profile.name) {
+        m.set(shortKey(pubkey), profile.name);
+        m.set(nip19.npubEncode(pubkey), profile.name);
+      }
     }
     return m;
   }, [profiles]);
