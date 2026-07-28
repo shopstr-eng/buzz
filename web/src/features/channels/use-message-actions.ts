@@ -1,7 +1,12 @@
 /**
  * Edit and delete actions for chat messages, mirroring the desktop client:
- *   - Edit:   kind 40003, tags ["h", groupId] + ["e", targetId], content = new text.
+ *   - Edit:   kind 40003, tags ["h", groupId] + ["e", targetId] + ["p", pk]
+ *             for NEWLY-ADDED mentions only (desktop diff semantics: a
+ *             typo-fix edit re-notifies nobody), content = new text.
  *             The latest edit per target wins (relay + desktop behavior).
+ *             Desktop also re-emits imeta/emoji overlay sets; the web send
+ *             path emits neither, so edits carry none and receivers preserve
+ *             the original overlays (desktop applyEditTagOverlay semantics).
  *   - Delete: kind 5 (NIP-09), tags ["h", groupId] + ["e", targetId] — the same
  *             shape the desktop publishes for self-deletes (kind 9005 is the
  *             group-scoped moderation variant; the relay accepts both).
@@ -19,7 +24,7 @@ export function useMessageActions(
   applyLocalEdit: (messageId: string, content: string) => void,
   applyLocalDelete: (messageId: string) => void,
 ): {
-  editMessage: (messageId: string, content: string) => Promise<void>;
+  editMessage: (messageId: string, content: string, newMentionPubkeys?: string[]) => Promise<void>;
   deleteMessage: (messageId: string) => Promise<void>;
   error: string | null;
 } {
@@ -27,7 +32,7 @@ export function useMessageActions(
   const [error, setError] = useState<string | null>(null);
 
   const editMessage = useCallback(
-    async (messageId: string, content: string) => {
+    async (messageId: string, content: string, newMentionPubkeys?: string[]) => {
       if (!connection || !identity || !groupId) return;
       const trimmed = content.trim();
       if (!trimmed) return;
@@ -38,15 +43,20 @@ export function useMessageActions(
         return;
       }
 
+      const tags: string[][] = [
+        ["h", groupId],
+        ["e", messageId],
+      ];
+      for (const pk of newMentionPubkeys ?? []) {
+        if (pk !== identity.pubkey && /^[0-9a-f]{64}$/i.test(pk)) tags.push(["p", pk]);
+      }
+
       setError(null);
       try {
         const signed = await signFn({
           kind: KIND_STREAM_MSG_EDIT,
           created_at: Math.floor(Date.now() / 1000),
-          tags: [
-            ["h", groupId],
-            ["e", messageId],
-          ],
+          tags,
           content: trimmed,
         });
         applyLocalEdit(messageId, trimmed);

@@ -3,6 +3,7 @@ import { SendHorizonal, AtSign, X, CornerUpLeft, Zap, Pencil } from "lucide-reac
 import type { ChannelMember } from "../use-channel-members";
 import type { ChatMessage } from "../types";
 import type { Profile } from "@/shared/hooks/use-profiles";
+import { diffAddedMentionPubkeys, extractMentionPubkeys } from "../lib/edit-mentions";
 
 interface Props {
   channelName: string;
@@ -18,7 +19,7 @@ interface Props {
   /** Message being edited — pre-fills the input; send publishes a kind:40003 edit */
   editing?: ChatMessage | null;
   onClearEdit?: () => void;
-  onEditSave?: (messageId: string, content: string) => Promise<void>;
+  onEditSave?: (messageId: string, content: string, newMentionPubkeys?: string[]) => Promise<void>;
   /** When true, shows workflow-specific slash command hints */
   hasWorkflows?: boolean;
   /** Fired on keystroke so the parent can broadcast typing indicators */
@@ -134,11 +135,23 @@ export function MessageComposer({
     if (!content || isSending || disabled) return;
 
     if (editing && onEditSave) {
+      // Desktop edit semantics: p-tag ONLY mentions absent from the original
+      // body (a typo fix re-notifies nobody). Picks during editing are added
+      // by construction; typed @names are diffed against the original text.
+      const nameToPubkey = new Map<string, string>();
+      for (const m of members ?? []) {
+        const name = profiles?.get(m.pubkey)?.name?.toLowerCase();
+        if (name) nameToPubkey.set(name, m.pubkey);
+      }
+      const original = extractMentionPubkeys(editing.content, nameToPubkey);
+      const final = new Set([...extractMentionPubkeys(content, nameToPubkey), ...mentionedPubkeys]);
+      const added = diffAddedMentionPubkeys(original, final);
       setValue("");
+      setMentionedPubkeys(new Set());
       setPicker(null);
       setSlashPicker(null);
       if (textareaRef.current) textareaRef.current.style.height = "auto";
-      await onEditSave(editing.id, content);
+      await onEditSave(editing.id, content, added.length > 0 ? added : undefined);
       onClearEdit?.();
       return;
     }
