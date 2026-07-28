@@ -55,7 +55,8 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - Phases D–E from `docs/web-parity-analysis.md`: agents screen depth, workflow trace viewer, issues/PRs.
 - Phase A deltas: edit events don't re-emit mention p-tags (desktop does); unread badges cover last ~500 messages.
 - Phase B deltas: alerts fire on mentions only (not DM messages); DM creation takes pubkeys (no people-picker); inbox excludes approvals (46010) — the workflow channel already surfaces them.
-- Phase C deltas: no 45002 forum votes; no mod queue (see above); job cards are labeled rows without state aggregation; templates are web-local.
+- Phase C deltas: no 45002 forum votes; no mod queue (see above); job cards are labeled rows without state aggregation; templates are web-local. Unban (9041)/untimeout (9043) ARE wired in the message context menu — shown unconditionally to moderators since web has no ban/timeout state tracking.
+- Mention browser notifications navigate to the channel on click (Notification.onclick + window.focus).
 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.
