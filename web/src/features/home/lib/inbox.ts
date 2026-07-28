@@ -65,6 +65,8 @@ export interface InboxRow {
   id: string;
   rowKind: "inbox" | "reminder";
   category: InboxCategory | "reminder";
+  /** Latest item's event kind — drives kind-specific labels (job lifecycle). */
+  kind?: number;
   preview: string;
   authorPubkey?: string;
   channelId?: string;
@@ -120,6 +122,7 @@ export function buildInboxRows(
       id,
       rowKind: "inbox",
       category,
+      kind: latest.kind,
       preview: latest.content,
       authorPubkey: latest.pubkey,
       channelId: latest.channelId,

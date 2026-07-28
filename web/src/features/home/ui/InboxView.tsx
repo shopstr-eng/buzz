@@ -11,6 +11,7 @@ import { useChannels } from "../../channels/use-channels";
 import { useProfiles } from "@/shared/hooks/use-profiles";
 import { relativeTime } from "@/shared/lib/relative-time";
 import { CATEGORY_LABEL, type InboxRow } from "../lib/inbox";
+import { jobKindLabel } from "../../channels/types";
 
 type Filter = "all" | "needs_action" | "mention" | "agent_activity" | "activity" | "reminder";
 
@@ -54,7 +55,9 @@ export function InboxView() {
         <span
           className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${BADGE_CLS[row.category]}`}
         >
-          {CATEGORY_LABEL[row.category]}
+          {row.category === "agent_activity" && row.kind != null
+            ? (jobKindLabel(row.kind) ?? CATEGORY_LABEL[row.category])
+            : CATEGORY_LABEL[row.category]}
         </span>
         {row.authorPubkey && (
           <span className="truncate text-xs font-semibold text-black dark:text-white">
