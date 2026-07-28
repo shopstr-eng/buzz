@@ -123,14 +123,20 @@ export function InboxView() {
               >
                 {rowBody(row)}
               </Link>
-            ) : (
-              <div key={row.id} className="rounded-lg px-3 py-2">
+            ) : row.rowKind === "reminder" ? (
+              <Link
+                key={row.id}
+                to="/channels/reminders"
+                className="block rounded-lg px-3 py-2 hover:bg-black/5 dark:hover:bg-white/5"
+              >
                 <div className="flex items-start gap-1.5">
-                  {row.rowKind === "reminder" && (
-                    <Bell className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
-                  )}
+                  <Bell className="mt-0.5 h-3 w-3 shrink-0 text-emerald-500" />
                   <div className="min-w-0 flex-1">{rowBody(row)}</div>
                 </div>
+              </Link>
+            ) : (
+              <div key={row.id} className="rounded-lg px-3 py-2">
+                {rowBody(row)}
               </div>
             ),
           )}
