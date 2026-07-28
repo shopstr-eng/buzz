@@ -1,7 +1,9 @@
 /**
- * Mention alerts: browser Notification + sound when a new message p-tags the
- * current user. Live-only subscription (since: now), mounted ONCE in the
- * sidebar. Respects the settings from use-notification-settings.
+ * Message alerts: browser Notification + sound when a new message p-tags the
+ * current user (mentions) OR lands in one of their DM channels. Live-only
+ * subscriptions (since: now), mounted ONCE in the sidebar. Respects the
+ * settings from use-notification-settings. A shared dedupe set prevents a
+ * p-tagging DM message from alerting twice.
  */
 
 import { useEffect, useRef } from "react";
@@ -38,8 +40,13 @@ function notify(title: string, body: string, onClick?: () => void): void {
   }
 }
 
-/** Mount once (sidebar). Subscribes to live mentions of the current user. */
-export function useNotificationAlerts(): void {
+/**
+ * Mount once (sidebar). Subscribes to live mentions of the current user,
+ * plus live messages in their DM channels when `dmGroupIdsJoined`
+ * (comma-separated, sorted — keeps the effect stable across re-renders) is
+ * non-empty.
+ */
+export function useNotificationAlerts(dmGroupIdsJoined = ""): void {
   const { connection, connectionState, identity } = useRelay();
   const myPubkey = identity?.pubkey;
   const { location } = useRouterState();
@@ -56,34 +63,54 @@ export function useNotificationAlerts(): void {
   useEffect(() => {
     if (!connection || connectionState !== "ready" || !myPubkey) return;
 
-    const unsub = connection.subscribe(
-      {
-        kinds: [KIND_STREAM_MSG, KIND_STREAM_MSG_V2],
-        "#p": [myPubkey],
-        since: Math.floor(Date.now() / 1000),
-      },
-      (ev: NostrEvent) => {
-        if (ev.pubkey === myPubkey) return;
-        const { enabled, sound } = getNotificationSettings();
+    const since = Math.floor(Date.now() / 1000);
+    const alerted = new Set<string>();
 
-        // Skip when the user is already looking at this channel and the tab is visible.
-        const groupId = ev.tags.find((t) => t[0] === "h")?.[1];
-        const viewingChannel =
-          !document.hidden && pathnameRef.current === `/channels/${groupId}`;
-        if (viewingChannel) return;
+    function maybeAlert(ev: NostrEvent, source: "mention" | "dm"): void {
+      if (ev.pubkey === myPubkey || alerted.has(ev.id)) return;
 
-        if (sound) playPing();
-        if (enabled) {
-          const sender = `${ev.pubkey.slice(0, 4)}…${ev.pubkey.slice(-4)}`;
-          notify(`${sender} mentioned you`, ev.content, () => {
+      // Skip when the user is already looking at this channel and the tab is visible.
+      const groupId = ev.tags.find((t) => t[0] === "h")?.[1];
+      const viewingChannel =
+        !document.hidden && pathnameRef.current === `/channels/${groupId}`;
+      if (viewingChannel) return;
+
+      alerted.add(ev.id);
+      const { enabled, sound } = getNotificationSettings();
+      if (sound) playPing();
+      if (enabled) {
+        const sender = `${ev.pubkey.slice(0, 4)}…${ev.pubkey.slice(-4)}`;
+        notify(
+          source === "mention" ? `${sender} mentioned you` : `New message from ${sender}`,
+          ev.content,
+          () => {
             if (groupId) {
               void navigate({ to: "/channels/$groupId", params: { groupId } });
             }
-          });
-        }
-      },
-    );
+          },
+        );
+      }
+    }
 
-    return unsub;
-  }, [connection, connectionState, myPubkey, navigate]);
+    const unsubs = [
+      connection.subscribe(
+        { kinds: [KIND_STREAM_MSG, KIND_STREAM_MSG_V2], "#p": [myPubkey], since },
+        (ev: NostrEvent) => maybeAlert(ev, "mention"),
+      ),
+    ];
+
+    const dmIds = dmGroupIdsJoined.split(",").filter(Boolean);
+    if (dmIds.length > 0) {
+      unsubs.push(
+        connection.subscribe(
+          { kinds: [KIND_STREAM_MSG, KIND_STREAM_MSG_V2], "#h": dmIds, since },
+          (ev: NostrEvent) => maybeAlert(ev, "dm"),
+        ),
+      );
+    }
+
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [connection, connectionState, myPubkey, navigate, dmGroupIdsJoined]);
 }

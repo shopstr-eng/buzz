@@ -1,6 +1,7 @@
 /**
- * New direct message: enter one or more npub/hex pubkeys, publish kind 41010,
- * then navigate once the relay emits the DM channel discovery (kind:39000).
+ * New direct message: pick people from the community directory or enter
+ * npub/hex pubkeys manually, publish kind 41010, then navigate once the
+ * relay emits the DM channel discovery (kind:39000).
  */
 
 import { useEffect, useState } from "react";
@@ -9,6 +10,7 @@ import { Plus, X } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../../channels/use-channels";
 import { findDmChannel, parsePubkeyInput, useOpenDm } from "../use-open-dm";
+import { useCommunityPeople } from "../use-community-people";
 
 interface Props {
   onClose: () => void;
@@ -25,6 +27,27 @@ export function NewDmDialog({ onClose }: Props) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
   const [waitingFor, setWaitingFor] = useState<Set<string> | null>(null);
+  const [search, setSearch] = useState("");
+  const people = useCommunityPeople();
+
+  const addedPubkeys = new Set(
+    inputs.map((i) => parsePubkeyInput(i)).filter((pk): pk is string => Boolean(pk)),
+  );
+  const peopleByPubkey = new Map(people.map((p) => [p.pubkey, p.name]));
+  const filteredPeople = people
+    .filter((p) => {
+      if (p.pubkey === identity?.pubkey || addedPubkeys.has(p.pubkey)) return false;
+      const q = search.trim().toLowerCase();
+      return !q || p.name.toLowerCase().includes(q) || p.pubkey.startsWith(q);
+    })
+    .slice(0, 20);
+
+  /** Fill the first empty input with the picked person (or append a row). */
+  function addPerson(pubkey: string): void {
+    const emptyIdx = inputs.findIndex((v) => !v.trim());
+    if (emptyIdx >= 0) setInputs(inputs.map((v, j) => (j === emptyIdx ? pubkey : v)));
+    else if (inputs.length < 8) setInputs([...inputs, pubkey]);
+  }
 
   // Once the DM channel appears in discovery, jump to it.
   useEffect(() => {
@@ -106,20 +129,30 @@ export function NewDmDialog({ onClose }: Props) {
           Recipient pubkey{inputs.length > 1 ? "s" : ""} (npub or hex):
         </p>
         <div className="space-y-1.5">
-          {inputs.map((value, i) => (
-            <input
-              key={i}
-              type="text"
-              value={value}
-              onChange={(e) =>
-                setInputs(inputs.map((v, j) => (j === i ? e.target.value : v)))
-              }
-              onKeyDown={(e) => { if (e.key === "Enter") void handleOpen(); }}
-              placeholder="npub1… or 64-char hex"
-              autoFocus={i === 0}
-              className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 font-mono text-xs text-black placeholder:font-sans placeholder:text-black/35 focus:border-black/30 focus:outline-none dark:border-white/15 dark:text-white dark:placeholder:text-white/35 dark:focus:border-white/30"
-            />
-          ))}
+          {inputs.map((value, i) => {
+            const parsed = parsePubkeyInput(value);
+            const knownName = parsed ? peopleByPubkey.get(parsed) : undefined;
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={value}
+                  onChange={(e) =>
+                    setInputs(inputs.map((v, j) => (j === i ? e.target.value : v)))
+                  }
+                  onKeyDown={(e) => { if (e.key === "Enter") void handleOpen(); }}
+                  placeholder="npub1… or 64-char hex"
+                  autoFocus={i === 0}
+                  className="w-full min-w-0 flex-1 rounded-lg border border-black/15 bg-transparent px-3 py-2 font-mono text-xs text-black placeholder:font-sans placeholder:text-black/35 focus:border-black/30 focus:outline-none dark:border-white/15 dark:text-white dark:placeholder:text-white/35 dark:focus:border-white/30"
+                />
+                {knownName && (
+                  <span className="max-w-24 shrink-0 truncate text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                    {knownName}
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
         {inputs.length < 8 && (
           <button
@@ -130,6 +163,40 @@ export function NewDmDialog({ onClose }: Props) {
             <Plus className="h-3 w-3" /> Add participant
           </button>
         )}
+
+        <div className="mt-3 border-t border-black/8 pt-3 dark:border-white/8">
+          <p className="mb-1.5 text-xs text-black/50 dark:text-white/50">
+            Or pick from the community:
+          </p>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search people…"
+            className="mb-1.5 w-full rounded-lg border border-black/15 bg-transparent px-3 py-1.5 text-xs text-black placeholder:text-black/35 focus:border-black/30 focus:outline-none dark:border-white/15 dark:text-white dark:placeholder:text-white/35 dark:focus:border-white/30"
+          />
+          <div className="max-h-36 space-y-0.5 overflow-y-auto">
+            {filteredPeople.length === 0 ? (
+              <p className="py-2 text-center text-[10px] text-black/35 dark:text-white/35">
+                {people.length === 0 ? "Loading people…" : "No matches."}
+              </p>
+            ) : (
+              filteredPeople.map((p) => (
+                <button
+                  key={p.pubkey}
+                  type="button"
+                  onClick={() => addPerson(p.pubkey)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  <span className="truncate text-xs text-black/70 dark:text-white/70">{p.name}</span>
+                  <span className="ml-2 shrink-0 font-mono text-[9px] text-black/30 dark:text-white/30">
+                    {p.pubkey.slice(0, 8)}…
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
 
         {(localError ?? error) && (
           <p className="mt-2 text-xs text-red-600 dark:text-red-400">{localError ?? error}</p>

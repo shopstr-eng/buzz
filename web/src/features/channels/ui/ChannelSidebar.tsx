@@ -206,8 +206,12 @@ export function ChannelSidebar() {
 
   // Global presence + user-status lifecycles (mounted once here).
   usePresenceLifecycle();
-  // Mention alerts (browser notifications + sound), mounted once.
-  useNotificationAlerts();
+  const dmChannels = channels.filter((ch) => ch.channelType === "dm");
+  // Mention + DM alerts (browser notifications + sound), mounted once. The
+  // sorted joined id string keeps the alert subscriptions stable across
+  // re-renders (a fresh array would retrigger the effect every render).
+  const dmGroupIds = dmChannels.map((ch) => ch.groupId).sort().join(",");
+  useNotificationAlerts(dmGroupIds);
   const { publishStatus } = useUserStatusLifecycle();
   const userStatuses = useUserStatusMap();
   const { customEmoji } = useCustomEmoji();
@@ -223,7 +227,6 @@ export function ChannelSidebar() {
     : null;
   const displayName = myProfile?.name ?? shortPubkey;
 
-  const dmChannels = channels.filter((ch) => ch.channelType === "dm");
   const regularChannels = channels.filter((ch) => ch.channelType !== "dm");
   const pinnedChannels = regularChannels.filter((ch) => pinned.has(ch.groupId));
   const unpinnedChannels = regularChannels.filter((ch) => !pinned.has(ch.groupId));
