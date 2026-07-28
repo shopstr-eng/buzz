@@ -33,6 +33,7 @@ Legend: ✅ full parity · 🟡 partial · ❌ missing · 🖥️ desktop-native
 |---|---|---|---|---|
 | Add agent to channel | ✅ | `ConnectAgentDialog` (kind 10100) | ✅ | — |
 | Agent profiles | Kind 10100 + persona/team snapshots 30175/30176 | 10100 only | 🟡 | Persona/team rendering |
+| Community catalog | Shared 30175 personas from all members, copy-to-local | Community catalog section + Add (owner-private copy, provenance) | ✅ | Offline publish queue (desktop retention DB) |
 | Create/configure agents | `AgentsScreen`: models, API keys, MCP servers | None (admin-web partial) | ❌ | Agents management screen |
 | Session transcripts | `AgentSessionTranscriptList` | None | ❌ | Transcript viewer |
 | Turn metrics | Kind 44200 | None | ❌ | Metrics display |

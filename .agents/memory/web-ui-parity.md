@@ -68,5 +68,11 @@ All 8 remaining desktop↔web gaps closed (votes, DM polish, working indicator, 
 - **Every async-decrypt subscription callback needs a disposed guard pre/post-await** — identity switch/unmount races otherwise write stale state (use-sync-30078 had it; use-engrams regressed).
 - **Import snapshots always mint fresh identity** — never overwrite an existing persona on import (desktop always-mint rule); fresh unique slug, imports land owner-private.
 
+## Community catalog parity (2026-07-28, upstream #2439)
+- **The relay has NO #shared tag filter** — the desktop catalog pages ALL kind-30175 events (until-cursor, 500/page) and decides membership client-side: exactly one `["shared","true"]` tag on the LATEST head per (author,d). An unshared newest head hides older shared definitions. Web mirrors this; do not "optimize" it into a tag-filtered REQ.
+- **Catalog copies are owner-private always-mints** (shared:false, fresh slug); provenance is local-only on both platforms (desktop SQLite catalogSource, web localStorage buzz.catalogCopies.v1) — it is never written onto persona events.
+- **Snapshot definition gained `sourceIsBuiltin`** (camelCase serde) — import-preview metadata only, never grants built-in; web exports hardcode false like desktop persona exports.
+- Deferred publishing / retention DB / paging past the 1,000-row clamp are desktop-Tauri infra; web publishes directly online and pages REQ-side.
+
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.
