@@ -20,7 +20,7 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 
 ## Phase A done (2026-07-27) — key decisions
 - **Self-delete publishes kind 5** (not 9005) with `h+e` tags — matches desktop; 9005 is the moderation variant. Relay accepts both for ingest.
-- **Read state + pinned channels are web-local (localStorage)** — desktop's kind:30078 NIP-RS format is nip44-encrypted slot-merged blobs; cross-client sync is a follow-up, do NOT publish plaintext 30078 (would collide with desktop's blobs).
+- **Read state + pinned channels sync via kind:30078 (DONE 2026-07-28)** — desktop's NIP-RS slot format (nip44-to-self) is mirrored in `use-sync-30078.ts`. STILL TRUE: never publish plaintext 30078 (would corrupt desktop's blobs); degrade to local-only when nip44 is unavailable.
 - **Optimistic edits tracked in a set** — relay echo must always replace an optimistic edit regardless of clock skew (timestamp-compare only applies to confirmed edits).
 - Presence uses tab-visibility (web has no OS idle); user status kind 30315 d-tag `general`.
 
@@ -54,10 +54,19 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - ACP channel membership: DONE in dev (agents channel, ACP joined, turns verified). Prod community (buzz.shopstrmarkets.com) needs the same join per channel if agents are wanted there.
 - Agents tab creation: DONE on web (personas/teams/managed agents, full create/edit/delete mirroring desktop's write contract in `web/src/features/agents/agent-events.ts` — keep builders and `desktop/src-tauri/src/managed_agents/*_events.rs` in lockstep after upstream merges). Replaceable resolution for the directory lives in `directory-store.ts` and must match relay semantics everywhere: newest created_at wins, same-second ties go to the larger event id, and kind-5 tombstones suppress snapshots at/below the delete's timestamp (replay can deliver a delete before the older snapshot it removes). Web edits of desktop-authored records must preserve contract fields the web UI doesn't expose (name_pool, parallelism, respond_to_allowlist) — passthrough, don't drop. Deletions are kind-5 address-only; use-agents.ts applies them live. Managed-agent creation generates a keypair and shows the nsec once (web never stores it); running the agent still needs the key provisioned to an ACP worker. Usage (44200) publishes only when the agent backend emits a usage notification AND delta is reliable — buzz-agent can skip emission (lib.rs "nothing correct to emit"), then the section stays empty with no error. Live activity (24200) frames are ephemeral and only visible live while the tab is open; lookback never returns history.
 - Phases D–E from `docs/web-parity-analysis.md`: agents screen depth, workflow trace viewer, issues/PRs.
-- Phase A deltas: edit events don't re-emit mention p-tags (desktop does); unread badges cover last ~500 messages.
-- Phase B deltas: alerts fire on mentions only (not DM messages); DM creation takes pubkeys (no people-picker); inbox excludes approvals (46010) — the workflow channel already surfaces them.
-- Phase C deltas: no 45002 forum votes; no mod queue (see above); job cards are labeled rows without state aggregation; templates are web-local. Unban (9041)/untimeout (9043) ARE wired in the message context menu — shown unconditionally to moderators since web has no ban/timeout state tracking.
+- Phase A deltas: DONE — edits re-emit newly-added mention p-tags (desktop diff semantics). Unread badges cover last ~500 messages remains.
+- Phase B deltas: DONE — alerts fire on DM messages (h-scoped sub + dedupe) and New DM has a kind:0 people-picker. Inbox excludes approvals (46010) remains — the workflow channel already surfaces them.
+- Phase C deltas: DONE — 45002 forum votes. No mod queue remains (relay suppresses report fanout); job cards are labeled rows — CORRECTION: desktop also renders labeled rows, no stateful card exists anywhere, so per-kind labels were the whole parity target; templates are web-local. Unban (9041)/untimeout (9043) ARE wired in the message context menu — shown unconditionally to moderators since web has no ban/timeout state tracking.
 - Mention browser notifications navigate to the channel on click (Notification.onclick + window.focus).
+
+## Parity sprint done (2026-07-28) — key decisions
+All 8 remaining desktop↔web gaps closed (votes, DM polish, working indicator, job labels, edit mentions, 30078 sync, snapshots, memory viewer). Durable lessons:
+- **Forum vote (45002) convention is web-defined** — desktop never shipped votes; relay validates only e-tag target + channel match. Convention: "+"/"-" content, latest-per-(voter,target) with (created_at,id) tie-breaks, kind-5 single-e retraction.
+- **Vote tombstones must ACCUMULATE deleter pubkeys per vote id** — overwriting lets a later non-author deletion displace a valid author-matched one and resurrect a replayed vote (architect catch).
+- **Engram (30174) head ties break to LOWEST event id** — opposite of the larger-id convention used for NIP-33 directory records and lifecycle events. Source: buzz-core engram.rs.
+- **LWW timestamps must persist even when the visible state doesn't change** — applyRemotePins only persisted on visible change; a reload then resurrected stale local decisions (architect catch).
+- **Every async-decrypt subscription callback needs a disposed guard pre/post-await** — identity switch/unmount races otherwise write stale state (use-sync-30078 had it; use-engrams regressed).
+- **Import snapshots always mint fresh identity** — never overwrite an existing persona on import (desktop always-mint rule); fresh unique slug, imports land owner-private.
 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.

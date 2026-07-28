@@ -17,12 +17,12 @@ Legend: ✅ full parity · 🟡 partial · ❌ missing · 🖥️ desktop-native
 | Message edits | Kinds 40003/40008 (edits/diffs), "edited" marker | Not rendered | ❌ | Subscribe 40003/40008, show edited state + edit own messages |
 | Message deletion | Kinds 5/9005, removed in UI with tombstone | Not handled | ❌ | Subscribe 5/9005, tombstone or remove; delete-own action |
 | Message context menu | Copy, reply, react, edit, delete, pin, report, timeout (mod) | Hover quick-react only | ❌ | Right-click/long-press menu per message |
-| Read state / unread | Kind 30078 read state, unread badges in sidebar | None | ❌ | Publish read state; unread badge per channel; mention badge |
+| Read state / unread | Kind 30078 read state, unread badges in sidebar | 30078 NIP-RS sync (encrypted slot merge) + unread/mention badges | ✅ | Badges cover recent-activity window (~500 msgs) |
 | Typing indicators | Per-channel typing indicator | None | ❌ | Typing indicator subscription/publish |
 | System messages | Kind 40099 (member joined, etc.) | Not rendered | ❌ | Render 40099 in timeline |
 | Channel canvas | `ChannelCanvas` | None | ❌ | Canvas tab/section in channel view |
-| Jobs in channel | Kinds 43001–43006 (job cards) | None | ❌ | Render job events in timeline |
-| Pins / stars / mutes / sections | Sidebar kinds 30078 (sections, mutes, stars, sort) | Plain channel list | ❌ | Pinned channels, mute, custom sections, sort order |
+| Jobs in channel | Kinds 43001–43006 (labeled rows) | Labeled rows in timeline + per-kind inbox labels | ✅ | — |
+| Pins / stars / mutes / sections | Sidebar kinds 30078 (sections, mutes, stars, sort) | Pinned channels synced via 30078 channel-stars (LWW) | 🟡 | Mute, custom sections, sort order |
 | Channel settings | Permissions, typing, template application | Create dialog only | ❌ | Channel settings dialog (rename, permissions) |
 | Channel templates | `channel-templates` (create/duplicate/apply) | None | ❌ | Template picker in create-channel flow |
 | Forum view | Threaded forum per channel: posts (45001), comments (45003), route `/channels/$id/posts/$postId` | None | ❌ | Forum tab per channel + post detail route |
@@ -37,8 +37,8 @@ Legend: ✅ full parity · 🟡 partial · ❌ missing · 🖥️ desktop-native
 | Session transcripts | `AgentSessionTranscriptList` | None | ❌ | Transcript viewer |
 | Turn metrics | Kind 44200 | None | ❌ | Metrics display |
 | Observer frames | Kind 24200 | None | ❌ | Live "agent is working" frames in channel |
-| Memory graph | `MemorySection` (decrypted engrams, owner-only) | None | ❌ | Memory visualization (owner-only) |
-| Import/export snapshots | ✅ | None | ❌ | Snapshot import/export |
+| Memory graph | `MemorySection` (decrypted engrams, owner-only) | Owner-only engram viewer (30174, core-rooted reachability) | ✅ | — |
+| Import/export snapshots | ✅ | ✅ (.agent.json v1, always-mint import) | ✅ | .agent.png tEXt-chunk variant |
 
 ## 3. Navigation & app shell
 
@@ -133,10 +133,10 @@ Legend: ✅ full parity · 🟡 partial · ❌ missing · 🖥️ desktop-native
 1. ✅ Message edits (40003) + deletions (kind 5, same h/e tag shape as desktop) with hover menu
 2. ✅ Message context menu (copy/edit/delete/open-thread; report/pin-message not yet)
 3. ✅ Full emoji picker (+ NIP-30 custom emoji: kind 30030 d-tag `buzz:custom-emoji`, `["emoji", shortcode, url]` reaction tags, `:shortcode:` rendering in content + reaction chips)
-4. ✅ Read state → unread + mention badges in sidebar — **web-local v1** (localStorage); desktop's encrypted NIP-RS slot format (kind 30078, nip44-to-self) sync is a follow-up
+4. ✅ Read state → unread + mention badges in sidebar — synced cross-client via desktop's encrypted NIP-RS slot format (kind 30078, nip44-to-self, max-per-key merge, own-slot publish with collision rotation)
 5. ✅ Typing indicators (kind 20002, 3s throttle, 8s TTL, cleared on message)
 6. ✅ System messages (40099): join/leave/channel-created/moderation tombstones as centered rows
-7. ✅ Pinned channels with sidebar section — **web-local v1** (localStorage); kind-30078 sync + custom sections/drag-sort are follow-ups
+7. ✅ Pinned channels with sidebar section — synced via kind-30078 "channel-stars" slot (LWW per channel); custom sections/drag-sort/mutes are follow-ups
 8. ✅ Presence (20001; tab-visibility heartbeat — desktop uses OS idle) + user status (30315, d=`general`) + profile popover (avatar/name/presence/status/about)
 9. ✅ Thread panel drawer (reply-chain discovery, in-thread composer, "Open thread" menu action)
 10. ✅ Channel settings dialog (kind 9002 name/about edit; relay enforces permissions)
@@ -147,11 +147,11 @@ _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay 
 1. Global search + in-channel find bar ✅ (NIP-50 `search` filter at `/channels/search?q=`, sidebar box + client-side find bar)
 2. Home/inbox (mentions + Pulse feed) ✅ (kinds 9/40002 `#p:[me]`; kind 1 notes + composer). Approvals (46010) NOT included — workflow channel already surfaces them
 3. Notifications + sounds + settings ✅ (browser Notification + ping.mp3 on live mentions; `/channels/settings` toggles in localStorage `buzz.notifications.v1`). Delta: mentions only, not DM-message alerts
-4. DMs + `/messages/new` equivalent ✅ (kind 41010 open with p tags → relay idempotent participant-hash channels; sidebar "Direct messages" section; New message dialog accepts npub/hex). Delta: no people-picker — recipients entered as pubkey
+4. DMs + `/messages/new` equivalent ✅ (kind 41010 open with p tags → relay idempotent participant-hash channels; sidebar "Direct messages" section; New message dialog accepts npub/hex OR picks from a kind:0 community people directory). DM messages also trigger mention-style alerts
 5. Reminders panel + "remind me" message action ✅ (kind 30300 NIP-44-to-self; `/channels/reminders`; presets 1h/3h/tomorrow/next week). Requires nsec login or NIP-07 extension with `window.nostr.nip44`
 
 **Phase C — channel extensions** ✅ DONE
-1. Forum tab per channel ✅ (45001 posts/45003 comments h-scoped; Chat/Forum tabs in channel view; reply counts order-independent). Deltas: no post route (inline thread view), no 45002 votes
+1. Forum tab per channel ✅ (45001 posts/45003 comments h-scoped; Chat/Forum tabs in channel view; reply counts order-independent; 45002 up/down votes with kind-5 retraction — web defined the client convention since desktop never shipped votes). Delta: no post route (inline thread view)
 2. Channel canvas ✅ (kind 40100 markdown doc, latest-wins; Canvas tab on all non-DM channels; react-markdown render + edit)
 3. Job cards ✅ (43001–43006 in timeline ingest + violet label badges). Delta: rendered as labeled rows, no state aggregation into a single card
 4. Moderation ✅ (1984 report dialog; 9040–9043 ban/timeout commands admin-gated by member role; reactive timeout banner via `publishAndWait` rejection parsing). Delta: mod queue NOT feasible — reports suppress relay fanout, desktop reads them via Tauri API
@@ -178,4 +178,4 @@ _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay 
 ## Notes
 - `admin-web` already covers relay-level administration (agents, channels, members, providers). Keep admin functions there; this analysis concerns the *user-facing* client.
 - Web is **ahead of desktop** in: workflow channel chat tab, historical workflow runs.
-- Event-kind coverage summary: web currently handles 0, 5(part), 7, 9, 10100, 30617, 30620, 39000, 39002, 40002, 44100/44101, 46001–46031. Desktop additionally uses 1, 3, 4/1059, 1617/1618/1621, 1630–1633, 1984, 20001, 24200, 24810, 30030, 30078, 30175–30177, 30300, 30315, 30618, 39005, 40003, 40007, 40008, 40099, 43001–43006, 44100-series (notif), 44200, 45001/45003, 46010, 48100–48103, 9000/9001, 9005, 9040–9044, 13535.
+- Event-kind coverage summary: web currently handles 0, 5, 7, 9, 10100, 24200, 30078, 30174, 30175–30177, 30315, 30617, 30620, 39000, 39002, 40002, 40003, 41010, 43001–43006, 44100/44101, 44200, 45001/45002/45003, 46001–46031, 46010–46012. Desktop additionally uses 1, 3, 4/1059, 1617/1618/1621, 1630–1633, 1984, 20001, 24810, 30030, 30300, 30618, 39005, 40007, 40008, 40099, 44100-series (notif), 48100–48103, 9000/9001, 9005, 9040–9044, 13535.
