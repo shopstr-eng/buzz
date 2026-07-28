@@ -112,7 +112,8 @@ describe("useWorkflowRuns – delete button unblocks after run finishes", () => 
     mockRelayReady(connection);
 
     const { result } = renderHook(() => useWorkflowRuns("group-1"));
-    expect(subscribeCalls).toHaveLength(1);
+    // History sub (until: now, self-closing after EOSE) + live sub (since: now).
+    expect(subscribeCalls).toHaveLength(2);
     const { onEvent } = subscribeCalls[0];
 
     // 1. Run starts — relay emits kind:46001 (triggered)

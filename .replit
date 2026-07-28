@@ -15,6 +15,10 @@ timeoutMs = 180000
 [userenv.shared]
 BUZZ_AUTO_MIGRATE = "false"
 BUZZ_BIND_ADDR = "0.0.0.0:5000"
+# No MinIO/S3 runs in dev or prod — disable the hourly storage sweep + gauges
+# (its retry-on-failure spammed an ERROR every usage tick against localhost:9000).
+# Re-enable after pointing BUZZ_S3_ENDPOINT at a real bucket with ListBucket.
+BUZZ_STORAGE_METRICS = "off"
 BUZZ_GIT_CONFORMANCE_PROBE = "false"
 BUZZ_REQUIRE_AUTH_TOKEN = "true"
 BUZZ_REQUIRE_RELAY_MEMBERSHIP = "true"
