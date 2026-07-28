@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
 import type { NostrEvent } from "@/shared/lib/relay-connection";
+import { DirectoryStore } from "./directory-store";
 
 export const KIND_PERSONA = 30175;
 export const KIND_TEAM = 30176;
@@ -30,6 +31,10 @@ export interface AgentPersona {
   respondTo: string | null;
   /** True when the event carries ["shared","true"] (community catalog). */
   shared: boolean;
+  /** Preserved verbatim through web edits (desktop contract fields). */
+  namePool: string[];
+  parallelism: number | null;
+  respondToAllowlist: string[];
 }
 
 export interface AgentTeam {
@@ -85,6 +90,9 @@ function parsePersona(ev: NostrEvent): AgentPersona | null {
     isBuiltIn: Boolean(c?.is_built_in ?? c?.isBuiltIn),
     respondTo: str(c?.respond_to) ?? str(c?.respondTo),
     shared: ev.tags.some((t) => t[0] === "shared" && t[1] === "true"),
+    namePool: strList(c?.name_pool ?? c?.namePool),
+    parallelism: typeof c?.parallelism === "number" ? c.parallelism : null,
+    respondToAllowlist: strList(c?.respond_to_allowlist ?? c?.respondToAllowlist),
   };
 }
 
@@ -131,62 +139,54 @@ export function useAgentDirectory(): {
   useEffect(() => {
     if (!connection || connectionState !== "ready" || !owner) return;
 
-    // Addressable events: latest per (kind, d-tag) wins — compare created_at,
-    // not arrival order, so replayed older snapshots can't replace newer ones.
-    const personaMap = new Map<string, { at: number; value: AgentPersona }>();
-    const teamMap = new Map<string, { at: number; value: AgentTeam }>();
-    const agentMap = new Map<string, { at: number; value: ManagedAgent }>();
+    // Reconciliation lives in DirectoryStore: NIP-33 (created_at, event-id)
+    // resolution plus tombstone suppression for replay-ordered deletes.
+    const personaStore = new DirectoryStore<AgentPersona>();
+    const teamStore = new DirectoryStore<AgentTeam>();
+    const agentStore = new DirectoryStore<ManagedAgent>();
 
-    function put<T>(map: Map<string, { at: number; value: T }>, id: string, at: number, value: T): boolean {
-      const existing = map.get(id);
-      if (existing && existing.at > at) return false;
-      map.set(id, { at, value });
-      return true;
-    }
-
-    // Kind-5 address deletions ("a": "<kind>:<owner>:<d-tag>") remove the
-    // addressed record live — mirrors desktop's subscription set.
+    // Kind-5 address deletions ("a": "<kind>:<owner>:<d-tag>") tombstone the
+    // addressed record — mirrors desktop's subscription set.
     function applyDeletion(ev: NostrEvent): boolean {
       let changed = false;
       for (const tag of ev.tags) {
         if (tag[0] !== "a") continue;
         const [kindStr, , dTag] = (tag[1] ?? "").split(":");
         if (!dTag) continue;
-        const map =
-          kindStr === String(KIND_PERSONA) ? personaMap
-          : kindStr === String(KIND_TEAM) ? teamMap
-          : kindStr === String(KIND_MANAGED_AGENT) ? agentMap
-          : null;
-        if (map?.delete(dTag)) changed = true;
+        if (kindStr === String(KIND_PERSONA)) changed = personaStore.tombstone(dTag, ev.created_at) || changed;
+        else if (kindStr === String(KIND_TEAM)) changed = teamStore.tombstone(dTag, ev.created_at) || changed;
+        else if (kindStr === String(KIND_MANAGED_AGENT)) changed = agentStore.tombstone(dTag, ev.created_at) || changed;
       }
       return changed;
+    }
+
+    function syncAll(): void {
+      setPersonas(personaStore.values());
+      setTeams(teamStore.values());
+      setAgents(agentStore.values());
     }
 
     const unsub = connection.subscribe(
       { kinds: [KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT, 5], authors: [owner], limit: 300 },
       (ev: NostrEvent) => {
         if (ev.kind === 5) {
-          if (applyDeletion(ev)) {
-            setPersonas([...personaMap.values()].map((e) => e.value));
-            setTeams([...teamMap.values()].map((e) => e.value));
-            setAgents([...agentMap.values()].map((e) => e.value));
-          }
+          if (applyDeletion(ev)) syncAll();
           return;
         }
         if (ev.kind === KIND_PERSONA) {
           const p = parsePersona(ev);
-          if (p && put(personaMap, p.id, ev.created_at, p)) {
-            setPersonas([...personaMap.values()].map((e) => e.value));
+          if (p && personaStore.put(p.id, ev.created_at, ev.id, p)) {
+            setPersonas(personaStore.values());
           }
         } else if (ev.kind === KIND_TEAM) {
           const t = parseTeam(ev);
-          if (t && put(teamMap, t.id, ev.created_at, t)) {
-            setTeams([...teamMap.values()].map((e) => e.value));
+          if (t && teamStore.put(t.id, ev.created_at, ev.id, t)) {
+            setTeams(teamStore.values());
           }
         } else if (ev.kind === KIND_MANAGED_AGENT) {
           const a = parseManagedAgent(ev);
-          if (a && put(agentMap, a.id, ev.created_at, a)) {
-            setAgents([...agentMap.values()].map((e) => e.value));
+          if (a && agentStore.put(a.id, ev.created_at, ev.id, a)) {
+            setAgents(agentStore.values());
           }
         }
       },

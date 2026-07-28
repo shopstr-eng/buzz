@@ -109,6 +109,15 @@ describe("buildPersonaEvent", () => {
     const c = JSON.parse(buildPersonaEvent({ ...base, parallelism: 1 }, "s", NOW).content);
     expect(c).not.toHaveProperty("parallelism");
   });
+
+  it("preserves name_pool verbatim (desktop contract field)", () => {
+    const withPool = JSON.parse(
+      buildPersonaEvent({ ...base, namePool: ["alpha", "beta"] }, "s", NOW).content,
+    );
+    expect(withPool.name_pool).toEqual(["alpha", "beta"]);
+    const without = JSON.parse(buildPersonaEvent(base, "s", NOW).content);
+    expect(without).not.toHaveProperty("name_pool");
+  });
 });
 
 describe("buildTeamEvent", () => {

@@ -44,18 +44,31 @@ export function PersonaDialog({
   const [respondTo, setRespondTo] = useState<RespondTo>(
     (existing?.respondTo as RespondTo | null) ?? "anyone",
   );
+  const [allowlistText, setAllowlistText] = useState((existing?.respondToAllowlist ?? []).join("\n"));
   const [shared, setShared] = useState(existing?.shared ?? false);
   const [localError, setLocalError] = useState<string | null>(null);
+  // Desktop-contract fields the dialog doesn't edit — preserved verbatim so
+  // saving a desktop-authored persona from web doesn't strip them.
+  const namePool = existing?.namePool;
+  const parallelism = existing?.parallelism ?? undefined;
 
   async function submit() {
     if (!displayName.trim()) {
       setLocalError("Display name is required.");
       return;
     }
+    const respondToAllowlist = allowlistText.split(/[\s,]+/).filter(Boolean);
+    if (respondTo === "allowlist" && respondToAllowlist.length === 0) {
+      setLocalError("Add at least one pubkey to the allowlist, or choose a different audience.");
+      return;
+    }
     setLocalError(null);
     try {
       await savePersona(
-        { displayName, systemPrompt, avatarUrl, runtime, model, provider, respondTo, shared },
+        {
+          displayName, systemPrompt, avatarUrl, runtime, model, provider,
+          respondTo, respondToAllowlist, parallelism, namePool, shared,
+        },
         existing?.id ?? null,
         takenSlugs,
       );
@@ -108,6 +121,17 @@ export function PersonaDialog({
             ))}
           </select>
         </div>
+        {respondTo === "allowlist" && (
+          <div>
+            <label className={labelCls}>Allowlist pubkeys <span className="font-normal text-black/35 dark:text-white/35">(hex, one per line)</span></label>
+            <textarea
+              className={`${inputCls} min-h-16 resize-y font-mono text-xs`}
+              value={allowlistText}
+              onChange={(e) => setAllowlistText(e.target.value)}
+              placeholder="pubkey hex…"
+            />
+          </div>
+        )}
         <label className="flex items-start gap-2 text-xs text-black/60 dark:text-white/60">
           <input type="checkbox" className="mt-0.5" checked={shared} onChange={(e) => setShared(e.target.checked)} />
           <span>

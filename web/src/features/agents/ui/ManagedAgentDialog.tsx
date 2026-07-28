@@ -35,6 +35,7 @@ export function ManagedAgentDialog({
   const [model, setModel] = useState("");
   const [provider, setProvider] = useState("");
   const [respondTo, setRespondTo] = useState<RespondTo>("owner-only");
+  const [allowlistText, setAllowlistText] = useState("");
   const [parallelism, setParallelism] = useState(1);
   const [localError, setLocalError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ pubkey: string; nsec: string } | null>(null);
@@ -43,6 +44,11 @@ export function ManagedAgentDialog({
   async function submit() {
     if (!name.trim()) {
       setLocalError("Agent name is required.");
+      return;
+    }
+    const respondToAllowlist = allowlistText.split(/[\s,]+/).filter(Boolean);
+    if (respondTo === "allowlist" && respondToAllowlist.length === 0) {
+      setLocalError("Add at least one pubkey to the allowlist, or choose a different audience.");
       return;
     }
     setLocalError(null);
@@ -54,6 +60,7 @@ export function ManagedAgentDialog({
         model: model || undefined,
         provider: provider || undefined,
         respondTo,
+        respondToAllowlist,
         parallelism: Math.max(1, Math.floor(parallelism) || 1),
       });
       setCreated(result);
@@ -150,6 +157,17 @@ export function ManagedAgentDialog({
               <option value="anyone">Anyone</option>
             </select>
           </div>
+          {respondTo === "allowlist" && (
+            <div className="col-span-2">
+              <label className={labelCls}>Allowlist pubkeys <span className="font-normal text-black/35 dark:text-white/35">(hex, one per line)</span></label>
+              <textarea
+                className={`${inputCls} min-h-16 resize-y font-mono text-xs`}
+                value={allowlistText}
+                onChange={(e) => setAllowlistText(e.target.value)}
+                placeholder="pubkey hex…"
+              />
+            </div>
+          )}
           <div>
             <label className={labelCls}>Parallelism</label>
             <input

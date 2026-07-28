@@ -50,6 +50,8 @@ export interface PersonaFormInput {
   respondTo: RespondTo;
   respondToAllowlist?: string[];
   parallelism?: number;
+  /** Desktop-contract field; preserved verbatim across web edits. */
+  namePool?: string[];
   /** Adds ["shared","true"] — the relay then fans the persona out community-wide (agent catalog). */
   shared: boolean;
 }
@@ -72,6 +74,7 @@ export function buildPersonaEvent(
   opt(payload, "runtime", input.runtime);
   opt(payload, "model", input.model);
   opt(payload, "provider", input.provider);
+  if (input.namePool?.length) payload.name_pool = input.namePool;
   payload.respond_to = input.respondTo;
   if (input.respondToAllowlist?.length) payload.respond_to_allowlist = input.respondToAllowlist;
   if (input.parallelism && input.parallelism > 1) payload.parallelism = input.parallelism;
