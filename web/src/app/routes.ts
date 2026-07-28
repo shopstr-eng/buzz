@@ -16,6 +16,7 @@ export const routes = rootRoute("root.tsx", [
     route("/search", "channels.search.tsx"),
     route("/settings", "channels.settings.tsx"),
     route("/reminders", "channels.reminders.tsx"),
+    route("/agents", "channels.agents.tsx"),
     route("$groupId", "channels.$groupId.tsx"),
   ]),
 ]);

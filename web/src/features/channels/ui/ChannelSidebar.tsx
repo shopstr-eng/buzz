@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  AlarmClock, BookMarked, Hash, Home, Lock, MessageCircle, Settings, Wifi, WifiOff, Loader, LogOut,
+  AlarmClock, BookMarked, Bot, Hash, Home, Lock, MessageCircle, Settings, Wifi, WifiOff, Loader, LogOut,
   Zap, MessageSquare, Plus, Pencil, Pin, PinOff, Search,
 } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
@@ -278,6 +278,19 @@ export function ChannelSidebar() {
           >
             <AlarmClock className="h-3.5 w-3.5 shrink-0 opacity-60" />
             Reminders
+          </Link>
+
+          {/* Agents link */}
+          <Link
+            to="/channels/agents"
+            className={`mb-2 flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+              location.pathname === "/channels/agents"
+                ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+                : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+            }`}
+          >
+            <Bot className="h-3.5 w-3.5 shrink-0 opacity-60" />
+            Agents
           </Link>
 
           {/* Repos link */}

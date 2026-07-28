@@ -157,10 +157,10 @@ _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay 
 4. Moderation ✅ (1984 report dialog; 9040–9043 ban/timeout commands admin-gated by member role; reactive timeout banner via `publishAndWait` rejection parsing). Delta: mod queue NOT feasible — reports suppress relay fanout, desktop reads them via Tauri API
 5. Channel templates ✅ (web-local localStorage `buzz.channelTemplates.v1`; picker in create dialog, save from settings dialog)
 
-**Phase D — agents & workflows depth**
-1. Agents screen: personas/teams (30175/30176), transcripts, metrics (44200), observer frames (24200) in channel
-2. Workflow run trace viewer; visual form builder (or keep YAML by decision)
-3. Webhook header editor
+**Phase D — agents & workflows depth** ✅ DONE
+1. Agents screen ✅ (`/channels/agents`: personas 30175/teams 30176/managed agents 30177 read-only directory, owner-scoped with created_at latest-wins; usage metrics from 44200 NIP-AM — NIP-44 decrypted to owner, camelCase TokenCounts, aggregated per agent+model; live activity feed from 24200 observer frames parsed into prompt/message/tool-call items). Deltas: persona/team creation stays desktop/admin; transcripts are a live feed, not the desktop's full archive replay (archive is Tauri-only)
+2. Workflow run trace viewer ✅ (46002–46004 folded into per-run step entries with monotonic guards + event-id dedupe; expandable trace per run row). YAML kept by decision (no visual form builder)
+3. Webhook header editor ✅ (js-yaml dialog over `call_webhook` step headers; warns that applying normalizes YAML/drops comments)
 
 **Phase E — projects depth**
 1. Issues (1621), PRs (1618), patches (1617), CI status (1630–1633)

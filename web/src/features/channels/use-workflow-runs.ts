@@ -43,6 +43,16 @@ export type WorkflowRunStatus =
   | "cancelled"
   | "approval_required";
 
+/** One step in a run's execution trace, built from 46002–46004 events. */
+export interface WorkflowStepEntry {
+  stepId: string;
+  status: "running" | "completed" | "failed";
+  startedAt: number;
+  endedAt?: number;
+  /** Error text (46004) or step output (46003), when present. */
+  detail?: string;
+}
+
 export interface WorkflowRun {
   /** Run ID — from the `run` tag or the triggering event's `d` tag. */
   runId: string;
@@ -57,6 +67,55 @@ export interface WorkflowRun {
   errorMessage?: string;
   /** Approval token (for approval_required state). */
   approvalToken?: string;
+  /** Chronological step trace for the trace viewer. */
+  steps: WorkflowStepEntry[];
+}
+
+/** Fold a step event (46002/46003/46004) into a run's trace. */
+function applyStep(
+  steps: WorkflowStepEntry[],
+  ev: { kind: number; tags: string[][]; content: string; created_at: number },
+): WorkflowStepEntry[] {
+  const stepId = ev.tags.find((t) => t[0] === "step")?.[1];
+  if (!stepId) return steps;
+  if (ev.kind === KIND_WORKFLOW_STEP_STARTED) {
+    if (steps.some((s) => s.stepId === stepId)) return steps;
+    return [...steps, { stepId, status: "running", startedAt: ev.created_at }];
+  }
+  if (
+    ev.kind === KIND_WORKFLOW_STEP_COMPLETED ||
+    ev.kind === KIND_WORKFLOW_STEP_FAILED
+  ) {
+    const failed = ev.kind === KIND_WORKFLOW_STEP_FAILED;
+    const idx = steps.findIndex((s) => s.stepId === stepId);
+    const detail = ev.content || undefined;
+    if (idx === -1) {
+      return [
+        ...steps,
+        {
+          stepId,
+          status: failed ? "failed" : "completed",
+          startedAt: ev.created_at,
+          endedAt: ev.created_at,
+          detail,
+        },
+      ];
+    }
+    const entry = steps[idx];
+    // Monotonic: never overwrite an ended step with an older end event.
+    if (entry.endedAt && ev.created_at < entry.endedAt) return steps;
+    return steps.map((s, i) =>
+      i === idx
+        ? {
+            ...s,
+            status: failed ? "failed" : "completed",
+            endedAt: ev.created_at,
+            detail: detail ?? s.detail,
+          }
+        : s,
+    );
+  }
+  return steps;
 }
 
 const RUN_STATUS_KINDS = [
@@ -112,9 +171,12 @@ export function useWorkflowRuns(groupId: string | null): {
 
     // Run state machine: keyed by runId. Later events update status in-place.
     const runMap = new Map<string, WorkflowRun>();
+    const seenIds = new Set<string>();
     const now = Math.floor(Date.now() / 1000);
 
     function applyEvent(ev: { kind: number; id: string; tags: string[][]; content: string; created_at: number }) {
+      if (seenIds.has(ev.id)) return;
+      seenIds.add(ev.id);
       const runId =
         ev.tags.find((t) => t[0] === "run")?.[1] ??
         ev.tags.find((t) => t[0] === "d")?.[1] ??
@@ -126,6 +188,18 @@ export function useWorkflowRuns(groupId: string | null): {
 
       const existing = runMap.get(runId);
       const status = kindToStatus(ev.kind);
+
+      // Stale for status purposes (an older event arriving after a newer
+      // one): don't regress run-level fields, but the event may still carry
+      // unseen step info, so fold it into the trace.
+      if (existing && ev.created_at < existing.updatedAt) {
+        const steps = applyStep(existing.steps, ev);
+        if (steps !== existing.steps) {
+          runMap.set(runId, { ...existing, steps });
+          setRuns(Array.from(runMap.values()).sort((a, b) => b.startedAt - a.startedAt));
+        }
+        return;
+      }
 
       const updated: WorkflowRun = existing
         ? {
@@ -144,6 +218,7 @@ export function useWorkflowRuns(groupId: string | null): {
               ev.kind === KIND_WORKFLOW_APPROVAL_REQUESTED
                 ? (ev.tags.find((t) => t[0] === "token")?.[1] ?? existing.approvalToken)
                 : existing.approvalToken,
+            steps: applyStep(existing.steps, ev),
           }
         : {
             runId,
@@ -151,6 +226,7 @@ export function useWorkflowRuns(groupId: string | null): {
             status,
             startedAt: ev.created_at,
             updatedAt: ev.created_at,
+            steps: applyStep([], ev),
           };
 
       runMap.set(runId, updated);

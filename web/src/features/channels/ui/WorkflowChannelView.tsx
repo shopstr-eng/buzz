@@ -25,6 +25,7 @@ import {
   Zap,
   BookOpen,
   MessageSquare,
+  Globe,
 } from "lucide-react";
 import { useWorkflows } from "../use-workflows";
 import { useWorkflowRuns, type WorkflowRun, type WorkflowRunStatus } from "../use-workflow-runs";
@@ -33,6 +34,7 @@ import { useSendMessage } from "../use-send-message";
 import { useChannelMembers } from "../use-channel-members";
 import { useReactions } from "../use-reactions";
 import { useRelay } from "@/shared/context/relay-context";
+import { WebhookHeadersDialog } from "./WebhookHeadersDialog";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
 import type { Channel, ChatMessage } from "../types";
@@ -113,6 +115,20 @@ function StatusBadge({ status }: { status: WorkflowRunStatus }) {
 
 // ── Run row ────────────────────────────────────────────────────────────────
 
+/** Format a step duration from epoch seconds. */
+function fmtStepDuration(s: { startedAt: number; endedAt?: number }): string {
+  if (!s.endedAt) return "running…";
+  const secs = Math.max(0, s.endedAt - s.startedAt);
+  if (secs < 60) return `${secs}s`;
+  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+const STEP_DOT: Record<string, string> = {
+  running: "bg-violet-500 animate-pulse",
+  completed: "bg-emerald-500",
+  failed: "bg-red-500",
+};
+
 function RunRow({
   run,
   onApprove,
@@ -122,48 +138,100 @@ function RunRow({
   onApprove: () => void;
   onDeny: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const date = new Date(run.startedAt * 1000);
   const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const dateStr = date.toLocaleDateString([], { month: "short", day: "numeric" });
 
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-black/8 bg-white px-3 py-2.5 dark:border-white/8 dark:bg-[#1A1A1A]">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <StatusBadge status={run.status} />
-          {run.currentStep && (
-            <span className="text-[11px] text-black/40 dark:text-white/40">
-              step: {run.currentStep}
-            </span>
+    <div className="rounded-lg border border-black/8 bg-white dark:border-white/8 dark:bg-[#1A1A1A]">
+      <div className="flex items-start justify-between gap-3 px-3 py-2.5">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <StatusBadge status={run.status} />
+            {run.currentStep && (
+              <span className="text-[11px] text-black/40 dark:text-white/40">
+                step: {run.currentStep}
+              </span>
+            )}
+          </div>
+          {run.errorMessage && (
+            <p className="mt-1 text-[11px] text-red-600 dark:text-red-400 line-clamp-2">
+              {run.errorMessage}
+            </p>
+          )}
+          <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
+            {dateStr} · {timeStr} · run {run.runId.slice(0, 8)}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1.5">
+          {run.status === "approval_required" && (
+            <>
+              <button
+                type="button"
+                onClick={onApprove}
+                className="flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700"
+              >
+                <ThumbsUp className="h-3 w-3" /> Approve
+              </button>
+              <button
+                type="button"
+                onClick={onDeny}
+                className="flex items-center gap-1 rounded-md border border-black/15 px-2.5 py-1 text-xs text-black/60 transition-colors hover:bg-black/5 dark:border-white/15 dark:text-white/60 dark:hover:bg-white/5"
+              >
+                <ThumbsDown className="h-3 w-3" /> Deny
+              </button>
+            </>
+          )}
+          {run.steps.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-label={open ? "Hide step trace" : "Show step trace"}
+              title="Step trace"
+              className="rounded-md border border-black/10 p-1 text-black/40 transition-colors hover:bg-black/5 dark:border-white/10 dark:text-white/40 dark:hover:bg-white/5"
+            >
+              {open ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </button>
           )}
         </div>
-        {run.errorMessage && (
-          <p className="mt-1 text-[11px] text-red-600 dark:text-red-400 line-clamp-2">
-            {run.errorMessage}
-          </p>
-        )}
-        <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
-          {dateStr} · {timeStr} · run {run.runId.slice(0, 8)}
-        </p>
       </div>
 
-      {run.status === "approval_required" && (
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onApprove}
-            className="flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-emerald-700"
-          >
-            <ThumbsUp className="h-3 w-3" /> Approve
-          </button>
-          <button
-            type="button"
-            onClick={onDeny}
-            className="flex items-center gap-1 rounded-md border border-black/15 px-2.5 py-1 text-xs text-black/60 transition-colors hover:bg-black/5 dark:border-white/15 dark:text-white/60 dark:hover:bg-white/5"
-          >
-            <ThumbsDown className="h-3 w-3" /> Deny
-          </button>
-        </div>
+      {/* Step trace viewer */}
+      {open && run.steps.length > 0 && (
+        <ol className="space-y-1.5 border-t border-black/8 px-3 py-2 dark:border-white/8">
+          {run.steps.map((s) => (
+            <li key={s.stepId} className="text-[11px]">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`h-1.5 w-1.5 shrink-0 rounded-full ${STEP_DOT[s.status] ?? "bg-black/30"}`}
+                />
+                <span className="font-mono text-black/70 dark:text-white/70">
+                  {s.stepId}
+                </span>
+                <span className="text-black/35 dark:text-white/35">
+                  {fmtStepDuration(s)}
+                </span>
+              </div>
+              {s.detail && (
+                <p
+                  className={`ml-3.5 mt-0.5 line-clamp-3 whitespace-pre-wrap break-all font-mono text-[10px] ${
+                    s.status === "failed"
+                      ? "text-red-600 dark:text-red-400"
+                      : "text-black/45 dark:text-white/45"
+                  }`}
+                >
+                  {s.detail}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   );
@@ -252,6 +320,7 @@ function WorkflowEditor({
   existingId?: string;
 }) {
   const [yaml, setYaml] = useState(initialYaml ?? EXAMPLE_YAML);
+  const [headersOpen, setHeadersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Reset editor content whenever we switch to a different workflow (or clear to new).
@@ -282,19 +351,30 @@ function WorkflowEditor({
         <span className="text-xs font-semibold text-black/60 dark:text-white/60">
           {existingId ? "Edit workflow" : "New workflow"}
         </span>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSaving}
-          className="flex items-center gap-1.5 rounded-md bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-black/80 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/90"
-        >
-          {isSaving ? (
-            <Loader className="h-3 w-3 animate-spin" />
-          ) : (
-            <Save className="h-3 w-3" />
-          )}
-          Save workflow
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setHeadersOpen(true)}
+            title="Edit call_webhook step headers"
+            className="flex items-center gap-1.5 rounded-md border border-black/15 px-3 py-1.5 text-xs font-medium text-black/70 transition-colors hover:bg-black/5 dark:border-white/15 dark:text-white/70 dark:hover:bg-white/5"
+          >
+            <Globe className="h-3 w-3" />
+            Webhook headers
+          </button>
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 rounded-md bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-black/80 disabled:opacity-40 dark:bg-white dark:text-black dark:hover:bg-white/90"
+          >
+            {isSaving ? (
+              <Loader className="h-3 w-3 animate-spin" />
+            ) : (
+              <Save className="h-3 w-3" />
+            )}
+            Save workflow
+          </button>
+        </div>
       </div>
 
       <textarea
@@ -313,6 +393,14 @@ function WorkflowEditor({
       )}
 
       <ReferenceCard />
+
+      {headersOpen && (
+        <WebhookHeadersDialog
+          source={yaml}
+          onApply={setYaml}
+          onClose={() => setHeadersOpen(false)}
+        />
+      )}
     </div>
   );
 }

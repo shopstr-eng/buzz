@@ -37,6 +37,12 @@ A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives
 - **Mixed-kind subscriptions deliver out of order** — aggregation across kinds (forum posts+comments) must cache children until parents arrive and dedupe by event id.
 - **Moderation commands are community-scoped (no h tag)** — tag shapes pinned by desktop `shared/api/moderation.ts`: timeout 9042 requires `["expiration", ts]`; timeout detection is reactive via OK false `restricted: you are timed out until <ts>`.
 
+## Phase D done (2026-07-27) — key decisions
+- **NIP-AM 44200 payloads are camelCase** (`turn.inputTokens/costUsd` — serde rename_all), NIP-44-encrypted to the owner with the agent pubkey in the `agent` tag; the counts field is `payload.turn` (null when delta_reliable is false).
+- **Observer 24200 frames are owner-scoped (#p), never h-tagged** — web can't associate them with channels beyond the envelope's `channel_id` field. Subscription mirrors desktop: `#p=[owner]`, 300s lookback.
+- **Persona/team snapshots (30175/30176/30177) are backend-published read-only mirrors** — web displays them; creation stays desktop/admin. Compare created_at for latest-wins, not arrival order.
+- **js-yaml has no default export under rolldown** — use named imports `{ load, dump }`.
+
 ## Still needed for full parity
 - AI provider config: `BUZZ_AGENT_PROVIDER` + API key must be set as Replit secrets before the agent can respond to anything.
 - ACP must be added to at least one channel via Admin → Agents → Add to channel.

@@ -11,6 +11,7 @@ import { Route as loginRouteImport } from "./routes/login";
 import { Route as reposRouteImport } from "./routes/repos";
 import { Route as channelsDotindexRouteImport } from "./routes/channels.index";
 import { Route as channelsDotgroupIdRouteImport } from "./routes/channels.$groupId";
+import { Route as channelsDotagentsRouteImport } from "./routes/channels.agents";
 import { Route as channelsDothomeRouteImport } from "./routes/channels.home";
 import { Route as channelsDotremindersRouteImport } from "./routes/channels.reminders";
 import { Route as channelsDotsearchRouteImport } from "./routes/channels.search";
@@ -49,6 +50,11 @@ const channelsDotindexRoute = channelsDotindexRouteImport.update({
 const channelsDotgroupIdRoute = channelsDotgroupIdRouteImport.update({
   id: "/$groupId",
   path: "/$groupId",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotagentsRoute = channelsDotagentsRouteImport.update({
+  id: "/agents",
+  path: "/agents",
   getParentRoute: () => channelsRoute,
 } as any);
 const channelsDothomeRoute = channelsDothomeRouteImport.update({
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   "/login": typeof loginRoute;
   "/repos": typeof reposRouteWithChildren;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
+  "/channels/agents": typeof channelsDotagentsRoute;
   "/channels/home": typeof channelsDothomeRoute;
   "/channels/reminders": typeof channelsDotremindersRoute;
   "/channels/search": typeof channelsDotsearchRoute;
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   "/": typeof indexRoute;
   "/login": typeof loginRoute;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
+  "/channels/agents": typeof channelsDotagentsRoute;
   "/channels/home": typeof channelsDothomeRoute;
   "/channels/reminders": typeof channelsDotremindersRoute;
   "/channels/search": typeof channelsDotsearchRoute;
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   "/login": typeof loginRoute;
   "/repos": typeof reposRouteWithChildren;
   "/channels/$groupId": typeof channelsDotgroupIdRoute;
+  "/channels/agents": typeof channelsDotagentsRoute;
   "/channels/home": typeof channelsDothomeRoute;
   "/channels/reminders": typeof channelsDotremindersRoute;
   "/channels/search": typeof channelsDotsearchRoute;
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | "/login"
     | "/repos"
     | "/channels/$groupId"
+    | "/channels/agents"
     | "/channels/home"
     | "/channels/reminders"
     | "/channels/search"
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | "/"
     | "/login"
     | "/channels/$groupId"
+    | "/channels/agents"
     | "/channels/home"
     | "/channels/reminders"
     | "/channels/search"
@@ -189,6 +200,7 @@ export interface FileRouteTypes {
     | "/login"
     | "/repos"
     | "/channels/$groupId"
+    | "/channels/agents"
     | "/channels/home"
     | "/channels/reminders"
     | "/channels/search"
@@ -251,6 +263,13 @@ declare module "@tanstack/react-router" {
       path: "/$groupId";
       fullPath: "/channels/$groupId";
       preLoaderRoute: typeof channelsDotgroupIdRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/agents": {
+      id: "/channels/agents";
+      path: "/agents";
+      fullPath: "/channels/agents";
+      preLoaderRoute: typeof channelsDotagentsRouteImport;
       parentRoute: typeof channelsRoute;
     };
     "/channels/home": {
@@ -321,6 +340,7 @@ declare module "@tanstack/react-router" {
 
 interface channelsRouteChildren {
   channelsDotgroupIdRoute: typeof channelsDotgroupIdRoute;
+  channelsDotagentsRoute: typeof channelsDotagentsRoute;
   channelsDothomeRoute: typeof channelsDothomeRoute;
   channelsDotremindersRoute: typeof channelsDotremindersRoute;
   channelsDotsearchRoute: typeof channelsDotsearchRoute;
@@ -330,6 +350,7 @@ interface channelsRouteChildren {
 
 const channelsRouteChildren: channelsRouteChildren = {
   channelsDotgroupIdRoute: channelsDotgroupIdRoute,
+  channelsDotagentsRoute: channelsDotagentsRoute,
   channelsDothomeRoute: channelsDothomeRoute,
   channelsDotremindersRoute: channelsDotremindersRoute,
   channelsDotsearchRoute: channelsDotsearchRoute,
