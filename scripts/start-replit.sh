@@ -3,6 +3,11 @@
 # Starts Redis in the background, then runs the Buzz relay.
 set -euo pipefail
 
+# Report the exact failing line/command on any unhandled error. Production
+# crash-loop logs drop lines, so this trap is the reliable way to see where
+# startup dies in the deployment container.
+trap 'rc=$?; echo "==> FATAL start-replit.sh: rc=${rc} line=${LINENO} cmd=[${BASH_COMMAND}]" >&2' ERR
+
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 # Use the Nix-managed Rust toolchain (rust-stable module, 1.88.0).
