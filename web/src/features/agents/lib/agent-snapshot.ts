@@ -34,6 +34,12 @@ export interface SnapshotDefinition {
   respondTo?: string;
   respondToAllowlist?: string[];
   namePool?: string[];
+  /**
+   * Portable source classification (upstream #2439). Import-preview metadata
+   * only — it NEVER grants built-in status; imports always mint custom
+   * agents with fresh identities, matching the desktop always-mint rule.
+   */
+  sourceIsBuiltin?: boolean;
 }
 
 export interface SnapshotProfile {
@@ -60,6 +66,9 @@ export function buildSnapshot(persona: AgentPersona): AgentSnapshot {
   const definition: SnapshotDefinition = {
     name: persona.displayName,
     systemPrompt: persona.systemPrompt,
+    // Web personas are never built-in; desktop persona exports hardcode the
+    // same false (personas/snapshot.rs).
+    sourceIsBuiltin: false,
   };
   if (persona.runtime) definition.runtime = persona.runtime;
   if (persona.model) definition.model = persona.model;

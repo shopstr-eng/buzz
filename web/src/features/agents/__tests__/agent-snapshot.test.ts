@@ -34,6 +34,7 @@ describe("buildSnapshot", () => {
     expect(s.definition).toEqual({
       name: "Researcher",
       systemPrompt: "You research things.",
+      sourceIsBuiltin: false,
       runtime: "claude-acp",
       model: "claude-opus-4-5",
       provider: "anthropic",
@@ -73,6 +74,7 @@ describe("buildSnapshot", () => {
     expect(buildSnapshot(bare).definition).toEqual({
       name: "Researcher",
       systemPrompt: "You research things.",
+      sourceIsBuiltin: false,
     });
   });
 });
@@ -136,5 +138,29 @@ describe("snapshotToPersonaInput", () => {
       profile: { ...s.profile, avatarDataUrl: "data:image/png;base64,AAAA" },
     };
     expect(snapshotToPersonaInput(withData).avatarUrl).toBe("data:image/png;base64,AAAA");
+  });
+});
+
+describe("sourceIsBuiltin (upstream #2439)", () => {
+  it("export marks web personas as non-built-in (desktop persona exports hardcode false)", () => {
+    expect(buildSnapshot(PERSONA).definition.sourceIsBuiltin).toBe(false);
+  });
+
+  it("parses desktop exports carrying sourceIsBuiltin; import never grants built-in status", () => {
+    const s = buildSnapshot(PERSONA);
+    const fromDesktop = {
+      ...s,
+      definition: { ...s.definition, sourceIsBuiltin: true },
+    };
+    const parsed = parseSnapshot(JSON.stringify(fromDesktop));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      // Round-trip metadata survives parse…
+      expect(parsed.snapshot.definition.sourceIsBuiltin).toBe(true);
+      // …but the import input has no built-in concept: always-mint, owner-private.
+      const input = snapshotToPersonaInput(parsed.snapshot);
+      expect(input.shared).toBe(false);
+      expect("sourceIsBuiltin" in input).toBe(false);
+    }
   });
 });
