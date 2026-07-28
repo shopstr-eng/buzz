@@ -25,3 +25,10 @@ When resolving conflicts in `crates/buzz-relay/src/api/invites.rs` by taking ups
 When an upstream merge *replaces* an already-applied migration file (add/add conflict on `migrations/NNNN_*.sql`), the dev/prod DB fails startup with "migration N was previously applied but has been modified".
 
 **How to apply (dev):** `DROP TABLE` the old table, `DELETE FROM _sqlx_migrations WHERE version = N;`, re-run `buzz-admin migrate`. Happened with 0025_relay_invites (fork's v1 single-use table vs upstream's v2 use-limited table; v2 supersedes, old table was empty).
+
+## Environment traps (2026-07-28 merge)
+
+- **Git identity is not configured in this repl** — `git merge upstream/main` fails with "unable to auto-detect email address". Set repo-local identity first (`git config user.name/user.email`).
+- **start-replit.sh builds Rust binaries only-if-missing** — after an upstream merge that touches `crates/`, the running relay/ACP keeps the STALE binary across restarts. Force `cargo build -p <changed-pkg> --release --ignore-rust-version`, then restart the workflow.
+
+**Why:** both produce silent staleness — the merge "succeeds" but the deployed behavior doesn't change.
