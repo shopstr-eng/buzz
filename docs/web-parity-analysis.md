@@ -162,6 +162,11 @@ _Known deltas:_ edited messages don't re-emit mention `p` tags / NIP-30 overlay 
 2. Workflow run trace viewer ✅ (46002–46004 folded into per-run step entries with monotonic guards + event-id dedupe; expandable trace per run row). YAML kept by decision (no visual form builder)
 3. Webhook header editor ✅ (js-yaml dialog over `call_webhook` step headers; warns that applying normalizes YAML/drops comments)
 
+**Post-merge parity (2026-07 upstream sync)** ✅ DONE
+1. Unified home inbox ✅ — desktop's new inbox (categories needs_action > mention > agent_activity > activity; conversation grouping project:/dm:/thread-root; reminders as due-time rows; unified sortAt desc) folded client-side from #p/#h subscriptions (getHomeFeed is Tauri-local, no relay endpoint). Approvals correlate on the `run` tag (46010 vs 46011/46012). Deltas: no unread counts (web has no read markers), no draft rows (web has no composer drafts)
+2. Search operators ✅ — desktop's parseSearchOperators ported verbatim (from:/in:/after:/before:), wired into the NIP-50 search filter
+3. Verified already at parity: reminders 30300 JSON shape, workflow approvals 46010–46012, job kinds 43001–43006, invite max_uses (admin-web). Skipped as cosmetic/Tauri-only: bot shimmer, thread view-mode toggle, agents catalog UI, Mesh "Auto" model selection
+
 **Phase E — projects depth** ✅ DONE
 1. Issues ✅ (1621 list/detail/create + 1630–1633 status with author/owner trust rule + kind-1 comment threads); PRs ✅ (1618 list/detail/create with conversation+commits sub-tabs, 1619 updates filtered to trusted signers, 1630–1633 status, review marks + inline-comment chips); patches ✅ (1617 rendered with diff line coloring). CI: 1630–1633 are issue/PR status kinds (desktop's Checks tab is itself a placeholder — nothing to replicate). Deltas: no merge button (desktop merges via Tauri git); no inline-comment composer; status writes use monotonic created_at + id tie-breaks
 2. Diff viewer ✅ for standalone patches (line coloring). PR diffs need a git server path the web doesn't have — delta. Contribution graph: skipped (optional)

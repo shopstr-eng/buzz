@@ -64,6 +64,10 @@ The relay looks up its community by the host from `RELAY_URL`. A row must exist 
 
 **Community host binding:** The relay maps WebSocket connections to communities by the HTTP `Host` header. When testing locally with `curl`, always pass `-H "Host: <dev-domain>"` — `localhost:3000` returns 404 because no community is mapped to it.
 
+## After merging upstream Rust changes
+
+`scripts/start-replit.sh` prefers **pre-built binaries** in `target/release/` — after any merge touching `crates/` or `Cargo.lock`, rebuild all five (`buzz-relay buzz-admin buzz-agent buzz-acp buzz-dev-mcp`) or the workflow runs stale code. Release builds exceed the 5-min shell limit; re-run the same `cargo build` foreground command repeatedly — incremental progress persists between runs (detached/background processes get reaped with the shell session). Also: workflow restarts can leave a stale `buzz-relay` holding the metrics port (9102) → new instance panics `Address already in use` and crash-loops; `kill -9` the old PID first.
+
 ## startup script order
 
 `scripts/start-replit.sh` must:
