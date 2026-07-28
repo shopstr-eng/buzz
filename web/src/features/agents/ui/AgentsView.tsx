@@ -1,30 +1,59 @@
 /**
- * Agents screen: the relay-readable slice of the desktop's agents surface.
+ * Agents screen: personas, teams, managed agents, usage and live activity.
  *
  * - Directory: personas (30175), teams (30176), managed agents (30177) —
- *   read-only owner snapshots published by the backend.
+ *   create/edit/delete from the web (desktop-compatible snapshots) or from
+ *   the desktop app; both stay in sync through the relay.
  * - Usage metrics (44200, NIP-AM): decrypted per-turn token/cost aggregates.
  * - Live activity (24200): observer frames folded into a transcript-style feed.
- *
- * Persona/team creation stays in the desktop app / admin console.
  */
 
-import { Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign } from "lucide-react";
-import { useAgentDirectory, type AgentPersona } from "../use-agents";
+import { useState } from "react";
+import {
+  Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign,
+  Plus, Pencil, Trash2,
+} from "lucide-react";
+import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-agents";
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
+import { useAgentPublishing } from "../use-agent-publishing";
+import { PersonaDialog } from "./PersonaDialog";
+import { TeamDialog } from "./TeamDialog";
+import { ManagedAgentDialog } from "./ManagedAgentDialog";
 import { truncatePubkey } from "@/shared/lib/pubkey";
 
-function PersonaCard({ persona }: { persona: AgentPersona }) {
+type DialogState =
+  | { type: "persona"; existing: AgentPersona | null }
+  | { type: "team"; existing: AgentTeam | null }
+  | { type: "agent" }
+  | null;
+
+const iconBtnCls =
+  "rounded p-1 text-black/30 hover:bg-black/5 hover:text-black/60 dark:text-white/30 dark:hover:bg-white/10 dark:hover:text-white/60";
+
+function PersonaCard({
+  persona,
+  onEdit,
+  onDelete,
+}: {
+  persona: AgentPersona;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#1A1A1A]">
       <div className="flex items-center gap-2">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300">
           <Bot className="h-4 w-4" />
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold text-black dark:text-white">
             {persona.displayName}
+            {persona.shared && (
+              <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                shared
+              </span>
+            )}
           </p>
           <p className="truncate text-[11px] text-black/40 dark:text-white/40">
             {[persona.runtime, persona.model, persona.provider]
@@ -32,6 +61,12 @@ function PersonaCard({ persona }: { persona: AgentPersona }) {
               .join(" · ") || "No runtime configured"}
           </p>
         </div>
+        <button className={iconBtnCls} onClick={onEdit} aria-label={`Edit ${persona.displayName}`}>
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
+        <button className={iconBtnCls} onClick={onDelete} aria-label={`Delete ${persona.displayName}`}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
       </div>
       {persona.systemPrompt && (
         <p className="mt-2 line-clamp-2 text-[11px] text-black/50 dark:text-white/50">
@@ -111,22 +146,27 @@ function Section({
   title,
   Icon,
   count,
+  action,
   children,
   empty,
 }: {
   title: string;
   Icon: typeof Bot;
   count?: number;
+  action?: React.ReactNode;
   children?: React.ReactNode;
   empty?: string;
 }) {
   return (
     <section className="mb-6">
-      <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
-        <Icon className="h-3.5 w-3.5" />
-        {title}
-        {count !== undefined && <span className="text-black/30 dark:text-white/30">({count})</span>}
-      </h2>
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-black/50 dark:text-white/50">
+          <Icon className="h-3.5 w-3.5" />
+          {title}
+          {count !== undefined && <span className="text-black/30 dark:text-white/30">({count})</span>}
+        </h2>
+        {action}
+      </div>
       {children ?? (
         <p className="rounded-lg border border-dashed border-black/15 px-3 py-4 text-center text-xs text-black/40 dark:border-white/15 dark:text-white/40">
           {empty}
@@ -136,46 +176,90 @@ function Section({
   );
 }
 
+function NewButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 rounded-lg border border-black/15 px-2 py-1 text-[11px] font-medium text-black/60 hover:bg-black/5 dark:border-white/15 dark:text-white/60 dark:hover:bg-white/10"
+    >
+      <Plus className="h-3 w-3" />
+      {label}
+    </button>
+  );
+}
+
 export function AgentsView() {
   const { personas, teams, agents, isLoading: dirLoading } = useAgentDirectory();
   const { metrics, decryptUnavailable } = useAgentMetrics();
   const { items: activity, isLoading: activityLoading } = useAgentActivity();
+  const { deletePersona, deleteTeam, deleteManagedAgent, error: publishError } = useAgentPublishing();
+  const [dialog, setDialog] = useState<DialogState>(null);
+
+  function confirmDelete(label: string, action: () => Promise<void>) {
+    if (window.confirm(`Delete ${label}? This publishes a deletion event and cannot be undone.`)) {
+      action().catch(() => {/* surfaced via publishError */});
+    }
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
       <h1 className="mb-1 text-lg font-bold text-black dark:text-white">Agents</h1>
       <p className="mb-6 text-xs text-black/40 dark:text-white/40">
-        Personas, teams, usage and live agent activity. Manage personas and
-        deployments from the desktop app or admin console.
+        Personas, teams, usage and live agent activity. Create and manage them
+        here or from the desktop app — both stay in sync.
       </p>
+      {publishError && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
+          {publishError}
+        </p>
+      )}
 
       <Section title="Personas" Icon={Bot} count={personas.length}
-        empty={dirLoading ? "Loading…" : "No personas published yet."}>
+        action={<NewButton label="New persona" onClick={() => setDialog({ type: "persona", existing: null })} />}
+        empty={dirLoading ? "Loading…" : "No personas yet — create your first one."}>
         {personas.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-2">
-            {personas.map((p) => <PersonaCard key={p.id} persona={p} />)}
+            {personas.map((p) => (
+              <PersonaCard
+                key={p.id}
+                persona={p}
+                onEdit={() => setDialog({ type: "persona", existing: p })}
+                onDelete={() => confirmDelete(`persona "${p.displayName}"`, () => deletePersona(p.id))}
+              />
+            ))}
           </div>
         )}
       </Section>
 
       <Section title="Teams" Icon={Users} count={teams.length}
-        empty={dirLoading ? "Loading…" : "No teams published yet."}>
+        action={<NewButton label="New team" onClick={() => setDialog({ type: "team", existing: null })} />}
+        empty={dirLoading ? "Loading…" : "No teams yet — group personas into one."}>
         {teams.length > 0 && (
           <div className="space-y-2">
             {teams.map((t) => (
-              <div key={t.id} className="rounded-lg border border-black/8 px-3 py-2 dark:border-white/8">
-                <p className="text-sm font-medium text-black dark:text-white">
-                  {t.name}
-                  {t.version && (
-                    <span className="ml-1.5 text-[10px] text-black/35 dark:text-white/35">v{t.version}</span>
+              <div key={t.id} className="flex items-start justify-between gap-2 rounded-lg border border-black/8 px-3 py-2 dark:border-white/8">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-black dark:text-white">
+                    {t.name}
+                    {t.version && (
+                      <span className="ml-1.5 text-[10px] text-black/35 dark:text-white/35">v{t.version}</span>
+                    )}
+                  </p>
+                  {t.description && (
+                    <p className="text-[11px] text-black/45 dark:text-white/45">{t.description}</p>
                   )}
-                </p>
-                {t.description && (
-                  <p className="text-[11px] text-black/45 dark:text-white/45">{t.description}</p>
-                )}
-                <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
-                  {t.personaIds.length} persona{t.personaIds.length === 1 ? "" : "s"}
-                </p>
+                  <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
+                    {t.personaIds.length} persona{t.personaIds.length === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div className="flex shrink-0">
+                  <button className={iconBtnCls} onClick={() => setDialog({ type: "team", existing: t })} aria-label={`Edit ${t.name}`}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button className={iconBtnCls} onClick={() => confirmDelete(`team "${t.name}"`, () => deleteTeam(t.id))} aria-label={`Delete ${t.name}`}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -183,7 +267,8 @@ export function AgentsView() {
       </Section>
 
       <Section title="Managed agents" Icon={Cpu} count={agents.length}
-        empty={dirLoading ? "Loading…" : "No managed agents published yet."}>
+        action={<NewButton label="New agent" onClick={() => setDialog({ type: "agent" })} />}
+        empty={dirLoading ? "Loading…" : "No managed agents yet — create one to get an agent key."}>
         {agents.length > 0 && (
           <div className="space-y-2">
             {agents.map((a) => (
@@ -196,11 +281,20 @@ export function AgentsView() {
                     <p className="text-[10px] text-black/35 dark:text-white/35">persona: {a.personaId}</p>
                   )}
                 </div>
-                {a.status && (
-                  <span className="shrink-0 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
-                    {a.status}
-                  </span>
-                )}
+                <div className="flex shrink-0 items-center">
+                  {a.status && (
+                    <span className="mr-1 rounded-full bg-black/5 px-2 py-0.5 text-[10px] font-medium text-black/60 dark:bg-white/10 dark:text-white/60">
+                      {a.status}
+                    </span>
+                  )}
+                  <button
+                    className={iconBtnCls}
+                    onClick={() => confirmDelete(`agent "${a.name ?? truncatePubkey(a.pubkey)}"`, () => deleteManagedAgent(a.id))}
+                    aria-label={`Delete ${a.name ?? "agent"}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -230,6 +324,24 @@ export function AgentsView() {
           </div>
         )}
       </Section>
+
+      {dialog?.type === "persona" && (
+        <PersonaDialog
+          existing={dialog.existing}
+          takenSlugs={personas.map((p) => p.id).filter((id) => id !== dialog.existing?.id)}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === "team" && (
+        <TeamDialog
+          existing={dialog.existing}
+          personas={personas}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.type === "agent" && (
+        <ManagedAgentDialog personas={personas} onClose={() => setDialog(null)} />
+      )}
     </div>
   );
 }

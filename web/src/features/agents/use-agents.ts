@@ -1,9 +1,9 @@
 /**
- * Agent directory (read-only): personas (kind 30175), teams (30176) and
- * managed agent instances (30177). These are owner-authored, addressable
- * (`d` tag) snapshots published by the backend — secrets-stripped mirrors of
- * the desktop's Tauri records. The web displays them; creation/editing stays
- * in the desktop app and admin console.
+ * Agent directory: personas (kind 30175), teams (30176) and managed agent
+ * instances (30177). These are owner-authored, addressable (`d` tag)
+ * snapshots — published by the desktop app, admin console, or the web itself
+ * (use-agent-publishing.ts, desktop-compatible wire format). Kind-5 address
+ * deletions from the owner are applied live.
  *
  * Content JSON is parsed defensively (snake_case and camelCase) since the
  * wire shape is a backend snapshot rather than a documented NIP.
@@ -26,6 +26,10 @@ export interface AgentPersona {
   model: string | null;
   provider: string | null;
   isBuiltIn: boolean;
+  /** owner-only | allowlist | anyone — used to prefill the edit dialog. */
+  respondTo: string | null;
+  /** True when the event carries ["shared","true"] (community catalog). */
+  shared: boolean;
 }
 
 export interface AgentTeam {
@@ -79,6 +83,8 @@ function parsePersona(ev: NostrEvent): AgentPersona | null {
     model: str(c?.model),
     provider: str(c?.provider),
     isBuiltIn: Boolean(c?.is_built_in ?? c?.isBuiltIn),
+    respondTo: str(c?.respond_to) ?? str(c?.respondTo),
+    shared: ev.tags.some((t) => t[0] === "shared" && t[1] === "true"),
   };
 }
 
@@ -138,9 +144,35 @@ export function useAgentDirectory(): {
       return true;
     }
 
+    // Kind-5 address deletions ("a": "<kind>:<owner>:<d-tag>") remove the
+    // addressed record live — mirrors desktop's subscription set.
+    function applyDeletion(ev: NostrEvent): boolean {
+      let changed = false;
+      for (const tag of ev.tags) {
+        if (tag[0] !== "a") continue;
+        const [kindStr, , dTag] = (tag[1] ?? "").split(":");
+        if (!dTag) continue;
+        const map =
+          kindStr === String(KIND_PERSONA) ? personaMap
+          : kindStr === String(KIND_TEAM) ? teamMap
+          : kindStr === String(KIND_MANAGED_AGENT) ? agentMap
+          : null;
+        if (map?.delete(dTag)) changed = true;
+      }
+      return changed;
+    }
+
     const unsub = connection.subscribe(
-      { kinds: [KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT], authors: [owner], limit: 300 },
+      { kinds: [KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT, 5], authors: [owner], limit: 300 },
       (ev: NostrEvent) => {
+        if (ev.kind === 5) {
+          if (applyDeletion(ev)) {
+            setPersonas([...personaMap.values()].map((e) => e.value));
+            setTeams([...teamMap.values()].map((e) => e.value));
+            setAgents([...agentMap.values()].map((e) => e.value));
+          }
+          return;
+        }
         if (ev.kind === KIND_PERSONA) {
           const p = parsePersona(ev);
           if (p && put(personaMap, p.id, ev.created_at, p)) {
