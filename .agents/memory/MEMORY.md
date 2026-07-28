@@ -1,4 +1,5 @@
 - [Replit build quirks for Buzz relay](replit-build-quirks.md) — Rust 1.88 vs 1.95 toolchain, AVX-512 vendor patch, required env vars, startup order.
+- [Prod deploy crash-loop debugging](prod-deploy-crashloop-debugging.md) — ERR trap in start-replit.sh survives lossy logs; prod REPLIT_DOMAINS includes the custom domain; bare `return` under set -e propagates $?.
 - [buzz-acp loopback auth quirks](buzz-acp-loopback-auth.md) — NIP-42/NIP-98 scheme mismatch when ACP connects via ws:// loopback to wss:// relay; _wait_for_relay bash fix.
 - [Web parity contract rulings](web-ui-parity.md) — Durable event-contract decisions for web↔desktop parity: kinds, tag shapes, trust rules, and desktop/mobile semantics web must mirror.
 - [Upstream-merge traps](prompt-channel-info-model.md) — Re-check PromptChannelInfo.model after upstream merges; fork-only endpoints die under --theirs; replaced migrations need _sqlx_migrations reset.
