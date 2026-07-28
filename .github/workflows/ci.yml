@@ -60,10 +60,13 @@ jobs:
             mobile:
               - 'mobile/**'
               - 'scripts/mobile-release.sh'
+              - 'scripts/mobile-worktree-overrides.sh'
+              - 'scripts/mobile-worktree-clean.sh'
               - 'scripts/publish-mobile-release-candidate.sh'
               - 'scripts/release-rulesets.sh'
               - 'scripts/test-mobile-release-contract.sh'
               - 'scripts/test-mobile-release-candidate-publisher.sh'
+              - 'scripts/test-mobile-worktree-overrides.sh'
               - '.github/workflows/mobile-release-candidate.yml'
               - '.github/workflows/ci.yml'
       - name: Release workflow source contract
@@ -72,6 +75,8 @@ jobs:
         run: |
           scripts/test-mobile-release-contract.sh
           scripts/test-mobile-release-candidate-publisher.sh
+      - name: Mobile worktree identity contract
+        run: scripts/test-mobile-worktree-overrides.sh
 
   rust-lint:
     name: Rust Lint
@@ -336,6 +341,7 @@ jobs:
           cargo build --profile ci -p buzz-relay -p git-credential-nostr
           cargo nextest archive \
             --cargo-profile ci \
+            -p buzz-db \
             -p buzz-relay \
             -p buzz-test-client \
             --lib \
@@ -667,11 +673,11 @@ jobs:
           done
           cat /tmp/buzz-relay.log
           exit 1
-      - name: Invite claim security tests
+      - name: Invite security tests
         run: |
           cargo nextest run \
             --archive-file target/ci/backend-integration-tests.tar.zst \
-            -E 'package(buzz-relay) and test(claim_)' \
+            -E '(package(buzz-db) and test(/relay_invite::tests/)) or (package(buzz-relay) and test(/api::invites::tests/))' \
             --run-ignored ignored-only
         env:
           DATABASE_URL: postgres://buzz:${{ env.BUZZ_TEST_POSTGRES_PASSWORD }}@localhost:5432/buzz

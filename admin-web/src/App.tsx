@@ -12,7 +12,13 @@ import { Agents } from "./Agents";
 import { Channels } from "./Channels";
 import { Settings } from "./Settings";
 import { clearStoredNsec, hasStoredNsec, storeNsec } from "./identity";
-import type { FeedbackDetail, FeedbackSummary, RelayMember, Report } from "./types";
+import type {
+  FeedbackDetail,
+  FeedbackSummary,
+  RelayMember,
+  Report,
+  ReportDetail as ReportDetailData,
+} from "./types";
 
 declare global {
   interface Window {
@@ -160,7 +166,10 @@ function Reports() {
 }
 
 function ReportDetail({ id }: { id: string }) {
-  const resource = useResource(() => request<Report>(`/reports/${id}`), id);
+  const resource = useResource(
+    () => request<ReportDetailData>(`/reports/${id}`),
+    id,
+  );
   return (
     <Page
       eyebrow="Moderation"
@@ -193,6 +202,32 @@ function ReportDetail({ id }: { id: string }) {
               <dd>
                 <code>{report.target}</code>
               </dd>
+              {report.targetKind === "event" ? (
+                <>
+                  <dt>Message</dt>
+                  <dd>
+                    {report.message ? (
+                      <div className="reported-message">
+                        {report.message.deletedAt ? (
+                          <span className="status">Deleted</span>
+                        ) : null}
+                        <p>{report.message.content}</p>
+                        <div className="reported-message-meta">
+                          <span>Author</span>
+                          <code>{report.message.authorPubkey}</code>
+                          <span>Created</span>
+                          <time>{date(report.message.createdAt)}</time>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="message-unavailable">
+                        Message content is unavailable. It may have expired or
+                        been removed from event storage.
+                      </p>
+                    )}
+                  </dd>
+                </>
+              ) : null}
               <dt>Note</dt>
               <dd className="sensitive">
                 {report.note ?? "No note provided."}

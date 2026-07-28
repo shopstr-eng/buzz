@@ -12,7 +12,7 @@ use axum::{
     http::{header, HeaderMap, HeaderValue, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, patch, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use nostr::{EventBuilder, Keys, Kind};
@@ -142,7 +142,7 @@ async fn report_detail(
     State(state): State<Arc<crate::state::AppState>>,
     headers: HeaderMap,
     Path(id): Path<Uuid>,
-) -> Result<Json<buzz_db::admin_moderation::AdminReport>, ApiError> {
+) -> Result<Json<buzz_db::admin_moderation::AdminReportDetail>, ApiError> {
     authorize(&state, &headers)?;
     state
         .db
@@ -579,12 +579,26 @@ async fn mint_invite_admin(
         })?
     };
 
-    let key = crate::invite_token::derive_invite_key(&state.relay_keypair);
     let ttl = request
         .ttl_secs
         .unwrap_or(crate::invite_token::DEFAULT_INVITE_TTL_SECS);
-    let (code, expires_at) =
-        crate::invite_token::mint_invite(&key, tenant.community(), ttl, request.single_use);
+    // Upstream v2 invites are database-backed; the v1 single-use flag maps to
+    // a use-limited invite with max_uses = 1.
+    let max_uses = if request.single_use { Some(1) } else { None };
+    let invite = state
+        .db
+        .mint_relay_invite(tenant.community(), "admin-panel", ttl, max_uses)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "error": {"code": "internal", "message": format!("invite mint: {e}")}
+                })),
+            )
+        })?;
+    let code = invite.code;
+    let expires_at = invite.expires_at.timestamp() as u64;
 
     let scheme = if state.config.relay_url.trim_start().starts_with("wss://") {
         "https"
@@ -949,6 +963,36 @@ mod tests {
     }
 
     const HASH: &str = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+
+    #[tokio::test]
+    async fn report_detail_requires_admin_host_before_database_access() {
+        let response = router(test_state().await)
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/reports/{}", Uuid::nil()))
+                    .header(header::HOST, "community.example")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), axum::http::StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn report_detail_rejects_unknown_report() {
+        let response = router(test_state().await)
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/reports/{}", Uuid::nil()))
+                    .header(header::HOST, "admin.example")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND);
+    }
 
     #[tokio::test]
     async fn feedback_attachment_requires_admin_host_before_database_access() {
