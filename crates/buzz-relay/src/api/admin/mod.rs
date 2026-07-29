@@ -49,6 +49,9 @@ pub fn router(state: Arc<crate::state::AppState>) -> Router {
             "/settings/agent-provider",
             get(get_agent_provider).post(set_agent_provider),
         )
+        // Agent model catalog: proxy the OpenAI-compatible /models endpoint
+        // so the web UI can offer dynamic model selection without the key.
+        .route("/settings/agent-models", get(get_agent_models))
         // Relay restart: gracefully shut down so the start script restarts it.
         .route("/restart", post(restart_relay))
         .layer(middleware::from_fn(security_headers))
@@ -868,6 +871,107 @@ async fn set_agent_provider(
     write_env_file(&vars)?;
     patch_relay_info_provider_configured(vars.contains_key(KEY_PROVIDER));
     Ok(Json(build_provider_settings(&vars)))
+}
+
+// ── Agent model catalog ───────────────────────────────────────────────────
+//
+// Proxy the OpenAI-compatible /models catalog so the web UI can offer dynamic
+// model selection without exposing the API key. OpenRouter is the keyless
+// provider; the endpoint is owner-only (NIP-98) and caches for 5 minutes.
+
+const MODELS_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(300);
+
+static MODELS_CACHE: std::sync::OnceLock<
+    tokio::sync::Mutex<Option<(std::time::Instant, std::sync::Arc<Vec<AgentModel>>)>>,
+> = std::sync::OnceLock::new();
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentModel {
+    id: String,
+    name: String,
+    context_length: Option<u64>,
+    prompt_per_million: Option<f64>,
+    completion_per_million: Option<f64>,
+}
+
+/// Parse the OpenAI-compatible /models response. OpenRouter and OpenAI both
+/// use `data: [{id, name?, context_length?, pricing?: {prompt, completion}}]`;
+/// pricing values are per-token USD strings and are normalized to per-million.
+fn parse_models(body: &serde_json::Value) -> Vec<AgentModel> {
+    let Some(data) = body.get("data").and_then(|d| d.as_array()) else {
+        return vec![];
+    };
+    data.iter()
+        .filter_map(|m| {
+            let id = m.get("id").and_then(|v| v.as_str())?.to_string();
+            let name = m
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&id)
+                .to_string();
+            let context_length = m
+                .get("context_length")
+                .and_then(|v| v.as_u64())
+                .or_else(|| m.get("contextLength").and_then(|v| v.as_u64()));
+            let pricing = m.get("pricing");
+            let prompt_per_million = pricing
+                .and_then(|p| p.get("prompt"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<f64>().ok())
+                .map(|v| v * 1_000_000.0);
+            let completion_per_million = pricing
+                .and_then(|p| p.get("completion"))
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse::<f64>().ok())
+                .map(|v| v * 1_000_000.0);
+            Some(AgentModel {
+                id,
+                name,
+                context_length,
+                prompt_per_million,
+                completion_per_million,
+            })
+        })
+        .collect()
+}
+
+/// GET /settings/agent-models — returns the model catalog from the configured
+/// OpenAI-compatible provider (OpenRouter keyless). Owner-only (NIP-98).
+async fn get_agent_models(
+    State(state): State<Arc<crate::state::AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<std::sync::Arc<Vec<AgentModel>>>, ApiError> {
+    authorize(&state, &headers)?;
+
+    let cache = MODELS_CACHE.get_or_init(|| tokio::sync::Mutex::new(None));
+    let mut guard = cache.lock().await;
+    if let Some((fetched_at, models)) = guard.as_ref() {
+        if fetched_at.elapsed() < MODELS_CACHE_TTL {
+            return Ok(Json(std::sync::Arc::clone(models)));
+        }
+    }
+
+    let api_key = std::env::var("OPENAI_COMPAT_API_KEY").map_err(|_| ApiError::not_found())?;
+    let base_url = std::env::var("OPENAI_COMPAT_BASE_URL")
+        .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+    let url = format!("{}/models", base_url.trim_end_matches('/'));
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get(&url)
+        .bearer_auth(api_key)
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .await
+        .map_err(|_| ApiError::internal())?;
+    if !response.status().is_success() {
+        return Err(ApiError::internal());
+    }
+    let body: serde_json::Value = response.json().await.map_err(|_| ApiError::internal())?;
+    let models = std::sync::Arc::new(parse_models(&body));
+    *guard = Some((std::time::Instant::now(), std::sync::Arc::clone(&models)));
+    Ok(Json(models))
 }
 
 /// Best-effort: update `provider_configured` in relay-info.json so the web UI

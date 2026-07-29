@@ -42,26 +42,27 @@ export BUZZ_AUTO_MIGRATE="${BUZZ_AUTO_MIGRATE:-false}"
 export RUST_LOG="${RUST_LOG:-buzz_relay=info,buzz_db=info,tower_http=warn}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 
-# Auto-wire Replit's managed (keyless) Anthropic integration. Replit's AI
-# Integrations inject AI_INTEGRATIONS_ANTHROPIC_API_KEY / _BASE_URL, but
-# buzz-agent reads the standard ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL.
-# Map them when the standard names aren't already set.
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_API_KEY:-}" ]]; then
-  export ANTHROPIC_API_KEY="$AI_INTEGRATIONS_ANTHROPIC_API_KEY"
-  echo "==> Mapped AI_INTEGRATIONS_ANTHROPIC_API_KEY → ANTHROPIC_API_KEY for buzz-agent."
+# Auto-wire Replit's managed (keyless) OpenRouter integration — the only
+# keyless provider. Replit's AI Integrations inject
+# AI_INTEGRATIONS_OPENROUTER_API_KEY / _BASE_URL; buzz-agent reads the
+# OpenAI-compatible OPENAI_COMPAT_* names. Map them when the standard names
+# aren't already set.
+if [[ -z "${OPENAI_COMPAT_API_KEY:-}" ]] && [[ -n "${AI_INTEGRATIONS_OPENROUTER_API_KEY:-}" ]]; then
+  export OPENAI_COMPAT_API_KEY="$AI_INTEGRATIONS_OPENROUTER_API_KEY"
+  echo "==> Mapped AI_INTEGRATIONS_OPENROUTER_API_KEY → OPENAI_COMPAT_API_KEY for buzz-agent."
 fi
-if [[ -z "${ANTHROPIC_BASE_URL:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_BASE_URL:-}" ]]; then
-  export ANTHROPIC_BASE_URL="$AI_INTEGRATIONS_ANTHROPIC_BASE_URL"
+if [[ -z "${OPENAI_COMPAT_BASE_URL:-}" ]] && [[ -n "${AI_INTEGRATIONS_OPENROUTER_BASE_URL:-}" ]]; then
+  export OPENAI_COMPAT_BASE_URL="$AI_INTEGRATIONS_OPENROUTER_BASE_URL"
 fi
 
-# If a key is present but no provider is configured yet, default to anthropic
-# so the keyless integration works with zero manual wiring. An explicit
-# BUZZ_AGENT_PROVIDER (env or admin-saved .env.agent, sourced later)
-# always wins over this default.
-if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]] && [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
-  export BUZZ_AGENT_PROVIDER="anthropic"
-  export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-4-5}"
-  echo "==> ANTHROPIC_API_KEY detected — defaulting BUZZ_AGENT_PROVIDER=anthropic (model=${ANTHROPIC_MODEL})."
+# If a key is present but no provider is configured yet, default to the
+# OpenAI-compatible provider with the chat dialect (OpenRouter is the only
+# keyless option). An explicit BUZZ_AGENT_PROVIDER (env or admin-saved
+# .env.agent, sourced later) always wins over this default.
+if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]] && [[ -n "${OPENAI_COMPAT_API_KEY:-}" ]]; then
+  export BUZZ_AGENT_PROVIDER="openai"
+  export OPENAI_COMPAT_API="${OPENAI_COMPAT_API:-chat}"
+  echo "==> OpenRouter keyless key detected — defaulting BUZZ_AGENT_PROVIDER=openai (openai-compat, chat dialect)."
 fi
 
 # Derive RELAY_URL from the current domain so the community row is seeded for
@@ -476,17 +477,9 @@ _start_acp() {
     echo "==> Loaded AI provider config from .env.agent (provider=${BUZZ_AGENT_PROVIDER:-none})."
   fi
 
-  # buzz-agent uses OPENAI_COMPAT_API_KEY (not OPENAI_API_KEY) for the OpenAI
-  # provider.  Map the standard name if the compat key isn't already set, so
-  # Replit's native OpenAI integration works out of the box.
-  if [[ -z "${OPENAI_COMPAT_API_KEY:-}" ]] && [[ -n "${OPENAI_API_KEY:-}" ]]; then
-    export OPENAI_COMPAT_API_KEY="$OPENAI_API_KEY"
-    echo "==> Mapped OPENAI_API_KEY → OPENAI_COMPAT_API_KEY for buzz-agent."
-  fi
-  # Same for OpenAI base URL and model.
-  if [[ -z "${OPENAI_COMPAT_BASE_URL:-}" ]] && [[ -n "${OPENAI_API_BASE:-}" ]]; then
-    export OPENAI_COMPAT_BASE_URL="$OPENAI_API_BASE"
-  fi
+  # OpenRouter is the only keyless provider — the keyless block above maps
+  # AI_INTEGRATIONS_OPENROUTER_* to OPENAI_COMPAT_*. The native OpenAI
+  # mapping was removed; BYOK OpenAI still works via OPENAI_COMPAT_API_KEY.
 
   # Validate: warn loudly when no provider is configured so failures are visible.
   if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]]; then
