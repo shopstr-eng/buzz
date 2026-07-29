@@ -5,31 +5,26 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from "./routes/root";
-import { Route as reposRouteImport } from "./routes/repos";
-import { Route as loginRouteImport } from "./routes/login";
-import { Route as channelsRouteImport } from "./routes/channels";
 import { Route as indexRouteImport } from "./routes/index";
-import { Route as reposDotindexRouteImport } from "./routes/repos.index";
+import { Route as channelsRouteImport } from "./routes/channels";
+import { Route as loginRouteImport } from "./routes/login";
+import { Route as reposRouteImport } from "./routes/repos";
 import { Route as channelsDotindexRouteImport } from "./routes/channels.index";
-import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
-import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
-import { Route as channelsDotsettingsRouteImport } from "./routes/channels.settings";
-import { Route as channelsDotsearchRouteImport } from "./routes/channels.search";
-import { Route as channelsDotremindersRouteImport } from "./routes/channels.reminders";
-import { Route as channelsDothomeRouteImport } from "./routes/channels.home";
-import { Route as channelsDotagentsRouteImport } from "./routes/channels.agents";
 import { Route as channelsDotgroupIdRouteImport } from "./routes/channels.$groupId";
-import { Route as reposDotrepoIdDottreeDotsplatRouteImport } from "./routes/repos.$repoId.tree.$";
+import { Route as channelsDotagentsRouteImport } from "./routes/channels.agents";
+import { Route as channelsDothomeRouteImport } from "./routes/channels.home";
+import { Route as channelsDotremindersRouteImport } from "./routes/channels.reminders";
+import { Route as channelsDotsearchRouteImport } from "./routes/channels.search";
+import { Route as channelsDotsettingsRouteImport } from "./routes/channels.settings";
+import { Route as inviteDotcodeRouteImport } from "./routes/invite.$code";
+import { Route as reposDotindexRouteImport } from "./routes/repos.index";
+import { Route as reposDotrepoIdRouteImport } from "./routes/repos.$repoId";
 import { Route as reposDotrepoIdDotblobDotsplatRouteImport } from "./routes/repos.$repoId.blob.$";
+import { Route as reposDotrepoIdDottreeDotsplatRouteImport } from "./routes/repos.$repoId.tree.$";
 
-const reposRoute = reposRouteImport.update({
-  id: "/repos",
-  path: "/repos",
-  getParentRoute: () => rootRouteImport,
-} as any);
-const loginRoute = loginRouteImport.update({
-  id: "/login",
-  path: "/login",
+const indexRoute = indexRouteImport.update({
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
 } as any);
 const channelsRoute = channelsRouteImport.update({
@@ -37,54 +32,19 @@ const channelsRoute = channelsRouteImport.update({
   path: "/channels",
   getParentRoute: () => rootRouteImport,
 } as any);
-const indexRoute = indexRouteImport.update({
-  id: "/",
-  path: "/",
+const loginRoute = loginRouteImport.update({
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
 } as any);
-const reposDotindexRoute = reposDotindexRouteImport.update({
-  id: "/",
-  path: "/",
-  getParentRoute: () => reposRoute,
+const reposRoute = reposRouteImport.update({
+  id: "/repos",
+  path: "/repos",
+  getParentRoute: () => rootRouteImport,
 } as any);
 const channelsDotindexRoute = channelsDotindexRouteImport.update({
   id: "/",
   path: "/",
-  getParentRoute: () => channelsRoute,
-} as any);
-const reposDotrepoIdRoute = reposDotrepoIdRouteImport.update({
-  id: "/$repoId",
-  path: "/$repoId",
-  getParentRoute: () => reposRoute,
-} as any);
-const inviteDotcodeRoute = inviteDotcodeRouteImport.update({
-  id: "/invite/$code",
-  path: "/invite/$code",
-  getParentRoute: () => rootRouteImport,
-} as any);
-const channelsDotsettingsRoute = channelsDotsettingsRouteImport.update({
-  id: "/settings",
-  path: "/settings",
-  getParentRoute: () => channelsRoute,
-} as any);
-const channelsDotsearchRoute = channelsDotsearchRouteImport.update({
-  id: "/search",
-  path: "/search",
-  getParentRoute: () => channelsRoute,
-} as any);
-const channelsDotremindersRoute = channelsDotremindersRouteImport.update({
-  id: "/reminders",
-  path: "/reminders",
-  getParentRoute: () => channelsRoute,
-} as any);
-const channelsDothomeRoute = channelsDothomeRouteImport.update({
-  id: "/home",
-  path: "/home",
-  getParentRoute: () => channelsRoute,
-} as any);
-const channelsDotagentsRoute = channelsDotagentsRouteImport.update({
-  id: "/agents",
-  path: "/agents",
   getParentRoute: () => channelsRoute,
 } as any);
 const channelsDotgroupIdRoute = channelsDotgroupIdRouteImport.update({
@@ -92,16 +52,56 @@ const channelsDotgroupIdRoute = channelsDotgroupIdRouteImport.update({
   path: "/$groupId",
   getParentRoute: () => channelsRoute,
 } as any);
-const reposDotrepoIdDottreeDotsplatRoute =
-  reposDotrepoIdDottreeDotsplatRouteImport.update({
-    id: "/$repoId/tree/$",
-    path: "/$repoId/tree/$",
-    getParentRoute: () => reposRoute,
-  } as any);
+const channelsDotagentsRoute = channelsDotagentsRouteImport.update({
+  id: "/agents",
+  path: "/agents",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDothomeRoute = channelsDothomeRouteImport.update({
+  id: "/home",
+  path: "/home",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotremindersRoute = channelsDotremindersRouteImport.update({
+  id: "/reminders",
+  path: "/reminders",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotsearchRoute = channelsDotsearchRouteImport.update({
+  id: "/search",
+  path: "/search",
+  getParentRoute: () => channelsRoute,
+} as any);
+const channelsDotsettingsRoute = channelsDotsettingsRouteImport.update({
+  id: "/settings",
+  path: "/settings",
+  getParentRoute: () => channelsRoute,
+} as any);
+const inviteDotcodeRoute = inviteDotcodeRouteImport.update({
+  id: "/invite/$code",
+  path: "/invite/$code",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const reposDotindexRoute = reposDotindexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => reposRoute,
+} as any);
+const reposDotrepoIdRoute = reposDotrepoIdRouteImport.update({
+  id: "/$repoId",
+  path: "/$repoId",
+  getParentRoute: () => reposRoute,
+} as any);
 const reposDotrepoIdDotblobDotsplatRoute =
   reposDotrepoIdDotblobDotsplatRouteImport.update({
     id: "/$repoId/blob/$",
     path: "/$repoId/blob/$",
+    getParentRoute: () => reposRoute,
+  } as any);
+const reposDotrepoIdDottreeDotsplatRoute =
+  reposDotrepoIdDottreeDotsplatRouteImport.update({
+    id: "/$repoId/tree/$",
+    path: "/$repoId/tree/$",
     getParentRoute: () => reposRoute,
   } as any);
 
@@ -223,18 +223,11 @@ export interface RootRouteChildren {
 
 declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    "/repos": {
-      id: "/repos";
-      path: "/repos";
-      fullPath: "/repos";
-      preLoaderRoute: typeof reposRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/login": {
-      id: "/login";
-      path: "/login";
-      fullPath: "/login";
-      preLoaderRoute: typeof loginRouteImport;
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof indexRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/channels": {
@@ -244,74 +237,25 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof channelsRouteImport;
       parentRoute: typeof rootRouteImport;
     };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof indexRouteImport;
+    "/login": {
+      id: "/login";
+      path: "/login";
+      fullPath: "/login";
+      preLoaderRoute: typeof loginRouteImport;
       parentRoute: typeof rootRouteImport;
     };
-    "/repos/": {
-      id: "/repos/";
-      path: "/";
-      fullPath: "/repos/";
-      preLoaderRoute: typeof reposDotindexRouteImport;
-      parentRoute: typeof reposRoute;
+    "/repos": {
+      id: "/repos";
+      path: "/repos";
+      fullPath: "/repos";
+      preLoaderRoute: typeof reposRouteImport;
+      parentRoute: typeof rootRouteImport;
     };
     "/channels/": {
       id: "/channels/";
       path: "/";
       fullPath: "/channels/";
       preLoaderRoute: typeof channelsDotindexRouteImport;
-      parentRoute: typeof channelsRoute;
-    };
-    "/repos/$repoId": {
-      id: "/repos/$repoId";
-      path: "/$repoId";
-      fullPath: "/repos/$repoId";
-      preLoaderRoute: typeof reposDotrepoIdRouteImport;
-      parentRoute: typeof reposRoute;
-    };
-    "/invite/$code": {
-      id: "/invite/$code";
-      path: "/invite/$code";
-      fullPath: "/invite/$code";
-      preLoaderRoute: typeof inviteDotcodeRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/channels/settings": {
-      id: "/channels/settings";
-      path: "/settings";
-      fullPath: "/channels/settings";
-      preLoaderRoute: typeof channelsDotsettingsRouteImport;
-      parentRoute: typeof channelsRoute;
-    };
-    "/channels/search": {
-      id: "/channels/search";
-      path: "/search";
-      fullPath: "/channels/search";
-      preLoaderRoute: typeof channelsDotsearchRouteImport;
-      parentRoute: typeof channelsRoute;
-    };
-    "/channels/reminders": {
-      id: "/channels/reminders";
-      path: "/reminders";
-      fullPath: "/channels/reminders";
-      preLoaderRoute: typeof channelsDotremindersRouteImport;
-      parentRoute: typeof channelsRoute;
-    };
-    "/channels/home": {
-      id: "/channels/home";
-      path: "/home";
-      fullPath: "/channels/home";
-      preLoaderRoute: typeof channelsDothomeRouteImport;
-      parentRoute: typeof channelsRoute;
-    };
-    "/channels/agents": {
-      id: "/channels/agents";
-      path: "/agents";
-      fullPath: "/channels/agents";
-      preLoaderRoute: typeof channelsDotagentsRouteImport;
       parentRoute: typeof channelsRoute;
     };
     "/channels/$groupId": {
@@ -321,11 +265,60 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof channelsDotgroupIdRouteImport;
       parentRoute: typeof channelsRoute;
     };
-    "/repos/$repoId/tree/$": {
-      id: "/repos/$repoId/tree/$";
-      path: "/$repoId/tree/$";
-      fullPath: "/repos/$repoId/tree/$";
-      preLoaderRoute: typeof reposDotrepoIdDottreeDotsplatRouteImport;
+    "/channels/agents": {
+      id: "/channels/agents";
+      path: "/agents";
+      fullPath: "/channels/agents";
+      preLoaderRoute: typeof channelsDotagentsRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/home": {
+      id: "/channels/home";
+      path: "/home";
+      fullPath: "/channels/home";
+      preLoaderRoute: typeof channelsDothomeRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/reminders": {
+      id: "/channels/reminders";
+      path: "/reminders";
+      fullPath: "/channels/reminders";
+      preLoaderRoute: typeof channelsDotremindersRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/search": {
+      id: "/channels/search";
+      path: "/search";
+      fullPath: "/channels/search";
+      preLoaderRoute: typeof channelsDotsearchRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/channels/settings": {
+      id: "/channels/settings";
+      path: "/settings";
+      fullPath: "/channels/settings";
+      preLoaderRoute: typeof channelsDotsettingsRouteImport;
+      parentRoute: typeof channelsRoute;
+    };
+    "/invite/$code": {
+      id: "/invite/$code";
+      path: "/invite/$code";
+      fullPath: "/invite/$code";
+      preLoaderRoute: typeof inviteDotcodeRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/repos/": {
+      id: "/repos/";
+      path: "/";
+      fullPath: "/repos/";
+      preLoaderRoute: typeof reposDotindexRouteImport;
+      parentRoute: typeof reposRoute;
+    };
+    "/repos/$repoId": {
+      id: "/repos/$repoId";
+      path: "/$repoId";
+      fullPath: "/repos/$repoId";
+      preLoaderRoute: typeof reposDotrepoIdRouteImport;
       parentRoute: typeof reposRoute;
     };
     "/repos/$repoId/blob/$": {
@@ -333,6 +326,13 @@ declare module "@tanstack/react-router" {
       path: "/$repoId/blob/$";
       fullPath: "/repos/$repoId/blob/$";
       preLoaderRoute: typeof reposDotrepoIdDotblobDotsplatRouteImport;
+      parentRoute: typeof reposRoute;
+    };
+    "/repos/$repoId/tree/$": {
+      id: "/repos/$repoId/tree/$";
+      path: "/$repoId/tree/$";
+      fullPath: "/repos/$repoId/tree/$";
+      preLoaderRoute: typeof reposDotrepoIdDottreeDotsplatRouteImport;
       parentRoute: typeof reposRoute;
     };
   }

@@ -3,6 +3,19 @@ name: Workspace migration to standard Replit app
 description: Why/how this Buzz relay moves to a standard Replit app for managed AI; data + cutover tooling and constraints.
 ---
 
+## Status (as of 2026-07-29)
+- Phases 1-3 DONE: new standard Agent app created, OpenRouter keyless integration attached
+  before the repo swap, workspace root replaced with an exact clone of shopstr-eng/buzz,
+  identity secrets (BUZZ_RELAY_PRIVATE_KEY, BUZZ_ACP_PRIVATE_KEY, SESSION_SECRET, GITHUB_TOKEN)
+  copied from the old app, relay verified booting with the OpenRouter-detection log line.
+- Anthropic keyless fallback removed from start-replit.sh in the new app (not integrated there).
+- New-app-only fix: platform reserves 127.0.0.1:8080 → health port now BUZZ_HEALTH_PORT=18081
+  (see replit-build-quirks.md); .replit ports remapped local 18081 → external 8080.
+- Phase 4 (dev data) skipped — old dev DB was test traffic only.
+- Phase 5 (prod cutover) PENDING: prod snapshot → backups/prod-seed.json → publish with
+  BUZZ_CUSTOM_DOMAINS=buzz.shopstrmarkets.com set before first boot → verify → DNS flip →
+  retire old app → delete the staged seed file.
+
 ## Why
 This workspace type cannot use Replit AI Integrations (keyless managed Anthropic/OpenAI):
 `searchIntegrations` returns only third-party connectors, `viewIntegration` rejects blueprint

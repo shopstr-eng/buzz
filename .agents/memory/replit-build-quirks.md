@@ -83,3 +83,15 @@ A workflow restart can orphan an older copy of start-replit.sh whose relay still
 
 **Why:** happened 2026-07-28; the serving relay was a zombie from a previous generation while the current one panic-looped on the metrics port.
 **How to apply:** if logs show the metrics EADDRINUSE panic, check for multiple `target/release/buzz-relay` processes with different parent shells and kill the stale generation. start-replit.sh now pkills both binaries at startup, so recurrence means the guard was removed.
+
+## Standard-app containers reserve 127.0.0.1:8080 (health port moved to 18081)
+
+In the standard Replit app (post-migration, July 2026), the platform itself holds 127.0.0.1:8080 — the relay's default health port — so every boot died with `Failed to bind health port 8080: Address already in use` and the workflow timed out on waitForPort 5000. Fixed by defaulting `BUZZ_HEALTH_PORT=18081` in start-replit.sh and remapping `.replit` [[ports]] to localPort 18081 → external 8080.
+
+**Why:** the old workspace type did not reserve 8080; the standard app does (visible in `/proc/net/tcp` even with zero user processes).
+**How to apply:** never bind any Buzz component to 8080 in this app; probe a candidate port before assigning it.
+
+Related tooling traps in this environment:
+- `ss -tlnp` shows NOTHING here (not even live listeners) — probe with `(exec 3<>/dev/tcp/127.0.0.1/PORT)` or read `/proc/net/tcp` (state 0A = LISTEN, hex ports).
+- `pkill -f <pattern>` from a shell command kills the shell itself when the pattern appears in its own command line (e.g. `pkill -f 'target/release/buzz'`); use a non-self-matching pattern like `'release/buzz[-]relay'`.
+- `.replit` edits go through the verifyAndReplaceDotReplit temp-file flow, and the platform re-normalizes the [[ports]] section afterwards (it resurrected a stale 8080→8080 mapping and reassigned external ports) — always `cat .replit` after applying to confirm what actually landed.

@@ -41,6 +41,11 @@ export BUZZ_SERVE_GIT_WEB_GUI="${BUZZ_SERVE_GIT_WEB_GUI:-true}"
 export BUZZ_AUTO_MIGRATE="${BUZZ_AUTO_MIGRATE:-false}"
 export RUST_LOG="${RUST_LOG:-buzz_relay=info,buzz_db=info,tower_http=warn}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
+# Standard Replit app containers reserve 127.0.0.1:8080 for a platform service
+# (the old workspace type did not) — the relay's health bind dies with
+# EADDRINUSE on a fresh import. Move the health listener off 8080 by default;
+# the [[ports]] mapping in .replit forwards external 8080 to this port.
+export BUZZ_HEALTH_PORT="${BUZZ_HEALTH_PORT:-18081}"
 
 # Auto-wire Replit's managed (keyless) OpenRouter integration — the only
 # keyless provider. Replit's AI Integrations inject
@@ -63,35 +68,6 @@ if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]] && [[ -n "${OPENAI_COMPAT_API_KEY:-}" ]];
   export BUZZ_AGENT_PROVIDER="openai"
   export OPENAI_COMPAT_API="${OPENAI_COMPAT_API:-chat}"
   echo "==> OpenRouter keyless key detected — defaulting BUZZ_AGENT_PROVIDER=openai (openai-compat, chat dialect)."
-fi
-
-# Keyless Anthropic fallback. Some Replit workspace types inject the Anthropic
-# key but NOT the OpenRouter key — without this fallback the agent has no
-# working provider at all and exits immediately. Map the Anthropic key, then
-# fall back to provider=anthropic whenever the effective provider cannot
-# authenticate (unset, or openai-compat without a key). An explicit
-# admin-saved .env.agent always wins over this fallback.
-if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_API_KEY:-}" ]]; then
-  export ANTHROPIC_API_KEY="$AI_INTEGRATIONS_ANTHROPIC_API_KEY"
-  echo "==> Mapped AI_INTEGRATIONS_ANTHROPIC_API_KEY → ANTHROPIC_API_KEY for buzz-agent."
-fi
-if [[ -z "${ANTHROPIC_BASE_URL:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_BASE_URL:-}" ]]; then
-  export ANTHROPIC_BASE_URL="$AI_INTEGRATIONS_ANTHROPIC_BASE_URL"
-fi
-
-_provider_broken=0
-if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]]; then
-  _provider_broken=1
-elif [[ "${BUZZ_AGENT_PROVIDER}" == "openai" || "${BUZZ_AGENT_PROVIDER}" == "openai-compat" ]] && [[ -z "${OPENAI_COMPAT_API_KEY:-}" ]]; then
-  # Provider points at OpenRouter/BYOK but no credential is available
-  # (e.g. prod userenv sets provider=openai where the keyless secrets
-  # are not injected) — the agent would exit on startup.
-  _provider_broken=1
-fi
-if [[ "$_provider_broken" == "1" ]] && [[ -n "${ANTHROPIC_API_KEY:-}" ]] && [[ ! -s .env.agent ]]; then
-  export BUZZ_AGENT_PROVIDER="anthropic"
-  export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-4-5}"
-  echo "==> OpenRouter keyless unavailable — falling back to keyless Anthropic (model=${ANTHROPIC_MODEL})."
 fi
 
 # Derive RELAY_URL from the current domain so the community row is seeded for

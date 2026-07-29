@@ -1,8 +1,8 @@
-- [Replit build quirks for Buzz relay](replit-build-quirks.md) — Rust 1.88 vs 1.95 toolchain, AVX-512 vendor patch, required env vars, startup order.
+- [Replit build quirks for Buzz relay](replit-build-quirks.md) — Rust 1.88 vs 1.95 toolchain, AVX-512 vendor patch, required env vars, startup order; standard app reserves 127.0.0.1:8080 (health moved to 18081); ss unreliable — probe /dev/tcp.
 - [Prod deploy crash-loop debugging](prod-deploy-crashloop-debugging.md) — ERR trap in start-replit.sh survives lossy logs; prod REPLIT_DOMAINS includes the custom domain; bare `return` under set -e propagates $?.
 - [buzz-acp loopback auth quirks](buzz-acp-loopback-auth.md) — NIP-42/NIP-98 scheme mismatch when ACP connects via ws:// loopback to wss:// relay; _wait_for_relay bash fix.
 - [Web parity contract rulings](web-ui-parity.md) — Durable event-contract decisions for web↔desktop parity: kinds, tag shapes, trust rules, and desktop/mobile semantics web must mirror.
 - [Upstream-merge traps](prompt-channel-info-model.md) — Re-check PromptChannelInfo.model after upstream merges; fork-only endpoints die under --theirs; replaced migrations need _sqlx_migrations reset.
 - [ACP host-tenant binding](acp-host-tenant-binding.md) — loopback-connected ACP/MCP processes bind to the wrong community; Host/URL env overrides required; MCP helper is buzz-dev-mcp, not buzz CLI.
-- [Workspace migration to standard app](workspace-migration.md) — this workspace type can't use managed AI; repo carries migration tooling + one-shot prod seed; prod DB is read-only from tools.
-- [Keyless provider wiring](openrouter-keyless-provider.md) — OpenRouter primary + Anthropic keyless auto-fallback (this workspace can't inject OpenRouter secrets; removing fallback kills the agent); keyless vs BYOK split on OPENAI_COMPAT_BASE_URL.
+- [Workspace migration to standard app](workspace-migration.md) — phases 1-3 done 2026-07-29 (relay running in new app); Phase 5 prod cutover pending; prod DB read-only from tools; one-shot prod seed hook.
+- [Keyless provider wiring](openrouter-keyless-provider.md) — OpenRouter sole keyless provider in standard app; Anthropic fallback removed 2026-07-29 (git history has it); keyless vs BYOK split on OPENAI_COMPAT_BASE_URL.
