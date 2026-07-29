@@ -15,7 +15,7 @@ import {
 import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
 import {
-  KIND_CREATE_GROUP, AI_MODELS,
+  KIND_CREATE_GROUP, AI_MODELS, findModelPreset,
   type ChannelType, type ModelPreset,
 } from "../types";
 import {
@@ -327,7 +327,7 @@ export function CreateChannelDialog({ onClose }: Props) {
               setChannelType(t.channelType);
               setIsPrivate(t.isPrivate);
               setSelectedModel(
-                t.model ? (AI_MODELS.find((m) => m.name === t.model) ?? null) : null,
+                t.model ? (findModelPreset(t.model) ?? null) : null,
               );
             }}
             onCancel={onClose} onNext={handleStep1Next}

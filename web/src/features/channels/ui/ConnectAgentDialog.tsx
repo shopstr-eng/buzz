@@ -296,7 +296,7 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
                     type="text"
                     value={modelName}
                     onChange={(e) => setModelName(e.target.value)}
-                    placeholder={selectedModel.defaultModel ?? "e.g. claude-opus-4-5"}
+                    placeholder={selectedModel.defaultModel ?? "e.g. anthropic/claude-opus-4.5"}
                     spellCheck={false}
                     className="w-full rounded-md border border-black/15 bg-white px-3 py-2 font-mono text-sm text-black placeholder-black/25 outline-none focus:border-black/40 dark:border-white/15 dark:bg-[#222] dark:text-white dark:placeholder-white/25 dark:focus:border-white/40"
                   />

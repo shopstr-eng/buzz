@@ -12,7 +12,7 @@ export interface Channel {
   channelType: ChannelType;
   /** DM channels: all participant pubkeys (from kind:39000 p tags) */
   participantPubkeys?: string[];
-  /** Model ID for workflow channels (e.g. "claude-sonnet-4-20250514"). */
+  /** Model ID for workflow channels — an OpenRouter id (e.g. "anthropic/claude-sonnet-4.5"). */
   model?: string;
   memberCount?: number;
 }
@@ -92,19 +92,70 @@ export interface ModelPreset {
   defaultModel?: string;
 }
 
+/**
+ * Preset ids are OpenRouter model ids: the id is stored in the channel's
+ * `model` metadata tag and buzz-acp matches it against the agent's
+ * configured model (OPENAI_COMPAT_MODEL via the keyless OpenRouter path).
+ */
 export const AI_MODELS: ModelPreset[] = [
   {
-    id: "claude",
-    name: "Claude",
-    provider: "Anthropic",
-    description: "Anthropic's Claude assistant.",
-    defaultModel: "claude-opus-4-5",
+    id: "anthropic/claude-opus-4.5",
+    name: "Claude Opus 4.5",
+    provider: "OpenRouter",
+    description: "Anthropic's flagship model, via OpenRouter.",
+    defaultModel: "anthropic/claude-opus-4.5",
   },
   {
-    id: "codex-acp",
-    name: "Codex",
-    provider: "OpenAI",
-    description: "OpenAI's Codex coding agent.",
-    defaultModel: "gpt-4o",
+    id: "anthropic/claude-sonnet-4.5",
+    name: "Claude Sonnet 4.5",
+    provider: "OpenRouter",
+    description: "Anthropic's fast everyday model, via OpenRouter.",
+    defaultModel: "anthropic/claude-sonnet-4.5",
+  },
+  {
+    id: "openai/gpt-5.2",
+    name: "GPT-5.2",
+    provider: "OpenRouter",
+    description: "OpenAI's flagship model, via OpenRouter.",
+    defaultModel: "openai/gpt-5.2",
+  },
+  {
+    id: "google/gemini-3-pro",
+    name: "Gemini 3 Pro",
+    provider: "OpenRouter",
+    description: "Google's frontier model, via OpenRouter.",
+    defaultModel: "google/gemini-3-pro",
+  },
+  {
+    id: "moonshotai/kimi-k3",
+    name: "Kimi K3",
+    provider: "OpenRouter",
+    description: "Moonshot's open-weight model, via OpenRouter.",
+    defaultModel: "moonshotai/kimi-k3",
   },
 ];
+
+/**
+ * Preset identifiers from before the OpenRouter migration. Saved channel
+ * templates (localStorage) may still hold these as either the preset id or
+ * the preset name.
+ */
+const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  claude: "anthropic/claude-opus-4.5",
+  Claude: "anthropic/claude-opus-4.5",
+  "codex-acp": "openai/gpt-5.2",
+  Codex: "openai/gpt-5.2",
+};
+
+/**
+ * Resolve a stored model value — a current preset id, a preset name, or a
+ * legacy pre-OpenRouter identifier — back to its preset. Returns undefined
+ * for unknown values so callers can fall back to "no preset selected".
+ */
+export function findModelPreset(value: string): ModelPreset | undefined {
+  const aliased = LEGACY_MODEL_ALIASES[value] ?? value;
+  return (
+    AI_MODELS.find((m) => m.id === aliased) ??
+    AI_MODELS.find((m) => m.name === value)
+  );
+}

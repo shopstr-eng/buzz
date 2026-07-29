@@ -178,3 +178,4 @@ just check          # fmt + clippy + desktop check
 - Custom domain over WSS — `RELAY_URL` must always be the public `wss://` domain
 - Admin UI accessible via the web at `/admin` path on the same domain
 - Do not create git commits announcing a publish/deployment — it bloats commit history
+- Git commits must be authored as `calvadev⚡️ <32919103+calvadev@users.noreply.github.com>` (the user's connected GitHub profile) and pushed with the user's GITHUB_TOKEN — never as "Replit Agent"
