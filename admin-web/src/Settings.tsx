@@ -55,6 +55,14 @@ function choiceLabel(
   return "None (agent disabled)";
 }
 
+/** Label for the *running* config — unlike the form preselect, this must
+ * show the actual provider, including the keyless Anthropic fallback the
+ * start script applies when OpenRouter credentials aren't injected. */
+function runningProviderLabel(cfg: AgentProviderConfig): string {
+  if (cfg.provider === "anthropic") return "Anthropic — keyless (fallback)";
+  return choiceLabel(choiceFor(cfg), cfg.baseUrl);
+}
+
 /** Map a stored config back to the UI's provider choice. */
 function choiceFor(cfg: AgentProviderConfig): ProviderChoice {
   if (cfg.provider === "openai" || cfg.provider === "openai-compat") {
@@ -451,14 +459,16 @@ export function Settings() {
         <h2 className="settings-current-title">Currently running</h2>
         <dl className="settings-dl">
           <dt>Provider</dt>
-          <dd>{choiceLabel(choiceFor(config), config.baseUrl)}</dd>
+          <dd>{runningProviderLabel(config)}</dd>
           <dt>Credentials</dt>
           <dd>
-            {config.provider
-              ? config.baseUrl
-                ? "OPENAI_COMPAT_API_KEY (your own secret)"
-                : "Replit AI Integrations (keyless OpenRouter)"
-              : "—"}
+            {config.provider === "anthropic"
+              ? "Replit AI Integrations (keyless Anthropic)"
+              : config.provider
+                ? config.baseUrl
+                  ? "OPENAI_COMPAT_API_KEY (your own secret)"
+                  : "Replit AI Integrations (keyless OpenRouter)"
+                : "—"}
           </dd>
           {config.model && (
             <>

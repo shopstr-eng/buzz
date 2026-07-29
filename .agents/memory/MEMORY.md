@@ -5,4 +5,4 @@
 - [Upstream-merge traps](prompt-channel-info-model.md) — Re-check PromptChannelInfo.model after upstream merges; fork-only endpoints die under --theirs; replaced migrations need _sqlx_migrations reset.
 - [ACP host-tenant binding](acp-host-tenant-binding.md) — loopback-connected ACP/MCP processes bind to the wrong community; Host/URL env overrides required; MCP helper is buzz-dev-mcp, not buzz CLI.
 - [Workspace migration to standard app](workspace-migration.md) — this workspace type can't use managed AI; repo carries migration tooling + one-shot prod seed; prod DB is read-only from tools.
-- [OpenRouter as the only keyless provider](openrouter-keyless-provider.md) — keyless vs BYOK both persist as provider=openai, split on OPENAI_COMPAT_BASE_URL presence; OPENAI_COMPAT_API=chat fixed; models stored as openai:<openrouter-id>.
+- [Keyless provider wiring](openrouter-keyless-provider.md) — OpenRouter primary + Anthropic keyless auto-fallback (this workspace can't inject OpenRouter secrets; removing fallback kills the agent); keyless vs BYOK split on OPENAI_COMPAT_BASE_URL.

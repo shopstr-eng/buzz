@@ -65,6 +65,35 @@ if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]] && [[ -n "${OPENAI_COMPAT_API_KEY:-}" ]];
   echo "==> OpenRouter keyless key detected — defaulting BUZZ_AGENT_PROVIDER=openai (openai-compat, chat dialect)."
 fi
 
+# Keyless Anthropic fallback. Some Replit workspace types inject the Anthropic
+# key but NOT the OpenRouter key — without this fallback the agent has no
+# working provider at all and exits immediately. Map the Anthropic key, then
+# fall back to provider=anthropic whenever the effective provider cannot
+# authenticate (unset, or openai-compat without a key). An explicit
+# admin-saved .env.agent always wins over this fallback.
+if [[ -z "${ANTHROPIC_API_KEY:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_API_KEY:-}" ]]; then
+  export ANTHROPIC_API_KEY="$AI_INTEGRATIONS_ANTHROPIC_API_KEY"
+  echo "==> Mapped AI_INTEGRATIONS_ANTHROPIC_API_KEY → ANTHROPIC_API_KEY for buzz-agent."
+fi
+if [[ -z "${ANTHROPIC_BASE_URL:-}" ]] && [[ -n "${AI_INTEGRATIONS_ANTHROPIC_BASE_URL:-}" ]]; then
+  export ANTHROPIC_BASE_URL="$AI_INTEGRATIONS_ANTHROPIC_BASE_URL"
+fi
+
+_provider_broken=0
+if [[ -z "${BUZZ_AGENT_PROVIDER:-}" ]]; then
+  _provider_broken=1
+elif [[ "${BUZZ_AGENT_PROVIDER}" == "openai" || "${BUZZ_AGENT_PROVIDER}" == "openai-compat" ]] && [[ -z "${OPENAI_COMPAT_API_KEY:-}" ]]; then
+  # Provider points at OpenRouter/BYOK but no credential is available
+  # (e.g. prod userenv sets provider=openai where the keyless secrets
+  # are not injected) — the agent would exit on startup.
+  _provider_broken=1
+fi
+if [[ "$_provider_broken" == "1" ]] && [[ -n "${ANTHROPIC_API_KEY:-}" ]] && [[ ! -s .env.agent ]]; then
+  export BUZZ_AGENT_PROVIDER="anthropic"
+  export ANTHROPIC_MODEL="${ANTHROPIC_MODEL:-claude-opus-4-5}"
+  echo "==> OpenRouter keyless unavailable — falling back to keyless Anthropic (model=${ANTHROPIC_MODEL})."
+fi
+
 # Derive RELAY_URL from the current domain so the community row is seeded for
 # the host the Replit proxy actually sends in the Host header.
 # Both REPLIT_DEV_DOMAIN and REPLIT_DOMAINS can be set in a production VM —
