@@ -30,6 +30,11 @@ User explicitly declined pasting API keys — keyless/Replit-billed is a hard re
   copied between apps; target runs its own migrations.
 - Identity secrets (`BUZZ_RELAY_PRIVATE_KEY`, `BUZZ_ACP_PRIVATE_KEY`) must be copied to the
   new app BEFORE anyone connects — relay pubkey and agent membership rows derive from them.
+- Media blobs are NOT in Postgres — they live in the S3/MinIO bucket (`buzz-media`). A DB
+  export/import alone leaves message attachments broken; mirror the bucket or share it via
+  `BUZZ_S3_*` secrets on the new app.
+- Export/import table coverage must match the `TABLES` array in `scripts/import-json-export.sh`
+  exactly; relay_invites was added to that list (durable invite links survive cutover).
 - Cutover order: snapshot prod right before DNS flip (messages between snapshot and flip are
   lost); old app stays intact as rollback until DNS verified.
 

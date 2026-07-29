@@ -135,8 +135,15 @@ Production currently serves `buzz.shopstrmarkets.com` from the OLD app's VM
 deployment and has real data (channels, members, messages).
 
 1. **Snapshot prod data** (old side): the old app's Agent exports every
-   non-empty table from the production replica to
-   `backups/prod-export-<ts>.json` (read-only SQL; done in chat, no downtime).
+   non-empty table listed in the `TABLES` array of
+   `scripts/import-json-export.sh` from the production replica to
+   `backups/prod-export-<ts>.json` (read-only SQL; done in chat, no
+   downtime). Export and import coverage must match that list exactly.
+   - **Media is separate**: uploaded files live in the S3/MinIO bucket
+     (`buzz-media`), not in Postgres, so no DB export includes them. Mirror
+     the bucket contents to the storage the new app will use, or point the
+     new app at the same bucket via `BUZZ_S3_*` secrets. If prod has no
+     uploads yet, skip this.
 2. **Stage the seed** (new side): place that file at
    `backups/prod-seed.json` in the NEW app's workspace (upload in chat or
    shell). It is gitignored; VM deployments snapshot the filesystem, so it

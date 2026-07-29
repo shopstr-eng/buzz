@@ -59,6 +59,7 @@ TABLES=(
   archived_identities
   community_bans
   pubkey_allowlist
+  relay_invites
   parameterized_event_watermarks
   product_feedback
   api_tokens
