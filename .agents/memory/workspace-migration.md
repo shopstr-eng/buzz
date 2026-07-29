@@ -11,10 +11,20 @@ description: Why/how this Buzz relay moves to a standard Replit app for managed 
 - Anthropic keyless fallback removed from start-replit.sh in the new app (not integrated there).
 - New-app-only fix: platform reserves 127.0.0.1:8080 → health port now BUZZ_HEALTH_PORT=18081
   (see replit-build-quirks.md); .replit ports remapped local 18081 → external 8080.
-- Phase 4 (dev data) skipped — old dev DB was test traffic only.
-- Phase 5 (prod cutover) PENDING: prod snapshot → backups/prod-seed.json → publish with
-  BUZZ_CUSTOM_DOMAINS=buzz.shopstrmarkets.com set before first boot → verify → DNS flip →
-  retire old app → delete the staged seed file.
+- Phase 4 (dev data) superseded: user supplied the full old-prod JSON export on 2026-07-29;
+  staged at backups/prod-seed.json AND imported into the new dev DB (5 channels, ~350 events).
+- Seed FK trap nuance: the one-shot hook (script section 3b) runs BEFORE community seeding,
+  so a fresh prod DB has zero community rows at import time and cannot hit the host-conflict
+  trap. The trap only bites when importing into an ALREADY-booted DB — the new dev DB had
+  auto-seeded loopback communities, so the seed's loopback community ids (127.0.0.1:5000,
+  localhost:5000, localhost) were string-remapped to the new dev DB's ids in the staged file
+  (73 replacements; also safe for the prod path since remapped ids are just uuids).
+- ACP "discovered 0 channels" in the new dev workspace is EXPECTED: the ACP worker binds to
+  the dev-domain community, and the imported channels belong to buzz.shopstrmarkets.com /
+  buzzstr.replit.app / old riker+janeway hosts.
+- Phase 5 (prod cutover) PENDING: publish with BUZZ_CUSTOM_DOMAINS=buzz.shopstrmarkets.com
+  set before first boot (seed is already staged and imports before community seeding) →
+  verify → DNS flip → retire old app → delete the staged seed file.
 
 ## Why
 This workspace type cannot use Replit AI Integrations (keyless managed Anthropic/OpenAI):
