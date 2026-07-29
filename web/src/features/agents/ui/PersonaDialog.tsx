@@ -16,6 +16,7 @@ import {
   inputCls,
   labelCls,
 } from "./agent-dialog-shell";
+import { ModelCombobox, providerForModel } from "./ModelCombobox";
 
 const RESPOND_TO_OPTIONS: { value: RespondTo; label: string }[] = [
   { value: "anyone", label: "Anyone" },
@@ -40,7 +41,9 @@ export function PersonaDialog({
   const [avatarUrl, setAvatarUrl] = useState(existing?.avatarUrl ?? "");
   const [runtime, setRuntime] = useState(existing?.runtime ?? "");
   const [model, setModel] = useState(existing?.model ?? "");
-  const [provider, setProvider] = useState(existing?.provider ?? "");
+  // No longer editable in the UI — derived from the model's prefix at save
+  // time. Kept as a fallback for legacy personas whose model has no prefix.
+  const provider = existing?.provider ?? "";
   const [respondTo, setRespondTo] = useState<RespondTo>(
     (existing?.respondTo as RespondTo | null) ?? "anyone",
   );
@@ -66,7 +69,10 @@ export function PersonaDialog({
     try {
       await savePersona(
         {
-          displayName, systemPrompt, avatarUrl, runtime, model, provider,
+          displayName, systemPrompt, avatarUrl, runtime, model,
+          // Keyless OpenRouter: the provider is the model string's prefix.
+          // Bare legacy ids (no prefix) keep the previously stored provider.
+          provider: providerForModel(model) || provider,
           respondTo, respondToAllowlist, parallelism, namePool, shared,
         },
         existing?.id ?? null,
@@ -100,15 +106,15 @@ export function PersonaDialog({
             <label className={labelCls}>Runtime</label>
             <input className={inputCls} value={runtime} onChange={(e) => setRuntime(e.target.value)} placeholder="buzz-agent" />
           </div>
-          <div>
+          <div className="col-span-2">
             <label className={labelCls}>Model</label>
-            <input className={inputCls} value={model} onChange={(e) => setModel(e.target.value)} placeholder="claude-opus-4-5" />
-          </div>
-          <div>
-            <label className={labelCls}>Provider</label>
-            <input className={inputCls} value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="anthropic" />
+            <ModelCombobox id="persona-model" value={model} onChange={setModel} />
           </div>
         </div>
+        <p className="-mt-2 text-[11px] leading-snug text-black/40 dark:text-white/40">
+          Served by the keyless OpenRouter provider — search the catalog or type any
+          {" "}model id.
+        </p>
         <div>
           <label className={labelCls}>Avatar URL <span className="font-normal text-black/35 dark:text-white/35">(optional)</span></label>
           <input className={inputCls} value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://…" />

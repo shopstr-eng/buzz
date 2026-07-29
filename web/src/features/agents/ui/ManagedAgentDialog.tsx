@@ -20,6 +20,7 @@ import {
   inputCls,
   labelCls,
 } from "./agent-dialog-shell";
+import { ModelCombobox, providerForModel } from "./ModelCombobox";
 
 export function ManagedAgentDialog({
   personas,
@@ -33,7 +34,6 @@ export function ManagedAgentDialog({
   const [personaId, setPersonaId] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [model, setModel] = useState("");
-  const [provider, setProvider] = useState("");
   const [respondTo, setRespondTo] = useState<RespondTo>("owner-only");
   const [allowlistText, setAllowlistText] = useState("");
   const [parallelism, setParallelism] = useState(1);
@@ -58,7 +58,8 @@ export function ManagedAgentDialog({
         personaId: personaId || undefined,
         systemPrompt: systemPrompt || undefined,
         model: model || undefined,
-        provider: provider || undefined,
+        // Keyless OpenRouter: the provider is the model string's prefix.
+        provider: providerForModel(model) || undefined,
         respondTo,
         respondToAllowlist,
         parallelism: Math.max(1, Math.floor(parallelism) || 1),
@@ -136,15 +137,13 @@ export function ManagedAgentDialog({
                 placeholder="You are…"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className={labelCls}>Model</label>
-                <input className={inputCls} value={model} onChange={(e) => setModel(e.target.value)} placeholder="claude-opus-4-5" />
-              </div>
-              <div>
-                <label className={labelCls}>Provider</label>
-                <input className={inputCls} value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="anthropic" />
-              </div>
+            <div>
+              <label className={labelCls}>Model</label>
+              <ModelCombobox id="managed-agent-model" value={model} onChange={setModel} />
+              <p className="mt-1.5 text-[11px] leading-snug text-black/40 dark:text-white/40">
+                Served by the keyless OpenRouter provider — search the catalog or type any
+                {" "}model id.
+              </p>
             </div>
           </>
         )}
