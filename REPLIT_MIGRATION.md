@@ -1,9 +1,10 @@
 # Migrating this Buzz relay to a standard Replit App
 
 Goal: move development + production of this relay into a **new, standard
-Replit App** so it can use **Replit AI Integrations** (keyless Anthropic
-access billed to Replit credits). The current workspace type cannot use
-managed AI credentials; a standard app can.
+Replit App** so it can use **Replit AI Integrations** (keyless OpenRouter
+access — 200+ models, billed to Replit credits; keyless Anthropic serves
+as the automatic fallback). The current workspace type cannot use managed
+AI credentials; a standard app can.
 
 Everything the new app needs to build and run travels in this git repo
 (`.replit`, `replit.nix`, `scripts/`, vendored `tokio-websockets` patch).
@@ -35,14 +36,18 @@ integration first, repo second.
 
 1. Replit → **Create App** → describe a throwaway starter to Agent:
 
-   > Build a single-page app with one button that asks Claude for a haiku,
-   > using Replit's managed Anthropic integration (keyless, billed to my
+   > Build a single-page app with one button that asks an LLM for a haiku,
+   > using Replit's managed OpenRouter integration (keyless, billed to my
    > Replit account). Do not ask me for an API key.
 
-2. Approve the **“Anthropic (Replit managed)”** card when it appears.
-   - If Agent asks you to paste an `ANTHROPIC_API_KEY` value: decline and
+2. Approve the **“OpenRouter (Replit managed)”** card when it appears.
+   - If Agent asks you to paste an `OPENROUTER_API_KEY` value: decline and
      reply “No key — use Replit AI Integrations, the Replit-managed
-     Anthropic option.”
+     OpenRouter option.”
+   - Optionally also attach the **Anthropic (Replit managed)** integration
+     while you're here — the start script maps it as an automatic fallback
+     whenever OpenRouter credentials are absent, and it costs nothing when
+     unused.
    - If it says managed AI isn't available: it requires a paid plan, and in
      a Pro/Enterprise **organization** an org admin must first enable AI
      Integrations in org settings (off by default). Fix that before doing
@@ -54,8 +59,9 @@ integration first, repo second.
    > Replace this entire scaffold with my real project. Clone
    > https://github.com/shopstr-eng/buzz.git and make the workspace root an
    > exact copy of that repo (including its `.replit`, `replit.nix`, and
-   > `.git`), deleting the scaffold files. Keep the Anthropic integration
-   > attached. Then read `REPLIT_MIGRATION.md` in the repo and follow it
+   > `.git`), deleting the scaffold files. Keep the OpenRouter integration
+   > attached (and Anthropic, if you added it). Then read
+   > `REPLIT_MIGRATION.md` in the repo and follow it
    > from Phase 2 — ask me for the secrets when you're ready.
 
    Suggested commands for that agent (adapt as needed), run from the
@@ -93,19 +99,25 @@ from `BUZZ_RELAY_PRIVATE_KEY`.
 ## Phase 3 — keyless AI (the reason for the move)
 
 The integration was already attached in Phase 1. The repo needs no manual
-wiring: `scripts/start-replit.sh` auto-detects `ANTHROPIC_API_KEY` in the
-environment and defaults `BUZZ_AGENT_PROVIDER=anthropic`,
-`ANTHROPIC_MODEL=claude-opus-4-5` (a provider explicitly saved in
-Admin → Settings still wins). The same auto-detection applies to the
-production deployment.
+wiring: `scripts/start-replit.sh` maps `AI_INTEGRATIONS_OPENROUTER_API_KEY`
+→ `OPENAI_COMPAT_API_KEY` (and `..._BASE_URL` likewise) and defaults
+`BUZZ_AGENT_PROVIDER=openai` with the chat dialect (a provider explicitly
+saved in Admin → Settings still wins). The same auto-detection applies to
+the production deployment. If the Anthropic integration is also attached,
+its credentials are mapped too and take over automatically whenever the
+OpenRouter key is absent — leave it attached as the safety net.
 
 - Restart the **Buzz Relay** workflow and look for
-  `ANTHROPIC_API_KEY detected — defaulting BUZZ_AGENT_PROVIDER=anthropic`
+  `OpenRouter keyless key detected — defaulting BUZZ_AGENT_PROVIDER=openai (openai-compat, chat dialect)`
   in the logs.
 - If that line does not appear, the integration injected different
-  variable names: ask the app's Agent to expose the managed Anthropic
-  credentials to the workflow environment as `ANTHROPIC_API_KEY` (and
-  `ANTHROPIC_BASE_URL` if it uses a custom endpoint).
+  variable names: ask the app's Agent to expose the managed OpenRouter
+  credentials to the workflow environment as
+  `AI_INTEGRATIONS_OPENROUTER_API_KEY` (and
+  `AI_INTEGRATIONS_OPENROUTER_BASE_URL`).
+- With OpenRouter active, the Admin → Settings page and the web model
+  pickers serve the live OpenRouter catalog (200+ models with pricing)
+  instead of the built-in shortlist.
 - Verify end-to-end: @mention the agent in a channel and get a reply.
 
 ## Phase 4 — development data (optional)
