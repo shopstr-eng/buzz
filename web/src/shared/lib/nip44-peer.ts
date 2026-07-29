@@ -7,6 +7,7 @@
 
 import { nip44 } from "nostr-tools";
 import { getSecretKeyBytes, loadIdentity } from "./identity";
+import { ensureNip46Signer } from "./nip46-signer";
 
 export type PeerDecryptor = (peerPubkey: string, ciphertext: string) => Promise<string>;
 
@@ -26,6 +27,10 @@ export function getPeerDecryptor(): PeerDecryptor | null {
       }
       return nip44.v2.decrypt(ct, convKey);
     };
+  }
+
+  if (identity.type === "nip46") {
+    return async (peer, ct) => (await ensureNip46Signer()).nip44Decrypt(peer, ct);
   }
 
   const ext = window.nostr as

@@ -6,3 +6,4 @@
 - [ACP host-tenant binding](acp-host-tenant-binding.md) — loopback-connected ACP/MCP processes bind to the wrong community; Host/URL env overrides required; MCP helper is buzz-dev-mcp, not buzz CLI.
 - [Workspace migration to standard app](workspace-migration.md) — phases 1-3 done 2026-07-29 (relay running in new app); Phase 5 prod cutover pending; prod DB read-only from tools; one-shot prod seed hook.
 - [Keyless provider wiring](openrouter-keyless-provider.md) — OpenRouter sole keyless provider in standard app; Anthropic fallback removed 2026-07-29 (git history has it); keyless vs BYOK split on OPENAI_COMPAT_BASE_URL.
+- [NIP-46/NIP-49 web sign-in](nip46-nip49-signin.md) — bunker session in sessionStorage, ncryptsec→nsec at login, lazy restore + reload-on-dead-session; node nostr-tools harness quirks (no global WebSocket, NIP-11 at /).

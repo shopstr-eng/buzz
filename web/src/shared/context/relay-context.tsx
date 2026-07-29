@@ -19,6 +19,7 @@ import {
   getSignFn,
   hasNip07,
   loadIdentity,
+  loginWithBunker,
   loginWithNip07,
   loginWithNsec,
   type StoredIdentity,
@@ -33,8 +34,10 @@ interface RelayContextValue {
   connectionState: ConnectionState;
   /** Log in with NIP-07 extension. */
   loginWithExtension: () => Promise<void>;
-  /** Log in with a raw nsec / bech32 secret key. */
-  loginWithKey: (nsec: string) => void;
+  /** Log in with a raw nsec / hex / NIP-49 ncryptsec key (password for ncryptsec). */
+  loginWithKey: (key: string, password?: string) => void;
+  /** Log in with a NIP-46 remote signer (bunker:// URI or signer NIP-05). */
+  loginWithBunker: (input: string) => Promise<void>;
   /** Log out and disconnect. */
   logout: () => void;
 }
@@ -102,8 +105,13 @@ export function RelayProvider({ children }: { children: ReactNode }) {
     setIdentity(id);
   }, []);
 
-  const loginWithKey = useCallback((nsec: string) => {
-    const id = loginWithNsec(nsec);
+  const loginWithKey = useCallback((key: string, password?: string) => {
+    const id = loginWithNsec(key, password);
+    setIdentity(id);
+  }, []);
+
+  const loginWithBunkerCb = useCallback(async (input: string) => {
+    const id = await loginWithBunker(input);
     setIdentity(id);
   }, []);
 
@@ -124,6 +132,7 @@ export function RelayProvider({ children }: { children: ReactNode }) {
         connectionState,
         loginWithExtension,
         loginWithKey,
+        loginWithBunker: loginWithBunkerCb,
         logout,
       }}
     >

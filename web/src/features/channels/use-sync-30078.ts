@@ -92,7 +92,7 @@ export function useSync30078(): void {
           `read-state:${slotId}`,
           "read-state",
           buildSlotPlaintext(clientId, mergedContexts),
-        );
+        ).catch((err) => console.warn("[sync-30078] read-state publish failed:", err));
       }, PUBLISH_DEBOUNCE_MS);
     }
 
@@ -103,7 +103,7 @@ export function useSync30078(): void {
           "channel-stars",
           "channel-stars",
           JSON.stringify({ version: 1, channels: getPinsSnapshot() }),
-        );
+        ).catch((err) => console.warn("[sync-30078] pins publish failed:", err));
       }, PUBLISH_DEBOUNCE_MS);
     }
 

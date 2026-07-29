@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { KeyRound, Puzzle, Eye, EyeOff, AlertCircle, Lock } from "lucide-react";
+import { KeyRound, Puzzle, Eye, EyeOff, AlertCircle, Lock, Satellite } from "lucide-react";
 import { useRelay } from "@/shared/context/relay-context";
 import { hasNip07, loadIdentity } from "@/shared/lib/identity";
 import { makeNip98AuthHeader } from "@/shared/lib/nip98";
@@ -26,13 +26,16 @@ async function checkMembership(): Promise<{ member: boolean; role: string | null
 // ── Component ─────────────────────────────────────────────────────────────
 
 export function LoginPage() {
-  const { loginWithExtension, loginWithKey, logout } = useRelay();
+  const { loginWithExtension, loginWithKey, loginWithBunker, logout } = useRelay();
   const navigate = useNavigate();
   const [nsec, setNsec] = useState("");
+  const [keyPassword, setKeyPassword] = useState("");
+  const [bunkerUri, setBunkerUri] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const nip07Available = hasNip07();
+  const isNcryptsec = nsec.trim().startsWith("ncryptsec1");
 
   // ── helpers ──────────────────────────────────────────────────────────────
 
@@ -85,7 +88,7 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      loginWithKey(nsec);               // stores key, sets relay context
+      loginWithKey(nsec, isNcryptsec ? keyPassword : undefined); // stores key, sets relay context
       await verifyAndEnter();           // NIP-98 membership check (signs in-browser, no prompt)
       await navigate({ to: "/channels" });
     } catch (err) {
@@ -94,6 +97,26 @@ export function LoginPage() {
         setError("not_member");
       } else {
         setError(err instanceof Error ? err.message : "Invalid secret key.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleBunker(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      await loginWithBunker(bunkerUri); // NIP-46 connect, sets relay context
+      await verifyAndEnter();           // NIP-98 membership check (signed remotely)
+      await navigate({ to: "/channels" });
+    } catch (err) {
+      logout();                         // disconnect + clear identity/session
+      if (err instanceof Error && err.message === "not_member") {
+        setError("not_member");
+      } else {
+        setError(err instanceof Error ? err.message : "Remote signer connection failed.");
       }
     } finally {
       setLoading(false);
@@ -157,7 +180,7 @@ export function LoginPage() {
                   htmlFor="nsec-input"
                   className="mb-1.5 block text-xs font-medium text-black/70 dark:text-white/70"
                 >
-                  Secret key (nsec or hex)
+                  Secret key (nsec, ncryptsec, or hex)
                 </label>
                 <div className="relative">
                   <input
@@ -184,13 +207,73 @@ export function LoginPage() {
                   </button>
                 </div>
               </div>
+              {isNcryptsec && (
+                <div>
+                  <label
+                    htmlFor="ncryptsec-password"
+                    className="mb-1.5 block text-xs font-medium text-black/70 dark:text-white/70"
+                  >
+                    Key password
+                  </label>
+                  <input
+                    id="ncryptsec-password"
+                    type="password"
+                    value={keyPassword}
+                    onChange={(e) => setKeyPassword(e.target.value)}
+                    placeholder="Password for this ncryptsec key"
+                    autoComplete="off"
+                    className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-black placeholder-black/30 outline-none focus:border-black/40 dark:border-white/15 dark:text-white dark:placeholder-white/30 dark:focus:border-white/40"
+                  />
+                </div>
+              )}
               <button
                 type="submit"
-                disabled={loading || !nsec.trim()}
+                disabled={loading || !nsec.trim() || (isNcryptsec && !keyPassword)}
                 className="flex w-full items-center justify-center gap-2 rounded-lg border border-black/15 bg-transparent px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
               >
                 <KeyRound className="h-4 w-4" />
                 Sign in with secret key
+              </button>
+            </form>
+
+            {/* divider */}
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+              <span className="text-xs text-black/40 dark:text-white/40">or</span>
+              <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+            </div>
+
+            {/* NIP-46 remote signer */}
+            <form onSubmit={handleBunker} className="space-y-3">
+              <div>
+                <label
+                  htmlFor="bunker-input"
+                  className="mb-1.5 block text-xs font-medium text-black/70 dark:text-white/70"
+                >
+                  Remote signer (NIP-46)
+                </label>
+                <input
+                  id="bunker-input"
+                  type="text"
+                  value={bunkerUri}
+                  onChange={(e) => setBunkerUri(e.target.value)}
+                  placeholder="bunker://…  or signer NIP-05 address"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-black placeholder-black/30 outline-none focus:border-black/40 dark:border-white/15 dark:text-white dark:placeholder-white/30 dark:focus:border-white/40"
+                />
+                <p className="mt-1.5 text-xs text-black/40 dark:text-white/40">
+                  Paste a connection string from nsec.app, Amber, or another
+                  remote signer — your key never leaves the signer.
+                </p>
+              </div>
+              <button
+                type="submit"
+                disabled={loading || !bunkerUri.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-black/15 bg-transparent px-4 py-2.5 text-sm font-medium text-black transition-colors hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
+              >
+                <Satellite className="h-4 w-4" />
+                {loading ? "Connecting…" : "Connect remote signer"}
               </button>
             </form>
 

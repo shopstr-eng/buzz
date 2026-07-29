@@ -85,6 +85,7 @@ function mockRelayReady(connection: unknown) {
     identity: null,
     loginWithExtension: vi.fn(),
     loginWithKey: vi.fn(),
+    loginWithBunker: vi.fn(),
     logout: vi.fn(),
   });
 }

@@ -90,6 +90,7 @@ describe("useWorkflows – d-tag deduplication", () => {
       identity: null,
       loginWithExtension: vi.fn(),
       loginWithKey: vi.fn(),
+      loginWithBunker: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -132,6 +133,7 @@ describe("useWorkflows – d-tag deduplication", () => {
       identity: null,
       loginWithExtension: vi.fn(),
       loginWithKey: vi.fn(),
+      loginWithBunker: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -170,6 +172,7 @@ describe("useWorkflows – d-tag deduplication", () => {
       identity: null,
       loginWithExtension: vi.fn(),
       loginWithKey: vi.fn(),
+      loginWithBunker: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -201,6 +204,7 @@ describe("useWorkflows – edit flow (publishWorkflow re-uses existingId)", () =
       identity: null,
       loginWithExtension: vi.fn(),
       loginWithKey: vi.fn(),
+      loginWithBunker: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -248,6 +252,7 @@ describe("useWorkflows – edit flow (publishWorkflow re-uses existingId)", () =
       identity: null,
       loginWithExtension: vi.fn(),
       loginWithKey: vi.fn(),
+      loginWithBunker: vi.fn(),
       logout: vi.fn(),
     });
 
@@ -290,6 +295,7 @@ describe("useWorkflows – edit flow (publishWorkflow re-uses existingId)", () =
       identity: null,
       loginWithExtension: vi.fn(),
       loginWithKey: vi.fn(),
+      loginWithBunker: vi.fn(),
       logout: vi.fn(),
     });
 

@@ -3,11 +3,13 @@
  *  - nsec login: local secret key via nostr-tools.
  *  - NIP-07 login: window.nostr.nip44 (extension support optional) — returns
  *    null when the extension doesn't expose NIP-44.
+ *  - NIP-46 login: proxied to the remote signer (async variant only).
  */
 
 import { nip44 } from "nostr-tools";
 import { getPublicKey } from "nostr-tools/pure";
 import { loadIdentity, getSecretKeyBytes } from "./identity";
+import { ensureNip46Signer } from "./nip46-signer";
 
 export interface Nip44Self {
   encrypt: (plaintext: string) => string;
@@ -57,6 +59,13 @@ export async function getNip44SelfAsync(): Promise<{
   }
 
   const identity = loadIdentity();
+  if (identity?.type === "nip46") {
+    const me = identity.pubkey;
+    return {
+      encrypt: async (pt) => (await ensureNip46Signer()).nip44Encrypt(me, pt),
+      decrypt: async (ct) => (await ensureNip46Signer()).nip44Decrypt(me, ct),
+    };
+  }
   if (identity?.type !== "nip07") return null;
   const ext = window.nostr as
     | { nip44?: { encrypt: (pk: string, pt: string) => Promise<string>; decrypt: (pk: string, ct: string) => Promise<string> } }
