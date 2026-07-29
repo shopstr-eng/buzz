@@ -22,6 +22,17 @@ description: Why/how this Buzz relay moves to a standard Replit app for managed 
 - ACP "discovered 0 channels" in the new dev workspace is EXPECTED: the ACP worker binds to
   the dev-domain community, and the imported channels belong to buzz.shopstrmarkets.com /
   buzzstr.replit.app / old riker+janeway hosts.
+- Old members' deletion was INTENTIONAL (user confirmed 2026-07-29): the deleted pre-snapshot
+  "general" channel and its 3 removed members stay removed. An earlier accidental re-add was
+  reverted (kind:9001 in dev DB; seed restored to pristine + loopback remap).
+- Invite auto-join feature (2026-07-29): invite claims now auto-add the joining account to the
+  community's `general` channel relay-side (both v2 and v1 claim paths, genuine-join only,
+  self-join as actor, role member, best-effort). The 11 pre-existing invite-joined accounts
+  were backfilled into general in the dev DB (kind:9000) and in prod-seed.json (channel_members
+  rows + owner-signed replacement 39002; stale agent-only one retired). Old prod itself is NOT
+  backfilled — it catches up via the seed at cutover.
+- Members panel/@menu mirror the live kind:39002 exactly; the channel owner is never p-tagged
+  (it's the event author), so "5 channel_members rows, 4 p-tags" is correct, not a mismatch.
 - Phase 5 (prod cutover) PENDING: publish with BUZZ_CUSTOM_DOMAINS=buzz.shopstrmarkets.com
   set before first boot (seed is already staged and imports before community seeding) →
   verify → DNS flip → retire old app → delete the staged seed file.

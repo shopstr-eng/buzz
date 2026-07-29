@@ -380,6 +380,32 @@ async fn acquire_channel_membership_lock(
 ///
 /// The entire check-then-insert sequence runs inside a transaction to prevent TOCTOU
 /// races (e.g. the inviter being removed between the role check and the INSERT).
+/// Finds the community's oldest live `general` channel, if one exists.
+///
+/// This is the auto-join target for invite claims: a freshly-joined relay
+/// member lands in `general` without a separate channel invite. Names are
+/// canonicalized (but not case-folded) at creation, so the match is
+/// case-insensitive; deleted and archived channels are never selected.
+/// Oldest-first keeps the choice deterministic if duplicates ever appear.
+pub async fn find_general_channel(
+    pool: &PgPool,
+    community_id: CommunityId,
+) -> Result<Option<Uuid>> {
+    let row: Option<(Uuid,)> = sqlx::query_as(
+        r#"
+        SELECT id FROM channels
+        WHERE community_id = $1 AND lower(name) = 'general'
+          AND deleted_at IS NULL AND archived_at IS NULL
+        ORDER BY created_at ASC
+        LIMIT 1
+        "#,
+    )
+    .bind(community_id.as_uuid())
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(id,)| id))
+}
+
 pub async fn add_member(
     pool: &PgPool,
     community_id: CommunityId,

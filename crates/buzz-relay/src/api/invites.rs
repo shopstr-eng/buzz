@@ -415,6 +415,7 @@ pub async fn claim_invite(
                 if let Err(e) = publish_nip43_membership_list(&tenant, &state).await {
                     tracing::warn!("failed to publish NIP-43 membership list after v2 claim: {e}");
                 }
+                auto_join_general_channel(&tenant, &state, &claimer_hex).await;
                 Ok(Json(serde_json::json!({
                     "status": "joined",
                     "community_id": tenant.community().to_string(),
@@ -490,6 +491,7 @@ pub async fn claim_invite(
         if let Err(e) = publish_nip43_membership_list(&tenant, &state).await {
             tracing::warn!("failed to publish NIP-43 membership list after claim: {e}");
         }
+        auto_join_general_channel(&tenant, &state, &claimer_hex).await;
     }
 
     Ok(Json(serde_json::json!({
@@ -498,6 +500,43 @@ pub async fn claim_invite(
         "host": tenant.host(),
         "role": payload.r,
     })))
+}
+
+/// Best-effort auto-join of a freshly-claimed invite member to the community's
+/// `general` channel. Runs only on a genuine join (never on already-member,
+/// expired, or invalid outcomes) and never fails the claim: any lookup/add
+/// error just skips the auto-join. The joining member is their own actor
+/// (self-join semantics); `db.add_member` still enforces channel-visibility
+/// rules, so a private `general` simply won't auto-join.
+async fn auto_join_general_channel(
+    tenant: &buzz_core::tenant::TenantContext,
+    state: &Arc<AppState>,
+    claimer_hex: &str,
+) {
+    let channel_id = match state.db.find_general_channel(tenant.community()).await {
+        Ok(Some(id)) => id,
+        Ok(None) => return,
+        Err(e) => {
+            tracing::warn!("auto-join general: channel lookup failed: {e}");
+            return;
+        }
+    };
+    let Ok(claimer_bytes) = hex::decode(claimer_hex) else {
+        tracing::warn!("auto-join general: undecodable claimer pubkey");
+        return;
+    };
+    if let Err(e) = crate::handlers::side_effects::add_member_with_side_effects(
+        tenant,
+        state,
+        channel_id,
+        &claimer_bytes,
+        buzz_db::channel::MemberRole::Member,
+        &claimer_bytes,
+    )
+    .await
+    {
+        tracing::warn!(channel = %channel_id, member = %claimer_hex, "auto-join general failed: {e}");
+    }
 }
 
 /// `GET /api/me/membership` — NIP-98 authenticated, exempt from the relay

@@ -1317,21 +1317,48 @@ async fn handle_put_user(
     };
 
     let actor_bytes = event.pubkey.to_bytes().to_vec();
+    add_member_with_side_effects(
+        tenant,
+        state,
+        channel_id,
+        &target_pubkey,
+        role,
+        &actor_bytes,
+    )
+    .await?;
 
+    info!(channel = %channel_id, target = %hex::encode(&target_pubkey), "NIP-29 PUT_USER processed");
+    Ok(())
+}
+
+/// Add `target_pubkey` to a channel with the standard post-add side effects:
+/// membership-cache invalidation, a `member_joined` system message, NIP-29
+/// group-discovery (kind:39002) regeneration, and a kind:44100 member-added
+/// notification. Shared by the kind:9000 moderation path and the invite-claim
+/// auto-join; channel-visibility and role rules are enforced inside
+/// `db.add_member` regardless of the caller.
+pub async fn add_member_with_side_effects(
+    tenant: &TenantContext,
+    state: &Arc<AppState>,
+    channel_id: Uuid,
+    target_pubkey: &[u8],
+    role: MemberRole,
+    actor_bytes: &[u8],
+) -> anyhow::Result<()> {
     state
         .db
         .add_member(
             tenant.community(),
             channel_id,
-            &target_pubkey,
+            target_pubkey,
             role,
-            Some(&actor_bytes),
+            Some(actor_bytes),
         )
         .await?;
-    state.invalidate_membership(tenant, channel_id, &target_pubkey);
+    state.invalidate_membership(tenant, channel_id, target_pubkey);
 
-    let actor_hex = hex::encode(&actor_bytes);
-    let target_hex = hex::encode(&target_pubkey);
+    let actor_hex = hex::encode(actor_bytes);
+    let target_hex = hex::encode(target_pubkey);
     emit_system_message(
         tenant,
         state,
@@ -1352,8 +1379,8 @@ async fn handle_put_user(
         tenant,
         state,
         channel_id,
-        &target_pubkey,
-        &actor_bytes,
+        target_pubkey,
+        actor_bytes,
         KIND_MEMBER_ADDED_NOTIFICATION,
     )
     .await
@@ -1361,7 +1388,6 @@ async fn handle_put_user(
         warn!(channel = %channel_id, error = %e, "membership notification emission failed");
     }
 
-    info!(channel = %channel_id, target = %target_hex, "NIP-29 PUT_USER processed");
     Ok(())
 }
 

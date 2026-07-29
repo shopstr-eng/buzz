@@ -1537,6 +1537,12 @@ impl Db {
         .await
     }
 
+    /// Finds the community's oldest live `general` channel, if one exists.
+    /// Used to auto-join freshly-claimed invite members to `general`.
+    pub async fn find_general_channel(&self, community_id: CommunityId) -> Result<Option<Uuid>> {
+        channel::find_general_channel(&self.pool, community_id).await
+    }
+
     /// Removes a member from a channel.
     pub async fn remove_member(
         &self,
