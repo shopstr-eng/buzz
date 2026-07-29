@@ -1,9 +1,10 @@
 /**
  * Admin panel — AI Agent Provider Settings.
  *
- * Selects which LLM provider the built-in ACP agent uses.
- * API credentials are supplied automatically by Replit AI Integrations —
- * no key management needed. Usage is billed to the Replit account.
+ * Selects which LLM provider the built-in ACP agent uses. OpenRouter is the
+ * keyless option: credentials are supplied automatically by Replit AI
+ * Integrations — no key management needed, usage billed to the Replit
+ * account. A custom OpenAI-compatible endpoint (BYOK) is also supported.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -11,27 +12,58 @@ import { post, request } from "./api";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-type Provider = "anthropic" | "openai" | null;
+/** "openrouter" and "openai-compat" both persist as provider="openai" — the
+ * presence of a baseUrl distinguishes a custom endpoint from the keyless
+ * OpenRouter path (whose base URL comes from AI_INTEGRATIONS_OPENROUTER_*). */
+type ProviderChoice = "openrouter" | "openai-compat" | null;
 
 interface AgentProviderConfig {
-  provider: Provider;
+  provider: string | null;
   model: string | null;
   baseUrl: string | null;
   restartRequired: boolean;
 }
 
+interface CatalogModel {
+  id: string;
+  name: string;
+  context_length: number | null;
+  prompt_per_million: number | null;
+  completion_per_million: number | null;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function providerLabel(p: Provider) {
-  if (p === "anthropic") return "Anthropic — Claude";
-  if (p === "openai") return "OpenAI-compatible";
+const OPENROUTER_DEFAULT_MODEL = "anthropic/claude-opus-4.5";
+
+/** Shortlist used when the live OpenRouter catalog can't be fetched. */
+const FALLBACK_MODELS: CatalogModel[] = [
+  { id: "anthropic/claude-opus-4.5", name: "Anthropic: Claude Opus 4.5", context_length: null, prompt_per_million: null, completion_per_million: null },
+  { id: "anthropic/claude-sonnet-4.5", name: "Anthropic: Claude Sonnet 4.5", context_length: null, prompt_per_million: null, completion_per_million: null },
+  { id: "openai/gpt-5.2", name: "OpenAI: GPT-5.2", context_length: null, prompt_per_million: null, completion_per_million: null },
+  { id: "google/gemini-3-pro", name: "Google: Gemini 3 Pro", context_length: null, prompt_per_million: null, completion_per_million: null },
+  { id: "moonshotai/kimi-k3", name: "Moonshot: Kimi K3", context_length: null, prompt_per_million: null, completion_per_million: null },
+];
+
+function choiceLabel(
+  choice: ProviderChoice,
+  baseUrl: string | null,
+): string {
+  if (choice === "openrouter") return "OpenRouter — keyless";
+  if (choice === "openai-compat")
+    return `OpenAI-compatible${baseUrl ? ` (${baseUrl})` : ""}`;
   return "None (agent disabled)";
 }
 
-function defaultModel(p: Provider) {
-  if (p === "anthropic") return "claude-opus-4-5";
-  if (p === "openai") return "gpt-4o";
-  return "";
+/** Map a stored config back to the UI's provider choice. */
+function choiceFor(cfg: AgentProviderConfig): ProviderChoice {
+  if (cfg.provider === "openai" || cfg.provider === "openai-compat") {
+    return cfg.baseUrl ? "openai-compat" : "openrouter";
+  }
+  if (cfg.provider === null) return null;
+  // Legacy saved values (e.g. "anthropic" from the removed keyless block):
+  // preselect OpenRouter; takes effect only if the admin saves.
+  return "openrouter";
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -41,9 +73,13 @@ export function Settings() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Form state
-  const [provider, setProvider] = useState<Provider>(null);
-  const [model, setModel] = useState("");
+  const [choice, setChoice] = useState<ProviderChoice>("openrouter");
+  const [model, setModel] = useState(OPENROUTER_DEFAULT_MODEL);
   const [baseUrl, setBaseUrl] = useState("");
+
+  // Model catalog (OpenRouter keyless path)
+  const [catalog, setCatalog] = useState<CatalogModel[]>([]);
+  const [catalogFallback, setCatalogFallback] = useState(false);
 
   // Submit state
   const [saving, setSaving] = useState(false);
@@ -60,8 +96,12 @@ export function Settings() {
     request<AgentProviderConfig>("/settings/agent-provider")
       .then((cfg) => {
         setConfig(cfg);
-        setProvider(cfg.provider);
-        setModel(cfg.model ?? "");
+        const c = choiceFor(cfg);
+        setChoice(c);
+        setModel(
+          cfg.model ??
+            (c === "openrouter" ? OPENROUTER_DEFAULT_MODEL : ""),
+        );
         setBaseUrl(cfg.baseUrl ?? "");
       })
       .catch((err) =>
@@ -70,8 +110,24 @@ export function Settings() {
   }, []);
 
   useEffect(() => {
+    request<CatalogModel[]>("/settings/agent-models")
+      .then((models) => {
+        if (Array.isArray(models) && models.length > 0) {
+          setCatalog(models);
+        } else {
+          setCatalog(FALLBACK_MODELS);
+          setCatalogFallback(true);
+        }
+      })
+      .catch(() => {
+        setCatalog(FALLBACK_MODELS);
+        setCatalogFallback(true);
+      });
+  }, []);
+
+  useEffect(() => {
     setSaved(false);
-  }, [provider, model, baseUrl]);
+  }, [choice, model, baseUrl]);
 
   // Cleanup countdown on unmount
   useEffect(() => () => {
@@ -80,13 +136,30 @@ export function Settings() {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    // A custom endpoint without a base URL is indistinguishable from the
+    // keyless OpenRouter path on load (both persist as provider="openai"
+    // with no baseUrl) — reject it instead of silently switching modes.
+    if (choice === "openai-compat" && !baseUrl.trim()) {
+      setSaveError("Base URL is required for a custom OpenAI-compatible endpoint.");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     setSaved(false);
     try {
-      const body: Record<string, string | null> = { provider };
-      body.model = model.trim() || null;
-      if (provider === "openai") body.baseUrl = baseUrl.trim() || null;
+      const body: Record<string, string | null> = {
+        // Both OpenRouter and custom endpoints persist as provider="openai";
+        // the keyless OpenRouter path is identified by the absence of a
+        // base URL (the start script maps AI_INTEGRATIONS_OPENROUTER_*).
+        provider: choice === null ? null : "openai",
+      };
+      if (choice === "openrouter") {
+        body.model = model.trim() || OPENROUTER_DEFAULT_MODEL;
+        body.baseUrl = "";
+      } else if (choice === "openai-compat") {
+        body.model = model.trim() || null;
+        body.baseUrl = baseUrl.trim() || null;
+      }
       const updated = await post<AgentProviderConfig>(
         "/settings/agent-provider",
         body,
@@ -177,8 +250,8 @@ export function Settings() {
         <p>Configuration</p>
         <h1>AI Agent Provider</h1>
         <span>
-          Choose which AI provider the built-in agent uses. Credentials are
-          provided automatically by{" "}
+          Choose which AI provider the built-in agent uses. OpenRouter
+          credentials are provided automatically by{" "}
           <a
             href="https://docs.replit.com/features/integrations/replit-ai-integrations"
             target="_blank"
@@ -212,90 +285,96 @@ export function Settings() {
         <fieldset className="settings-fieldset">
           <legend>Provider</legend>
 
-          {(["anthropic", "openai", null] as Provider[]).map((p) => (
-            <label key={String(p)} className="settings-radio">
-              <input
-                type="radio"
-                name="provider"
-                value={String(p)}
-                checked={provider === p}
-                onChange={() => {
-                  setProvider(p);
-                  setModel(defaultModel(p));
-                  setBaseUrl("");
-                }}
-              />
-              <span className="settings-radio-body">
-                <span className="settings-radio-label">
-                  {providerLabel(p)}
+          {(["openrouter", "openai-compat", null] as ProviderChoice[]).map(
+            (p) => (
+              <label key={String(p)} className="settings-radio">
+                <input
+                  type="radio"
+                  name="provider"
+                  value={String(p)}
+                  checked={choice === p}
+                  onChange={() => {
+                    setChoice(p);
+                    setModel(
+                      p === "openrouter" ? OPENROUTER_DEFAULT_MODEL : "",
+                    );
+                    setBaseUrl("");
+                  }}
+                />
+                <span className="settings-radio-body">
+                  <span className="settings-radio-label">
+                    {choiceLabel(p, null)}
+                  </span>
+                  {p === "openrouter" && (
+                    <span className="settings-radio-hint">
+                      Claude, GPT, Gemini, Kimi and 200+ other models —
+                      keyless via Replit AI Integrations
+                    </span>
+                  )}
+                  {p === "openai-compat" && (
+                    <span className="settings-radio-hint">
+                      Point to Azure OpenAI, Ollama, or any compatible
+                      endpoint with your own key set as a Replit Secret named{" "}
+                      <code>OPENAI_COMPAT_API_KEY</code>
+                    </span>
+                  )}
+                  {p === null && (
+                    <span className="settings-radio-hint">
+                      The agent will not respond to any messages.
+                    </span>
+                  )}
                 </span>
-                {p === "anthropic" && (
-                  <span className="settings-radio-hint">
-                    Claude Opus 4.5, Sonnet 4.5, Haiku 4 — keyless via Replit
-                  </span>
-                )}
-                {p === "openai" && (
-                  <span className="settings-radio-hint">
-                    GPT-4o, GPT-4.1, or any OpenAI-compatible endpoint —
-                    keyless via Replit, or point to a custom base URL with your
-                    own key set as a{" "}
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        window.open(
-                          "https://docs.replit.com/core-concepts/project-editor/app-setup/secrets",
-                          "_blank",
-                        );
-                      }}
-                    >
-                      Replit Secret
-                    </a>
-                  </span>
-                )}
-                {p === null && (
-                  <span className="settings-radio-hint">
-                    The agent will not respond to any messages.
-                  </span>
-                )}
-              </span>
-            </label>
-          ))}
+              </label>
+            ),
+          )}
         </fieldset>
 
         {/* Provider-specific fields */}
-        {provider !== null && (
+        {choice !== null && (
           <fieldset className="settings-fieldset">
             <legend>Options</legend>
 
-            {/* Model (optional) */}
+            {/* Model */}
             <label className="settings-field">
               <span className="settings-field-label">
                 Model{" "}
-                <span className="settings-field-optional">(optional)</span>
+                {choice === "openai-compat" && (
+                  <span className="settings-field-optional">(optional)</span>
+                )}
               </span>
               <input
                 type="text"
                 className="settings-input"
+                list="agent-model-catalog"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder={defaultModel(provider)}
+                placeholder={
+                  choice === "openrouter" ? OPENROUTER_DEFAULT_MODEL : "gpt-4o"
+                }
                 spellCheck={false}
               />
+              {choice === "openrouter" && (
+                <datalist id="agent-model-catalog">
+                  {catalog.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </datalist>
+              )}
               <span className="settings-field-hint">
-                {provider === "anthropic"
-                  ? "e.g. claude-opus-4-5 · claude-sonnet-4-5 · claude-haiku-4-5"
+                {choice === "openrouter"
+                  ? catalog.length > 0 && !catalogFallback
+                    ? "Pick from the live OpenRouter catalog or type any model id."
+                    : "e.g. anthropic/claude-opus-4.5 · openai/gpt-5.2 · google/gemini-3-pro · moonshotai/kimi-k3"
                   : "e.g. gpt-4o · gpt-4.1 · gpt-4o-mini"}
               </span>
             </label>
 
-            {/* Base URL (OpenAI-compat only) */}
-            {provider === "openai" && (
+            {/* Base URL (custom endpoint only) */}
+            {choice === "openai-compat" && (
               <label className="settings-field">
-                <span className="settings-field-label">
-                  Base URL{" "}
-                  <span className="settings-field-optional">(optional)</span>
-                </span>
+                <span className="settings-field-label">Base URL</span>
                 <input
                   type="url"
                   className="settings-input"
@@ -303,11 +382,12 @@ export function Settings() {
                   onChange={(e) => setBaseUrl(e.target.value)}
                   placeholder="https://api.openai.com/v1"
                   spellCheck={false}
+                  required
                 />
                 <span className="settings-field-hint">
-                  Override for Azure OpenAI, Ollama, or other compatible
-                  endpoints. When using a custom endpoint, add your key as a
-                  Replit Secret named <code>OPENAI_API_KEY</code>.
+                  Required — distinguishes this endpoint from the keyless
+                  OpenRouter path. Your key is read from the{" "}
+                  <code>OPENAI_COMPAT_API_KEY</code> secret.
                 </span>
               </label>
             )}
@@ -371,13 +451,15 @@ export function Settings() {
         <h2 className="settings-current-title">Currently running</h2>
         <dl className="settings-dl">
           <dt>Provider</dt>
+          <dd>{choiceLabel(choiceFor(config), config.baseUrl)}</dd>
+          <dt>Credentials</dt>
           <dd>
             {config.provider
-              ? providerLabel(config.provider)
-              : "None (agent disabled)"}
+              ? config.baseUrl
+                ? "OPENAI_COMPAT_API_KEY (your own secret)"
+                : "Replit AI Integrations (keyless OpenRouter)"
+              : "—"}
           </dd>
-          <dt>Credentials</dt>
-          <dd>Replit AI Integrations (keyless)</dd>
           {config.model && (
             <>
               <dt>Model</dt>
