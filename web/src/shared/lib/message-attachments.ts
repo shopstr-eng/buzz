@@ -87,10 +87,36 @@ function isInlineMedia(mime: string | undefined): boolean {
   return !!mime && (mime.startsWith("image/") || mime.startsWith("video/"));
 }
 
+/** Inline media (`![image|video](url)`) pulled out of the content. */
+export interface InlineMedia {
+  url: string;
+  type: "image" | "video";
+  mime?: string;
+  /** Markdown label / imeta filename, for alt text. */
+  name?: string;
+}
+
+const VIDEO_EXT_RE = /\.(mp4|webm|mov|m4v|ogv)$/i;
+
+/** Classify an inline `![label](url)` as image or video. */
+function inlineMediaType(
+  label: string,
+  url: string,
+  mime: string | undefined,
+): "image" | "video" {
+  if (mime?.startsWith("video/")) return "video";
+  if (mime?.startsWith("image/")) return "image";
+  if (/^video$/i.test(label)) return "video";
+  if (VIDEO_EXT_RE.test(urlBasename(url) ?? "")) return "video";
+  return "image";
+}
+
 export interface ExtractedContent {
   /** Content with attachment markdown lines removed. */
   text: string;
   attachments: MessageAttachment[];
+  /** Inline `![image|video](url)` media, in content order. */
+  media: InlineMedia[];
 }
 
 /**
@@ -100,27 +126,46 @@ export interface ExtractedContent {
  * `imeta` entry for its URL (uploaded blob), or when the filename is a
  * recognizable snapshot (`.agent.json` / `.team.json` / `.agent.png` /
  * `.team.png`) even without imeta. Other links stay in the text (the
- * renderer linkifies them); inline `![…](url)` media lines are left alone.
+ * renderer linkifies them); inline `![…](url)` media lines (and imeta-backed
+ * image/video links) come back in `media` for inline rendering.
  */
 export function extractAttachments(
   content: string,
   tags?: ReadonlyArray<string[]>,
 ): ExtractedContent {
   const imeta = tags ? parseImetaTags(tags) : new Map<string, ImetaEntry>();
-  if (!content.includes("](")) return { text: content, attachments: [] };
+  if (!content.includes("](")) return { text: content, attachments: [], media: [] };
 
   const attachments: MessageAttachment[] = [];
+  const media: InlineMedia[] = [];
   const text = content
     .replace(MD_LINK_RE, (match, bang: string, rawLabel: string, url: string) => {
-      if (bang) return match; // inline image/video — leave for the text renderer
       const entry = imeta.get(url);
       const label = unescapeLabel(rawLabel).trim();
       const name = entry?.filename || label || urlBasename(url) || "file";
       const looksLikeSnapshot = SNAPSHOT_EXT_RE.test(name) || SNAPSHOT_EXT_RE.test(urlBasename(url) ?? "");
-      // Uploaded inline media described by imeta stays as text (rendered inline
-      // by whoever handles media); everything imeta-backed or snapshot-shaped
+      if (bang) {
+        // Inline `![image|video](url)` media — render inline instead of raw text.
+        media.push({
+          url,
+          type: inlineMediaType(label, url, entry?.mime),
+          mime: entry?.mime,
+          name: entry?.filename || urlBasename(url) || undefined,
+        });
+        return "";
+      }
+      // Non-bang links: uploaded inline media described by imeta also renders
+      // inline (desktop parity); everything imeta-backed or snapshot-shaped
       // becomes a card.
-      if (entry && isInlineMedia(entry.mime) && !looksLikeSnapshot) return match;
+      if (entry && isInlineMedia(entry.mime) && !looksLikeSnapshot) {
+        media.push({
+          url,
+          type: inlineMediaType(label, url, entry.mime),
+          mime: entry.mime,
+          name: entry.filename || urlBasename(url) || undefined,
+        });
+        return "";
+      }
       if (!entry && !looksLikeSnapshot) return match; // ordinary prose link
       attachments.push({
         url,
@@ -137,7 +182,7 @@ export function extractAttachments(
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  return { text, attachments };
+  return { text, attachments, media };
 }
 
 /** "12.4 KB"-style size label (desktop FileCard parity). */

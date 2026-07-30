@@ -9,6 +9,7 @@ import { ProfilePopover } from "./ProfilePopover";
 import { canonicalNpubKey } from "@/shared/lib/mention-npub";
 import { relativeTime } from "@/shared/lib/relative-time";
 import { extractAttachments } from "@/shared/lib/message-attachments";
+import type { InlineMedia } from "@/shared/lib/message-attachments";
 import { AttachmentCard } from "./AttachmentCard";
 import type { Profile } from "@/shared/hooks/use-profiles";
 
@@ -144,6 +145,51 @@ function renderCustomEmojiTokens(
   if (last === 0) return [text];
   if (last < text.length) parts.push(text.slice(last));
   return parts;
+}
+
+/** Inline image/video pulled out of the message content. */
+function InlineMediaView({ media }: { media: InlineMedia }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <a
+        href={media.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-violet-600 underline decoration-violet-600/40 hover:decoration-violet-600 dark:text-violet-400 dark:decoration-violet-400/40 dark:hover:decoration-violet-400"
+      >
+        {media.name ?? media.url}
+      </a>
+    );
+  }
+  if (media.type === "video") {
+    return (
+      <video
+        src={media.url}
+        controls
+        preload="metadata"
+        className="mt-1 max-h-80 max-w-full rounded-lg border border-black/10 bg-black dark:border-white/10"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <a
+      href={media.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={media.name ?? "Open image"}
+      className="mt-1 block w-fit"
+    >
+      <img
+        src={media.url}
+        alt={media.name ?? "image"}
+        loading="lazy"
+        className="max-h-80 max-w-full rounded-lg border border-black/10 object-contain dark:border-white/10"
+        onError={() => setFailed(true)}
+      />
+    </a>
+  );
 }
 
 /** Markdown links left in the text after attachment extraction. */
@@ -501,7 +547,7 @@ export function MessageRow({
     ? "You"
     : (profile?.name ?? truncatePubkey(message.pubkey));
   const timeStr = useMemo(() => relativeTime(message.createdAt), [message.createdAt]);
-  const { text: bodyText, attachments } = useMemo(
+  const { text: bodyText, attachments, media } = useMemo(
     () => extractAttachments(message.content, message.imeta),
     [message.content, message.imeta],
   );
@@ -574,7 +620,7 @@ export function MessageRow({
           />
         )}
 
-        {(bodyText || attachments.length === 0) && (
+        {(bodyText || (attachments.length === 0 && media.length === 0)) && (
           <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
             {hasMention || hasCustomEmoji || hasMarkdownLink
               ? <ContentBody content={bodyText} mentionNames={mentionNames} customEmojiUrls={customEmojiUrls} />
@@ -586,6 +632,10 @@ export function MessageRow({
             )}
           </p>
         )}
+
+        {media.map((m, i) => (
+          <InlineMediaView key={`${m.url}#${i}`} media={m} />
+        ))}
 
         {attachments.map((att) => (
           <AttachmentCard key={att.url} attachment={att} onImportAgent={onImportAgent} />

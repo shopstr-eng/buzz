@@ -66,14 +66,42 @@ describe("extractAttachments", () => {
     expect(attachments[0].kind).toBe("file");
   });
 
-  it("leaves prose links and inline media in the text", () => {
+  it("leaves prose links in the text but extracts inline media", () => {
     const content =
       "See [the docs](https://example.com/docs) and ![image](https://media.example/pic.png)";
-    const { text, attachments } = extractAttachments(content, [
+    const { text, attachments, media } = extractAttachments(content, [
       ["imeta", "url https://media.example/pic.png", "m image/png"],
     ]);
     expect(attachments).toHaveLength(0);
-    expect(text).toBe(content);
+    expect(media).toEqual([
+      {
+        url: "https://media.example/pic.png",
+        type: "image",
+        mime: "image/png",
+        name: "pic.png",
+      },
+    ]);
+    expect(text).toBe("See [the docs](https://example.com/docs) and");
+  });
+
+  it("classifies ![video] lines and imeta-backed video links as video", () => {
+    const bang = extractAttachments("![video](https://media.example/clip.mp4)");
+    expect(bang.media).toEqual([
+      {
+        url: "https://media.example/clip.mp4",
+        type: "video",
+        mime: undefined,
+        name: "clip.mp4",
+      },
+    ]);
+    expect(bang.text).toBe("");
+
+    const linked = extractAttachments(
+      "[clip](https://media.example/clip.bin)",
+      [["imeta", "url https://media.example/clip.bin", "m video/mp4"]],
+    );
+    expect(linked.attachments).toHaveLength(0);
+    expect(linked.media[0]).toMatchObject({ type: "video", mime: "video/mp4" });
   });
 
   it("unescapes bracket-escaped labels", () => {
