@@ -332,6 +332,55 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // NIP-AO: materialize the built-in ACP agent → relay-owner mapping in every
+    // community where the agent is a relay member. The ACP receives its owner
+    // via BUZZ_ACP_AGENT_OWNER (no NIP-OA auth tag), so nothing on the request
+    // path can prove ownership — without this bootstrap, kind:44200 agent turn
+    // metrics fail the `is_agent_owner` check and 403 after every reply.
+    // Idempotent: set_agent_owner is first-write-wins.
+    if let (Some(acp_pubkey), Some(owner_hex)) = (
+        config.acp_pubkey.as_deref(),
+        config.relay_owner_pubkey.as_deref(),
+    ) {
+        let acp_hex = hex::encode(acp_pubkey);
+        match hex::decode(owner_hex) {
+            Ok(owner_bytes) => match db.usage_community_hosts().await {
+                Ok(hosts) => {
+                    for ch in hosts {
+                        let community = CommunityId::from_uuid(ch.id);
+                        match db.is_relay_member(community, &acp_hex).await {
+                            Ok(true) => {}
+                            Ok(false) => continue,
+                            Err(e) => {
+                                error!(host = %ch.host, "ACP owner bootstrap: membership check failed: {e}");
+                                continue;
+                            }
+                        }
+                        for pk in [acp_pubkey, owner_bytes.as_slice()] {
+                            if let Err(e) = db.ensure_user(community, pk).await {
+                                error!(host = %ch.host, "ACP owner bootstrap: ensure_user failed: {e}");
+                            }
+                        }
+                        match db.set_agent_owner(community, acp_pubkey, &owner_bytes).await {
+                            Ok(true) => {
+                                info!(host = %ch.host, agent = %acp_hex, owner = %owner_hex, "ACP agent owner bootstrapped")
+                            }
+                            Ok(false) => {
+                                // Mapping already exists (possibly to a different
+                                // owner — first-write-wins by design).
+                            }
+                            Err(e) => {
+                                error!(host = %ch.host, "ACP owner bootstrap: set_agent_owner failed: {e}")
+                            }
+                        }
+                    }
+                }
+                Err(e) => error!("ACP owner bootstrap: failed to list communities: {e}"),
+            },
+            Err(e) => error!("ACP owner bootstrap: RELAY_OWNER_PUBKEY is not valid hex: {e}"),
+        }
+    }
+
     // NIP-33: backfill d_tag for any existing parameterized replaceable events
     // that predate the column addition. Idempotent — no-ops when fully populated.
     match db.backfill_d_tags().await {

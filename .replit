@@ -33,6 +33,9 @@ BUZZ_AGENT_PROVIDER = "openai"
 OPENAI_COMPAT_API = "chat"
 OPENAI_COMPAT_MODEL = "anthropic/claude-opus-4.5"
 
+[userenv.development]
+OPENAI_COMPAT_MODEL = "anthropic/claude-opus-4.5"
+
 [deployment]
 deploymentTarget = "cloudrun"
 run = ["bash", "scripts/start-replit.sh"]

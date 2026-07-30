@@ -805,13 +805,14 @@ async fn submit_event_authed(
     )
     .await
     {
-        Ok(owner) => owner.or_else(|| {
-            if !state.config.require_relay_membership {
-                super::relay_members::extract_nip_oa_owner(&pubkey_bytes, auth_tag)
-            } else {
-                None
-            }
-        }),
+        // A direct member (or a caller on an open relay) still needs its
+        // NIP-OA owner extracted: kind 44200 (agent turn metric) ingest
+        // requires a materialized agent→owner mapping, and enforce_relay_membership
+        // only returns the owner on the delegation-fallback path. The tag is
+        // cryptographically self-proving, so opportunistic extraction is safe.
+        Ok(owner) => {
+            owner.or_else(|| super::relay_members::extract_nip_oa_owner(&pubkey_bytes, auth_tag))
+        }
         Err(e) => {
             return SubmitOutcome::Err {
                 status: e.0,

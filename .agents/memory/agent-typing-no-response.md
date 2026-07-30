@@ -22,6 +22,10 @@ description: Symptom→cause map for the built-in agent showing typing but no re
 - `events.created_at` is timestamptz — compare with `to_timestamp(<unix>)` or intervals, not integers.
 - Prod DB is read-only from tools; event writes must go through the relay's ingest paths (bridge/WS), never SQL.
 
-## Residual unexplained 403
+## Post-reply 403 (identified & fixed 2026-07-30)
 
-After a successful reply, the ACP issues one more `POST /events` that 403s (seen 2026-07-30 03:39:49 and earlier at 03:25). Likely observer-telemetry/presence frame, not user-visible. Not yet identified.
+The one extra `POST /events` 403 after every successful reply was the **kind:44200 agent turn metric**. Ingest requires `users.agent_owner_pubkey` (via `is_agent_owner`) to match the metric's `p` tag, but the built-in ACP gets its owner from `BUZZ_ACP_AGENT_OWNER` env — no NIP-OA auth tag exists, so ownership could never be proven and every metric 403'd (zero 44200 rows in prod/dev).
+
+**Fix (relay-side, needs republish to protect prod):** (a) startup bootstrap in `main.rs` materializes ACP→relay-owner mapping in every community where the ACP is a relay member; (b) the HTTP bridge now extracts a NIP-OA owner from `x-auth-tag` even when the caller is a direct member (previously only on the delegation-fallback path), so tag-bearing agents self-materialize.
+
+**How to apply:** if post-reply 403s reappear, check `users.agent_owner_pubkey` for the ACP pubkey in that community first.
