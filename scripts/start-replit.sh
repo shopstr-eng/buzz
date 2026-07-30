@@ -203,34 +203,40 @@ if [[ -n "${REPLIT_DEPLOYMENT:-}" && "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:
     done
 
     if [[ "${_proxy_ready}" != true ]]; then
-      echo "==> FATAL: GCS-S3 proxy failed to start." >&2
-      echo "==> Most likely cause: no App Storage bucket is provisioned for this Repl." >&2
-      echo "==> To fix: open the App Storage tool in the Replit editor, create a bucket," >&2
-      echo "==> then redeploy. Alternatively, set BUZZ_S3_ENDPOINT / BUZZ_S3_ACCESS_KEY /" >&2
-      echo "==> BUZZ_S3_SECRET_KEY / BUZZ_S3_BUCKET as production secrets to use an" >&2
-      echo "==> external S3-compatible bucket (Cloudflare R2, AWS S3, Backblaze B2)." >&2
-      exit 1
-    fi
+      # The deploy environment's sidecar does not serve the HTTP API the proxy
+      # needs (socket accepted, HTTP connection closed) and no App Storage
+      # bucket is provisioned yet — fall back to ephemeral MinIO so the
+      # deployment can boot, instead of failing the whole publish.
+      echo "==> WARNING: GCS-S3 proxy failed to start — falling back to ephemeral MinIO." >&2
+      echo "==> WARNING: uploaded media will NOT survive redeploys until durable storage" >&2
+      echo "==> WARNING: is restored: provision a bucket in the App Storage tool and/or set" >&2
+      echo "==> WARNING: BUZZ_S3_ENDPOINT / BUZZ_S3_ACCESS_KEY / BUZZ_S3_SECRET_KEY /" >&2
+      echo "==> WARNING: BUZZ_S3_BUCKET as production secrets (Cloudflare R2, AWS S3, B2)." >&2
+      kill "${_GCS_PROXY_PID}" 2>/dev/null || true
+      _GCS_FALLBACK_MINIO=true
+    else
     echo "==> GCS-S3 proxy started (PID ${_GCS_PROXY_PID})."
 
     # Credentials are ignored by the proxy (it uses the sidecar token), but
     # the relay's S3 client requires non-empty values to build its client.
     export BUZZ_S3_ACCESS_KEY="gcs_proxy"
     export BUZZ_S3_SECRET_KEY="gcs_proxy_secret"
+    _GCS_FALLBACK_MINIO=false
+    fi
   else
-    echo "==> FATAL: production deployment — no durable media storage available." >&2
-    echo "==> The Replit sidecar at 127.0.0.1:1106 is not reachable." >&2
-    echo "==> Either the App Storage bucket is not provisioned (create one in the" >&2
-    echo "==> App Storage tool), or supply BUZZ_S3_ENDPOINT / BUZZ_S3_ACCESS_KEY /" >&2
-    echo "==> BUZZ_S3_SECRET_KEY / BUZZ_S3_BUCKET as production secrets pointing" >&2
-    echo "==> at an external S3-compatible bucket (Cloudflare R2, AWS S3, etc.)." >&2
-    echo "==> The local MinIO fallback is dev-only: its data dir is ephemeral and" >&2
-    echo "==> every redeploy would wipe all uploaded photos/videos." >&2
-    exit 1
+    echo "==> WARNING: Replit sidecar at 127.0.0.1:1106 not reachable in deployment —" >&2
+    echo "==> WARNING: falling back to ephemeral MinIO. Uploaded media will NOT survive" >&2
+    echo "==> WARNING: redeploys. Restore durable storage: provision a bucket in the App" >&2
+    echo "==> WARNING: Storage tool and/or set BUZZ_S3_ENDPOINT / BUZZ_S3_ACCESS_KEY /" >&2
+    echo "==> WARNING: BUZZ_S3_SECRET_KEY / BUZZ_S3_BUCKET as production secrets." >&2
+    _GCS_FALLBACK_MINIO=true
   fi
 fi
 
-if [[ -z "${REPLIT_DEPLOYMENT:-}" && "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:9000" ]]; then
+if [[ ( -z "${REPLIT_DEPLOYMENT:-}" || "${_GCS_FALLBACK_MINIO:-false}" == true ) && "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:9000" ]]; then
+  if [[ -n "${REPLIT_DEPLOYMENT:-}" ]]; then
+    echo "==> WARNING: running MinIO in production as a temporary fallback — media is ephemeral." >&2
+  fi
   MINIO_BIN="bin-media/minio"
   if [[ ! -x "${MINIO_BIN}" ]]; then
     echo "==> Downloading MinIO server binary..."
