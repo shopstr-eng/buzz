@@ -27,6 +27,10 @@ export interface AgentMetricAggregate {
   turns: number;
   inputTokens: number;
   outputTokens: number;
+  /** Sum of genuine provider-reported per-turn totals (upstream #3593).
+   *  0 when no turn carried a provider total — callers fall back to
+   *  input+output. Never derive by summing input+output here (NIP-AM). */
+  totalTokens: number;
   costUsd: number;
   lastTurnAt: number;
 }
@@ -46,9 +50,15 @@ interface TokenCounts {
   inputTokens?: number | null;
   outputTokens?: number | null;
   costUsd?: number | null;
+  /** Genuine provider-reported turn total (upstream #3593); absent when the
+   *  harness/provider doesn't report one (e.g. goose). */
+  totalTokens?: number | null;
+  turnTotalTokens?: number | null;
   input_tokens?: number | null;
   output_tokens?: number | null;
   cost_usd?: number | null;
+  total_tokens?: number | null;
+  turn_total_tokens?: number | null;
 }
 
 function num(v: unknown): number {
@@ -107,6 +117,14 @@ export function useAgentMetrics(): {
           turns: (existing?.turns ?? 0) + 1,
           inputTokens: (existing?.inputTokens ?? 0) + num(counts.inputTokens ?? counts.input_tokens),
           outputTokens: (existing?.outputTokens ?? 0) + num(counts.outputTokens ?? counts.output_tokens),
+          totalTokens:
+            (existing?.totalTokens ?? 0) +
+            num(
+              counts.totalTokens ??
+                counts.turnTotalTokens ??
+                counts.total_tokens ??
+                counts.turn_total_tokens,
+            ),
           costUsd: (existing?.costUsd ?? 0) + num(counts.costUsd ?? counts.cost_usd),
           lastTurnAt: Math.max(existing?.lastTurnAt ?? 0, ev.created_at),
         });

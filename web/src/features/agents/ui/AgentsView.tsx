@@ -105,7 +105,11 @@ function MetricRow({ metric }: { metric: AgentMetricAggregate }) {
         </p>
         <p className="text-[10px] text-black/35 dark:text-white/35">
           {metric.turns} turn{metric.turns === 1 ? "" : "s"} ·{" "}
-          {(metric.inputTokens + metric.outputTokens).toLocaleString()} tokens
+          {(metric.totalTokens > 0
+            ? metric.totalTokens
+            : metric.inputTokens + metric.outputTokens
+          ).toLocaleString()}{" "}
+          tokens
         </p>
       </div>
       {metric.costUsd > 0 && (

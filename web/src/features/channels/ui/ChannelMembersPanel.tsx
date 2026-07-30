@@ -12,8 +12,9 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   X, Bot, Crown, ShieldCheck, UserRound, Zap,
   MoreHorizontal, ShieldPlus, ShieldMinus, UserMinus,
-  Loader2, AlertTriangle,
+  Loader2, AlertTriangle, UserPlus,
 } from "lucide-react";
+import { nip19 } from "nostr-tools";
 import { useChannelMembers, type ChannelMember } from "../use-channel-members";
 import { usePresenceMap } from "../use-presence";
 import { ConnectAgentDialog } from "./ConnectAgentDialog";
@@ -337,8 +338,16 @@ interface Props {
 }
 
 export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubkey, onClose }: Props) {
-  const { members, isLoading, kickMember, changeRole } = useChannelMembers(groupId);
+  const { members, isLoading, kickMember, changeRole, addMember } = useChannelMembers(groupId);
   const [showConnectAgent, setShowConnectAgent] = useState(false);
+
+  // Direct member add (desktop "Settings → Invites" parity): owners/admins
+  // paste an npub or hex key instead of sharing an invite link.
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addInput, setAddInput] = useState("");
+  const [addRole, setAddRole] = useState<"member" | "admin">("member");
+  const [addBusy, setAddBusy] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   // Check whether the relay has an AI provider configured.
   const [providerConfigured, setProviderConfigured] = useState<boolean | null>(null);
@@ -360,6 +369,45 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
   const myRole = myPubkey
     ? (members.find((m) => m.pubkey === myPubkey)?.role ?? null)
     : null;
+
+  const canAddMember = myRole === "owner" || myRole === "admin";
+
+  async function handleAddMember() {
+    const raw = addInput.trim();
+    if (!raw) return;
+    let hex: string | null = null;
+    if (/^[0-9a-fA-F]{64}$/.test(raw)) {
+      hex = raw.toLowerCase();
+    } else if (raw.startsWith("npub1")) {
+      try {
+        const decoded = nip19.decode(raw);
+        if (decoded.type === "npub") hex = decoded.data;
+      } catch {
+        // fall through to the validation error below
+      }
+    }
+    if (!hex) {
+      setAddError("Enter a valid npub or 64-character hex pubkey.");
+      return;
+    }
+    if (members.some((m) => m.pubkey === hex)) {
+      setAddError("That person is already a member of this channel.");
+      return;
+    }
+    setAddBusy(true);
+    setAddError(null);
+    try {
+      await addMember(hex, addRole);
+      // The 44100 member-added notification refreshes the list.
+      setAddInput("");
+      setAddRole("member");
+      setShowAddMember(false);
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Failed to add member.");
+    } finally {
+      setAddBusy(false);
+    }
+  }
 
   const owners = members.filter((m) => m.role === "owner");
   const admins = members.filter((m) => m.role === "admin");
@@ -464,6 +512,61 @@ export function ChannelMembersPanel({ groupId, channelName: _channelName, myPubk
 
       {/* Footer */}
       <div className="shrink-0 space-y-1 border-t border-black/10 px-3 py-2.5 dark:border-white/10">
+        {canAddMember &&
+          (showAddMember ? (
+            <div className="space-y-1.5 rounded-md border border-black/10 p-2 dark:border-white/10">
+              <input
+                type="text"
+                value={addInput}
+                onChange={(e) => { setAddInput(e.target.value); setAddError(null); }}
+                onKeyDown={(e) => { if (e.key === "Enter") void handleAddMember(); }}
+                placeholder="npub1… or hex pubkey"
+                disabled={addBusy}
+                className="w-full rounded border border-black/15 bg-white px-1.5 py-1 text-[11px] text-black/80 placeholder:text-black/30 focus:border-violet-400 focus:outline-none dark:border-white/15 dark:bg-white/5 dark:text-white/80 dark:placeholder:text-white/30"
+              />
+              <div className="flex items-center gap-1.5">
+                <select
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value as "member" | "admin")}
+                  disabled={addBusy}
+                  className="rounded border border-black/15 bg-white px-1 py-0.5 text-[10px] text-black/70 dark:border-white/15 dark:bg-[#242424] dark:text-white/70"
+                >
+                  <option value="member">Member</option>
+                  {/* Role hierarchy: only owners may add admins. */}
+                  {myRole === "owner" && <option value="admin">Admin</option>}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void handleAddMember()}
+                  disabled={addBusy || !addInput.trim()}
+                  className="flex items-center gap-1 rounded bg-violet-600 px-2 py-0.5 text-[10px] font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                >
+                  {addBusy && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                  {addBusy ? "Adding…" : "Add"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowAddMember(false); setAddError(null); }}
+                  disabled={addBusy}
+                  className="rounded px-1.5 py-0.5 text-[10px] text-black/40 hover:bg-black/5 dark:text-white/40 dark:hover:bg-white/5"
+                >
+                  Cancel
+                </button>
+              </div>
+              {addError && (
+                <p className="text-[10px] leading-tight text-red-600 dark:text-red-400">{addError}</p>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowAddMember(true)}
+              className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-[11px] font-medium text-black/50 transition-colors hover:bg-black/5 hover:text-black/80 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white/70"
+            >
+              <UserPlus className="h-3 w-3 text-violet-500/70" />
+              Add member
+            </button>
+          ))}
         <button
           type="button"
           onClick={() => setShowConnectAgent(true)}

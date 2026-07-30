@@ -26,6 +26,10 @@ When an upstream merge *replaces* an already-applied migration file (add/add con
 
 **How to apply (dev):** `DROP TABLE` the old table, `DELETE FROM _sqlx_migrations WHERE version = N;`, re-run `buzz-admin migrate`. Happened with 0025_relay_invites (fork's v1 single-use table vs upstream's v2 use-limited table; v2 supersedes, old table was empty).
 
+**Version-collision variant (2026-07-30 merge):** upstream added `0026_replica_heartbeat.sql` while the fork's `0026_channel_model.sql` was already applied as version 26 in dev+prod — no add/add conflict, but the same "previously applied but has been modified" startup failure. Fix: renumber UPSTREAM's file to 0027 (never renumber the one already applied in DBs), then update hardcoded version/count assertions in `crates/buzz-db/src/migration.rs` tests and "migration 0026" references in `replica_fence.rs`.
+
+**Migrations are compile-time embedded** (`sqlx::migrate!` in `crates/buzz-db/src/migration.rs`) — after ANY migration add/rename, `cargo build` the relay/admin binaries BEFORE restarting the workflow, or the old binary re-fails on the old embedded set.
+
 ## Environment traps (2026-07-28 merge)
 
 - **Git identity is not configured in this repl** — `git merge upstream/main` fails with "unable to auto-detect email address". Set repo-local identity first (`git config user.name/user.email`).

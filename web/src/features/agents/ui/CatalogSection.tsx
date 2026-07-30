@@ -6,9 +6,11 @@
  * same trust model as the desktop catalog.
  */
 
+import { useMemo } from "react";
 import { Bot, Check, Plus } from "lucide-react";
 import type { CatalogPersona } from "../lib/agent-catalog";
 import { truncatePubkey } from "@/shared/lib/pubkey";
+import { useProfiles } from "@/shared/hooks/use-profiles";
 
 export function CatalogSection({
   entries,
@@ -21,6 +23,14 @@ export function CatalogSection({
   addingId: string | null;
   onAdd: (entry: CatalogPersona) => void;
 }) {
+  // Resolve publisher display names (desktop catalog parity) — falls back to
+  // the truncated pubkey when the author has no kind:0/10100 profile.
+  const authorPubkeys = useMemo(
+    () => entries.map((e) => e.authorPubkey),
+    [entries],
+  );
+  const profiles = useProfiles(authorPubkeys);
+
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {entries.map((entry) => {
@@ -40,7 +50,7 @@ export function CatalogSection({
               <span className="truncate">{entry.displayName}</span>
             </p>
             <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
-              by {truncatePubkey(entry.authorPubkey)}
+              by {profiles.get(entry.authorPubkey)?.name ?? truncatePubkey(entry.authorPubkey)}
               {entry.model ? ` · ${entry.model}` : ""}
             </p>
             {entry.systemPrompt && (

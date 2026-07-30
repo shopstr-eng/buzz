@@ -74,5 +74,11 @@ All 8 remaining desktop↔web gaps closed (votes, DM polish, working indicator, 
 - **Snapshot definition gained `sourceIsBuiltin`** (camelCase serde) — import-preview metadata only, never grants built-in; web exports hardcode false like desktop persona exports.
 - Deferred publishing / retention DB / paging past the 1,000-row clamp are desktop-Tauri infra; web publishes directly online and pages REQ-side.
 
+## Upstream-merge parity round (2026-07-30, merge of block/buzz ~26 commits) — key decisions
+- **44200 total tokens: aggregate per-turn deltas, never session-cumulative** — upstream #3593 added `turnTotalTokens` (per-turn) + `accumulatedTotalTokens` (session-cumulative) to NIP-AM payloads; summing cumulative values across turns overcounts. Web sums per-turn totals; display falls back to input+output when 0 (goose omits provider totals).
+- **Catalog publisher names resolve via shared useProfiles** (kind:0/10100), truncatePubkey fallback — desktop #3640 parity.
+- **Direct member add is channel-scoped kind:9000 [h,p,role] via publishAndWait** (gated owner/admin; admin role owner-only) — desktop's equivalent (kind:9030) is relay-wide NIP-43 for its Settings→Invites; web's members panel is channel-scoped, so 9000 is the matching contract here.
+- **Deferred:** desktop's refined PersonaShareDialog (#3699) — web still has the simple shared-checkbox in PersonaDialog.
+
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.

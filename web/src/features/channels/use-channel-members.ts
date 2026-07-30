@@ -43,6 +43,7 @@ export function useChannelMembers(groupId: string | null): {
   isLoading: boolean;
   kickMember: (targetPubkey: string) => Promise<void>;
   changeRole: (targetPubkey: string, role: "admin" | "member") => Promise<void>;
+  addMember: (targetPubkey: string, role: "admin" | "member") => Promise<void>;
 } {
   const { connection, connectionState } = useRelay();
   const [members, setMembers] = useState<ChannelMember[]>([]);
@@ -182,5 +183,25 @@ export function useChannelMembers(groupId: string | null): {
     [connection, groupId],
   );
 
-  return { members, isLoading: !eoseReceived, kickMember, changeRole };
+  /** Directly add a member by pubkey (desktop "direct add" parity) — same
+   *  kind:9000 contract as changeRole, but publishAndWait so the caller can
+   *  surface relay rejections (permission, duplicate, etc.) in the UI. */
+  const addMember = useCallback(
+    async (targetPubkey: string, role: "admin" | "member") => {
+      if (!connection) throw new Error("Not connected to relay.");
+      if (!groupId) throw new Error("No channel selected.");
+      const signFn = getSignFn();
+      if (!signFn) throw new Error("No signing key available.");
+      const signed = await signFn({
+        kind: KIND_ADD_MEMBER,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [["h", groupId], ["p", targetPubkey], ["role", role]],
+        content: "",
+      });
+      await connection.publishAndWait(signed);
+    },
+    [connection, groupId],
+  );
+
+  return { members, isLoading: !eoseReceived, kickMember, changeRole, addMember };
 }
