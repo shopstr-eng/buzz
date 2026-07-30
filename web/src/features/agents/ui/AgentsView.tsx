@@ -17,7 +17,7 @@ import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-age
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
 import { useAgentPublishing } from "../use-agent-publishing";
-import type { RespondTo } from "../agent-events";
+import { personaToFormInput } from "../agent-events";
 import { parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
 import { useEngrams } from "../use-engrams";
 import { MemorySection } from "./MemorySection";
@@ -262,19 +262,7 @@ export function AgentsView() {
   async function handleCatalogSharedChange(persona: AgentPersona, shared: boolean): Promise<void> {
     try {
       await savePersona(
-        {
-          displayName: persona.displayName,
-          systemPrompt: persona.systemPrompt,
-          avatarUrl: persona.avatarUrl ?? undefined,
-          runtime: persona.runtime ?? undefined,
-          model: persona.model ?? undefined,
-          provider: persona.provider ?? undefined,
-          respondTo: (persona.respondTo as RespondTo | null) ?? "anyone",
-          respondToAllowlist: persona.respondToAllowlist,
-          parallelism: persona.parallelism ?? undefined,
-          namePool: persona.namePool,
-          shared,
-        },
+        personaToFormInput(persona, shared),
         persona.id,
         personas.map((p) => p.id),
       );

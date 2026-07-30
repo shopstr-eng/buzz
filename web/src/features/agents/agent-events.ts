@@ -56,6 +56,43 @@ export interface PersonaFormInput {
   shared: boolean;
 }
 
+/**
+ * Map a stored persona back to the form input used when republishing it —
+ * e.g. the catalog share toggle, which flips `shared` and republishes the
+ * FULL record. Every persona field the write contract carries must survive
+ * this mapping verbatim, or toggling share would silently strip
+ * desktop-authored settings (name_pool, parallelism, allowlist, …).
+ */
+export function personaToFormInput(
+  persona: {
+    displayName: string;
+    systemPrompt: string;
+    avatarUrl: string | null;
+    runtime: string | null;
+    model: string | null;
+    provider: string | null;
+    respondTo: string | null;
+    respondToAllowlist: string[];
+    parallelism: number | null;
+    namePool: string[];
+  },
+  shared: boolean,
+): PersonaFormInput {
+  return {
+    displayName: persona.displayName,
+    systemPrompt: persona.systemPrompt,
+    avatarUrl: persona.avatarUrl ?? undefined,
+    runtime: persona.runtime ?? undefined,
+    model: persona.model ?? undefined,
+    provider: persona.provider ?? undefined,
+    respondTo: (persona.respondTo as RespondTo | null) ?? "anyone",
+    respondToAllowlist: persona.respondToAllowlist,
+    parallelism: persona.parallelism ?? undefined,
+    namePool: persona.namePool,
+    shared,
+  };
+}
+
 function opt(payload: Record<string, unknown>, key: string, value: string | undefined): void {
   const v = value?.trim();
   if (v) payload[key] = v;

@@ -10,6 +10,7 @@ import {
   slugifyPersonaName,
   ensureUniqueSlug,
   buildPersonaEvent,
+  personaToFormInput,
   buildTeamEvent,
   buildManagedAgentEvent,
   buildDirectoryDeleteEvent,
@@ -108,6 +109,70 @@ describe("buildPersonaEvent", () => {
   it("omits parallelism of 1 (desktop default)", () => {
     const c = JSON.parse(buildPersonaEvent({ ...base, parallelism: 1 }, "s", NOW).content);
     expect(c).not.toHaveProperty("parallelism");
+  });
+
+  it("share toggle round-trip is byte-identical except the shared tag", () => {
+    // Full desktop-authored persona, incl. contract fields the web UI never edits.
+    const full = {
+      displayName: "Support Bot",
+      systemPrompt: "You help users.",
+      avatarUrl: "https://x.test/a.png",
+      runtime: "buzz-agent",
+      model: "claude-opus-4-5",
+      provider: "anthropic",
+      respondTo: "allowlist" as const,
+      respondToAllowlist: [OWNER],
+      parallelism: 3,
+      namePool: ["alpha", "beta"],
+    };
+
+    for (const [before, after] of [
+      [false, true],
+      [true, false],
+    ] as const) {
+      const original = buildPersonaEvent({ ...full, shared: before }, "support-bot", NOW);
+      // Stored persona as the directory hook exposes it (nulls for absent).
+      const stored = {
+        displayName: full.displayName,
+        systemPrompt: full.systemPrompt,
+        avatarUrl: full.avatarUrl,
+        runtime: full.runtime,
+        model: full.model,
+        provider: full.provider,
+        respondTo: full.respondTo,
+        respondToAllowlist: full.respondToAllowlist,
+        parallelism: full.parallelism,
+        namePool: full.namePool,
+      };
+      const toggled = buildPersonaEvent(personaToFormInput(stored, after), "support-bot", NOW);
+
+      // Byte-identical payload — no desktop-authored field may be dropped.
+      expect(toggled.content).toBe(original.content);
+      expect(toggled.kind).toBe(original.kind);
+      // Tags differ only by the shared marker.
+      const strip = (tags: string[][]) => tags.filter((t) => t[0] !== "shared");
+      expect(strip(toggled.tags)).toEqual(strip(original.tags));
+      expect(toggled.tags.some((t) => t[0] === "shared" && t[1] === "true")).toBe(after);
+    }
+  });
+
+  it("share toggle round-trip preserves a minimal persona (nulls/empties)", () => {
+    const original = buildPersonaEvent(base, "s", NOW);
+    const stored = {
+      displayName: base.displayName,
+      systemPrompt: base.systemPrompt,
+      avatarUrl: null,
+      runtime: null,
+      model: null,
+      provider: null,
+      respondTo: null, // hook yields null; toggle must default to "anyone"
+      respondToAllowlist: [],
+      parallelism: null,
+      namePool: [],
+    };
+    const toggled = buildPersonaEvent(personaToFormInput(stored, true), "s", NOW);
+    expect(toggled.content).toBe(original.content);
+    expect(toggled.tags).toEqual([...original.tags, ["shared", "true"]]);
   });
 
   it("preserves name_pool verbatim (desktop contract field)", () => {
