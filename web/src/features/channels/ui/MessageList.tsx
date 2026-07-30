@@ -42,6 +42,7 @@ interface Props {
   memberProfiles?: Map<string, import("@/shared/hooks/use-profiles").Profile>;
   /** Import a fetched .agent.json snapshot shared into the chat */
   onImportAgent?: (jsonText: string) => Promise<void>;
+  onImportTeam?: (jsonText: string) => Promise<void>;
 }
 
 /** shortKey matches the format inserted by MessageComposer: 8hex + … + 4hex */
@@ -125,6 +126,7 @@ export function MessageList({
   customEmojiUrls,
   memberProfiles,
   onImportAgent,
+  onImportTeam,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -294,6 +296,7 @@ export function MessageList({
             onUnban={onUnban ? () => onUnban(msg) : undefined}
             onUntimeout={onUntimeout ? () => onUntimeout(msg) : undefined}
             onImportAgent={onImportAgent}
+            onImportTeam={onImportTeam}
             replyToMessage={
               replyToMsg
                 ? {

@@ -22,7 +22,7 @@ export interface ImetaEntry {
   filename?: string;
 }
 
-export type AttachmentKind = "agent-snapshot" | "file";
+export type AttachmentKind = "agent-snapshot" | "team-snapshot" | "file";
 
 export interface MessageAttachment {
   url: string;
@@ -68,6 +68,8 @@ const MD_LINK_RE = /(!?)\[((?:\\.|[^\]\\])*)\]\((https?:\/\/[^\s)]+)\)/g;
 /** Snapshot filenames the send side produces (desktop + web share flows). */
 const SNAPSHOT_EXT_RE = /\.(agent|team)\.(json|png)$/i;
 const AGENT_JSON_RE = /\.agent\.json$/i;
+// .team.png stays a plain file card — the web has no PNG tEXt-chunk decoder.
+const TEAM_JSON_RE = /\.team\.json$/i;
 
 function unescapeLabel(label: string): string {
   return label.replace(/\\([\\[\]])/g, "$1");
@@ -170,7 +172,11 @@ export function extractAttachments(
       attachments.push({
         url,
         name,
-        kind: AGENT_JSON_RE.test(name) ? "agent-snapshot" : "file",
+        kind: AGENT_JSON_RE.test(name)
+          ? "agent-snapshot"
+          : TEAM_JSON_RE.test(name)
+            ? "team-snapshot"
+            : "file",
         mime: entry?.mime,
         size: entry?.size,
         sha256: entry?.sha256,

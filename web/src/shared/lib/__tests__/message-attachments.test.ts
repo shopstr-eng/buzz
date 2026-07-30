@@ -58,6 +58,20 @@ describe("extractAttachments", () => {
     expect(attachments[0].kind).toBe("agent-snapshot");
   });
 
+  it("classifies .team.json links as team-snapshot", () => {
+    const url = "https://media.example/blob/ops.team.json";
+    const { attachments } = extractAttachments(`[Ops.team.json](${url})`);
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].kind).toBe("team-snapshot");
+  });
+
+  it("keeps .team.png as a plain file card (no web PNG decoder)", () => {
+    const url = "https://media.example/blob/ops.team.png";
+    const { attachments } = extractAttachments(`[Ops.team.png](${url})`);
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].kind).toBe("file");
+  });
+
   it("treats non-agent imeta files as generic file attachments", () => {
     const url = "https://media.example/blob/report.pdf";
     const { attachments } = extractAttachments(`[report.pdf](${url})`, [

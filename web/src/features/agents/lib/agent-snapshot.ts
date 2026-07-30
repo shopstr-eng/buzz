@@ -153,6 +153,16 @@ export function parseSnapshot(jsonText: string): SnapshotParseResult {
   } catch {
     return { ok: false, error: "File is not valid JSON." };
   }
+  return validateSnapshotObject(parsed);
+}
+
+/**
+ * Object-level validation of an already-parsed agent snapshot. Shared by
+ * `parseSnapshot` (whole-file .agent.json) and the team-snapshot parser
+ * (per-member validation), mirroring desktop's validate_snapshot +
+ * validate_member_memory_consistency.
+ */
+export function validateSnapshotObject(parsed: unknown): SnapshotParseResult {
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return { ok: false, error: "File is not a snapshot object." };
   }

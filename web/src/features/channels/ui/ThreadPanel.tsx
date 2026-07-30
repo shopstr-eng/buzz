@@ -34,6 +34,7 @@ interface Props {
   onClose: () => void;
   /** Import a fetched .agent.json snapshot shared into the chat */
   onImportAgent?: (jsonText: string) => Promise<void>;
+  onImportTeam?: (jsonText: string) => Promise<void>;
 }
 
 /** Collect root + all descendants by walking replyToId chains. */
@@ -72,6 +73,7 @@ export function ThreadPanel({
   onSend,
   onClose,
   onImportAgent,
+  onImportTeam,
 }: Props) {
   const threadMessages = useMemo(() => collectThread(root, messages), [root, messages]);
   const [sending, setSending] = useState(false);
@@ -121,6 +123,7 @@ export function ThreadPanel({
               customEmoji={customEmoji}
               customEmojiUrls={customEmojiUrls}
               onImportAgent={onImportAgent}
+              onImportTeam={onImportTeam}
             />
           </div>
         ))}

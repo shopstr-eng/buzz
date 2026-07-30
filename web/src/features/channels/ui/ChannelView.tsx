@@ -22,6 +22,7 @@ import { useModeration } from "../../moderation/use-moderation";
 import { ForumView } from "../../forum/ui/ForumView";
 import { useAgentWorking } from "../../agents/use-agent-frames";
 import { useAgentSnapshotImport } from "../../agents/use-agent-snapshot-import";
+import { useTeamSnapshotImport } from "../../agents/use-team-snapshot-import";
 import { CanvasView } from "../../canvas/ui/CanvasView";
 import { WorkflowChannelView } from "./WorkflowChannelView";
 import type { Channel, ChannelType, ChatMessage } from "../types";
@@ -74,6 +75,7 @@ function ChatChannelView({ channel }: Props) {
   const { reactions, addReaction } = useReactions(channel.groupId, identity?.pubkey);
   const { customEmoji, customEmojiUrls } = useCustomEmoji();
   const { importSnapshot } = useAgentSnapshotImport();
+  const { importTeamSnapshot } = useTeamSnapshotImport();
   const [membersPanelOpen, setMembersPanelOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editing, setEditing] = useState<ChatMessage | null>(null);
@@ -238,6 +240,7 @@ function ChatChannelView({ channel }: Props) {
           onEdit={(msg) => { setEditing(msg); setReplyTo(null); }}
           onDelete={(msg) => void deleteMessage(msg.id)}
           onImportAgent={async (jsonText) => { await importSnapshot(jsonText); }}
+          onImportTeam={async (jsonText) => { await importTeamSnapshot(jsonText); }}
           onOpenThread={(msg) => setThreadRoot(msg)}
           onRemind={(msg) => setRemindTarget(msg)}
           canModerate={canModerate}
@@ -331,6 +334,7 @@ function ChatChannelView({ channel }: Props) {
           customEmoji={customEmoji}
           customEmojiUrls={customEmojiUrls}
           onImportAgent={async (jsonText) => { await importSnapshot(jsonText); }}
+          onImportTeam={async (jsonText) => { await importTeamSnapshot(jsonText); }}
           onSend={(content, replyToId, mentions) => send(content, replyToId, mentions)}
           onClose={() => setThreadRoot(null)}
         />

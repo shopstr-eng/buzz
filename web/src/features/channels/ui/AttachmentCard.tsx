@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { Bot, Check, Download, FileText, Loader2 } from "lucide-react";
+import { Bot, Check, Download, FileText, Loader2, Users } from "lucide-react";
 import { humanFileSize, type MessageAttachment } from "@/shared/lib/message-attachments";
 import { MAX_SNAPSHOT_JSON_BYTES } from "@/features/agents/lib/agent-snapshot";
 
@@ -40,22 +40,27 @@ type ImportState = "idle" | "importing" | "done";
 export function AttachmentCard({
   attachment,
   onImportAgent,
+  onImportTeam,
 }: {
   attachment: MessageAttachment;
   /** Import a fetched .agent.json snapshot; throws with a user-facing message. */
   onImportAgent?: (jsonText: string) => Promise<void>;
+  /** Import a fetched .team.json snapshot; throws with a user-facing message. */
+  onImportTeam?: (jsonText: string) => Promise<void>;
 }) {
   const [importState, setImportState] = useState<ImportState>("idle");
   const [importError, setImportError] = useState<string | null>(null);
   const isAgentSnapshot = attachment.kind === "agent-snapshot";
-  const Icon = isAgentSnapshot ? Bot : FileText;
+  const isTeamSnapshot = attachment.kind === "team-snapshot";
+  const Icon = isAgentSnapshot ? Bot : isTeamSnapshot ? Users : FileText;
+  const importFn = isAgentSnapshot ? onImportAgent : isTeamSnapshot ? onImportTeam : undefined;
 
   async function handleImport() {
-    if (!onImportAgent || importState !== "idle") return;
+    if (!importFn || importState !== "idle") return;
     setImportState("importing");
     setImportError(null);
     try {
-      await onImportAgent(await fetchSnapshotText(attachment));
+      await importFn(await fetchSnapshotText(attachment));
       setImportState("done");
     } catch (e) {
       setImportError(e instanceof Error ? e.message : "Import failed.");
@@ -90,7 +95,7 @@ export function AttachmentCard({
             {attachment.name}
           </a>
           <span className="text-[10px] text-black/40 dark:text-white/40">
-            {isAgentSnapshot ? "Agent snapshot" : "File"}
+            {isAgentSnapshot ? "Agent snapshot" : isTeamSnapshot ? "Team snapshot" : "File"}
             {attachment.size ? ` · ${humanFileSize(attachment.size)}` : ""}
           </span>
         </div>
@@ -104,7 +109,7 @@ export function AttachmentCard({
         >
           <Download className="h-3.5 w-3.5" />
         </a>
-        {isAgentSnapshot && onImportAgent && (
+        {importFn && (
           <button
             type="button"
             onClick={() => void handleImport()}
@@ -113,7 +118,13 @@ export function AttachmentCard({
           >
             {importState === "importing" && <Loader2 className="h-3 w-3 animate-spin" />}
             {importState === "done" && <Check className="h-3 w-3" />}
-            {importState === "done" ? "Added" : importState === "importing" ? "Adding…" : "Add agent"}
+            {importState === "done"
+              ? "Added"
+              : importState === "importing"
+                ? "Adding…"
+                : isTeamSnapshot
+                  ? "Add team"
+                  : "Add agent"}
           </button>
         )}
       </div>

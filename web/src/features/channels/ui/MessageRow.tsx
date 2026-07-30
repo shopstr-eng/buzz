@@ -57,6 +57,8 @@ interface Props {
   mentionNames?: Map<string, string>;
   /** Import a fetched .agent.json snapshot shared into the chat */
   onImportAgent?: (jsonText: string) => Promise<void>;
+  /** Import a fetched .team.json snapshot shared into the chat */
+  onImportTeam?: (jsonText: string) => Promise<void>;
 }
 
 function avatarColor(pubkey: string): string {
@@ -536,6 +538,7 @@ export function MessageRow({
   replyToProfile,
   mentionNames,
   onImportAgent,
+  onImportTeam,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -638,7 +641,7 @@ export function MessageRow({
         ))}
 
         {attachments.map((att) => (
-          <AttachmentCard key={att.url} attachment={att} onImportAgent={onImportAgent} />
+          <AttachmentCard key={att.url} attachment={att} onImportAgent={onImportAgent} onImportTeam={onImportTeam} />
         ))}
 
         {reactions && onAddReaction && (
