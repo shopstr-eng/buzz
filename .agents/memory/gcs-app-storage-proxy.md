@@ -31,6 +31,13 @@ The Replit sidecar returns `{"bucketId":""}` if no App Storage bucket is provisi
 2. Create a new bucket for this repl
 3. Redeploy — the proxy will then get a real bucket ID from the sidecar
 
+## Deploy-environment reality check (2026-07-30 publish failure)
+
+The sidecar at 127.0.0.1:1106 serves its HTTP API in the DEV container but NOT in the autoscale deploy container (TCP accepts, HTTP gets "other side closed"). Replit docs say deployments receive GCS credentials automatically for the official SDKs and "you do not need to manually configure sidecars or custom credential endpoints" — the 1106 pattern is unverified/unsupported in deployments. Provisioning the bucket alone may NOT fix the proxy; the durable fix likely requires sourcing credentials the way the official SDK does (deployment-injected env), not from 1106.
+
+**Why:** a publish failed at the promote step because the proxy's `getBucketId` fetch died and the boot script exited 1 — startup probe never got a 200.
+**How to apply:** the boot script now falls back to ephemeral MinIO (loud WARNINGs, `_GCS_FALLBACK_MINIO`) instead of failing the publish; media wipes on redeploy until durable storage is restored. Don't extend the 1106 sidecar design for prod without proving it serves in a real deployment first — test in the deploy env, not dev.
+
 ## BUZZ_STORAGE_METRICS
 
 Currently set to `"off"` in `.replit`. Can be re-enabled after the production bucket is confirmed working (the storage sweep uses `list_page` which goes through the proxy → GCS list API).

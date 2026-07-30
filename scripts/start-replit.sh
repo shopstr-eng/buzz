@@ -241,7 +241,7 @@ if [[ ( -z "${REPLIT_DEPLOYMENT:-}" || "${_GCS_FALLBACK_MINIO:-false}" == true )
   if [[ ! -x "${MINIO_BIN}" ]]; then
     echo "==> Downloading MinIO server binary..."
     mkdir -p bin-media
-    curl -fsSL -o "${MINIO_BIN}" https://dl.min.io/server/minio/release/linux-amd64/minio \
+    curl -fsSL --connect-timeout 10 --max-time 180 -o "${MINIO_BIN}" https://dl.min.io/server/minio/release/linux-amd64/minio \
       && chmod +x "${MINIO_BIN}" \
       || echo "==> WARNING: MinIO download failed — media uploads will not work." >&2
   fi
