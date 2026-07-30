@@ -16,6 +16,7 @@
 
 import type { AgentPersona } from "../use-agents";
 import type { PersonaFormInput, RespondTo } from "../agent-events";
+import type { MemoryGraph } from "./engrams";
 
 export const SNAPSHOT_FORMAT = "buzz-agent-snapshot";
 export const SNAPSHOT_VERSION = 1;
@@ -49,6 +50,15 @@ export interface SnapshotProfile {
   avatarUrl?: string;
 }
 
+/** Desktop MemoryLevel — how much decrypted memory a snapshot bundles. */
+export type SnapshotMemoryLevel = "none" | "core" | "everything";
+
+/** Desktop AgentSnapshotMemoryEntry (camelCase serde): plaintext engram. */
+export interface SnapshotMemoryEntry {
+  slug: string;
+  body: string;
+}
+
 export interface AgentSnapshot {
   format: string;
   version: number;
@@ -57,12 +67,38 @@ export interface AgentSnapshot {
   memory: { level: string; entries: unknown[] };
 }
 
+/**
+ * Pick the engram entries a snapshot should carry at `level`, mirroring the
+ * desktop export exactly (commands/personas/snapshot.rs): `core` bundles the
+ * core entry only; `everything` bundles core first, then ALL live non-core
+ * entries sorted by slug — including nodes unreachable from core (orphans).
+ * Tombstones never appear (the graph already drops them).
+ */
+export function selectMemoryEntries(
+  graph: MemoryGraph,
+  level: SnapshotMemoryLevel,
+): SnapshotMemoryEntry[] {
+  if (level === "none") return [];
+  const entries: SnapshotMemoryEntry[] = [];
+  if (graph.core) entries.push({ slug: "core", body: graph.core.text });
+  if (level === "everything") {
+    const rest = [...graph.reachable.values(), ...graph.orphans]
+      .filter((n) => n.slug !== "core")
+      .sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0));
+    for (const n of rest) entries.push({ slug: n.slug, body: n.text });
+  }
+  return entries;
+}
+
 function byteLength(s: string): number {
   return new TextEncoder().encode(s).length;
 }
 
 /** Export: build a portable snapshot from a directory persona. */
-export function buildSnapshot(persona: AgentPersona): AgentSnapshot {
+export function buildSnapshot(
+  persona: AgentPersona,
+  memory?: { level: SnapshotMemoryLevel; entries: SnapshotMemoryEntry[] },
+): AgentSnapshot {
   const definition: SnapshotDefinition = {
     name: persona.displayName,
     systemPrompt: persona.systemPrompt,
@@ -87,13 +123,18 @@ export function buildSnapshot(persona: AgentPersona): AgentSnapshot {
     }
   }
 
-  // Web personas carry no engrams; memory round-trips as an empty "none" block.
+  // Desktop invariant: level "none" never carries entries (agent_snapshot.rs
+  // rejects that combination on write). Normalize rather than trust callers.
+  const level = memory?.level ?? "none";
   return {
     format: SNAPSHOT_FORMAT,
     version: SNAPSHOT_VERSION,
     definition,
     profile,
-    memory: { level: "none", entries: [] },
+    memory:
+      level === "none"
+        ? { level: "none", entries: [] }
+        : { level, entries: memory?.entries ?? [] },
   };
 }
 

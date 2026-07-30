@@ -48,8 +48,10 @@ export function PersonaDialog({
     (existing?.respondTo as RespondTo | null) ?? "anyone",
   );
   const [allowlistText, setAllowlistText] = useState((existing?.respondToAllowlist ?? []).join("\n"));
-  const [shared, setShared] = useState(existing?.shared ?? false);
   const [localError, setLocalError] = useState<string | null>(null);
+  // Catalog sharing moved to the dedicated share dialog (desktop parity,
+  // upstream #3699) — edits preserve the current shared state verbatim.
+  const shared = existing?.shared ?? false;
   // Desktop-contract fields the dialog doesn't edit — preserved verbatim so
   // saving a desktop-authored persona from web doesn't strip them.
   const namePool = existing?.namePool;
@@ -138,15 +140,10 @@ export function PersonaDialog({
             />
           </div>
         )}
-        <label className="flex items-start gap-2 text-xs text-black/60 dark:text-white/60">
-          <input type="checkbox" className="mt-0.5" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-          <span>
-            Share to the community agent catalog
-            <span className="block text-[10px] text-black/35 dark:text-white/35">
-              Other members can read this persona. Secrets are never published.
-            </span>
-          </span>
-        </label>
+        <p className="text-[10px] text-black/35 dark:text-white/35">
+          Community catalog sharing lives in the persona’s share dialog (the
+          share icon on its card).
+        </p>
       </div>
       <div className="flex justify-end gap-2 border-t border-black/8 px-5 py-3 dark:border-white/8">
         <button className={btnSecondaryCls} onClick={onClose}>Cancel</button>

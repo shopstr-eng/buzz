@@ -6,8 +6,10 @@ import {
   SNAPSHOT_FORMAT,
   SNAPSHOT_VERSION,
   MAX_SNAPSHOT_JSON_BYTES,
+  selectMemoryEntries,
   type AgentSnapshot,
 } from "../lib/agent-snapshot";
+import { buildMemoryGraph, type EngramEntry } from "../lib/engrams";
 import type { AgentPersona } from "../use-agents";
 
 const PERSONA: AgentPersona = {
@@ -76,6 +78,60 @@ describe("buildSnapshot", () => {
       systemPrompt: "You research things.",
       sourceIsBuiltin: false,
     });
+  });
+});
+
+function engram(slug: string, text: string): EngramEntry {
+  return {
+    id: "e".repeat(64),
+    agentPubkey: "a".repeat(64),
+    dTag: slug,
+    createdAt: 1,
+    body:
+      slug === "core"
+        ? { slug, value: null, profile: text }
+        : { slug, value: text, profile: null },
+  };
+}
+
+describe("memory-bearing snapshots (desktop share-dialog parity)", () => {
+  const graph = buildMemoryGraph([
+    engram("core", "Core profile. See [[mem/linked]]."),
+    engram("mem/linked", "Reachable from core."),
+    engram("mem/orphan", "Not linked from core."),
+  ]);
+
+  it("selectMemoryEntries: core level bundles only the core entry", () => {
+    expect(selectMemoryEntries(graph, "core")).toEqual([
+      { slug: "core", body: "Core profile. See [[mem/linked]]." },
+    ]);
+  });
+
+  it("selectMemoryEntries: everything bundles core first, then ALL live entries (orphans included) sorted by slug", () => {
+    expect(selectMemoryEntries(graph, "everything").map((e) => e.slug)).toEqual([
+      "core",
+      "mem/linked",
+      "mem/orphan",
+    ]);
+  });
+
+  it("selectMemoryEntries: none is always empty", () => {
+    expect(selectMemoryEntries(graph, "none")).toEqual([]);
+  });
+
+  it("buildSnapshot embeds the entries at the requested level and round-trips through parseSnapshot", () => {
+    const entries = selectMemoryEntries(graph, "everything");
+    const s = buildSnapshot(PERSONA, { level: "everything", entries });
+    expect(s.memory).toEqual({ level: "everything", entries });
+    expect(parseSnapshot(JSON.stringify(s)).ok).toBe(true);
+  });
+
+  it("buildSnapshot normalizes level 'none' to empty entries (desktop write invariant)", () => {
+    const s = buildSnapshot(PERSONA, {
+      level: "none",
+      entries: [{ slug: "core", body: "should be dropped" }],
+    });
+    expect(s.memory).toEqual({ level: "none", entries: [] });
   });
 });
 

@@ -11,25 +11,28 @@
 import { useRef, useState } from "react";
 import {
   Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign,
-  Plus, Pencil, Trash2, Download, Upload, Brain, Globe,
+  Plus, Pencil, Trash2, Upload, Brain, Globe, Share2,
 } from "lucide-react";
 import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-agents";
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
 import { useAgentPublishing } from "../use-agent-publishing";
-import { buildSnapshot, parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
+import type { RespondTo } from "../agent-events";
+import { parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
 import { useEngrams } from "../use-engrams";
 import { MemorySection } from "./MemorySection";
 import { useAgentCatalog } from "../use-agent-catalog";
 import { catalogToPersonaInput, type CatalogPersona } from "../lib/agent-catalog";
 import { CatalogSection } from "./CatalogSection";
 import { PersonaDialog } from "./PersonaDialog";
+import { PersonaShareDialog } from "./PersonaShareDialog";
 import { TeamDialog } from "./TeamDialog";
 import { ManagedAgentDialog } from "./ManagedAgentDialog";
 import { truncatePubkey } from "@/shared/lib/pubkey";
 
 type DialogState =
   | { type: "persona"; existing: AgentPersona | null }
+  | { type: "personaShare"; personaId: string }
   | { type: "team"; existing: AgentTeam | null }
   | { type: "agent" }
   | null;
@@ -41,12 +44,12 @@ function PersonaCard({
   persona,
   onEdit,
   onDelete,
-  onExport,
+  onShare,
 }: {
   persona: AgentPersona;
   onEdit: () => void;
   onDelete: () => void;
-  onExport: () => void;
+  onShare: () => void;
 }) {
   return (
     <div className="rounded-lg border border-black/10 bg-white p-3 dark:border-white/10 dark:bg-[#1A1A1A]">
@@ -71,11 +74,11 @@ function PersonaCard({
         </div>
         <button
           className={iconBtnCls}
-          onClick={onExport}
-          aria-label={`Export ${persona.displayName} as snapshot`}
-          title="Export .agent.json snapshot"
+          onClick={onShare}
+          aria-label={`Share ${persona.displayName}`}
+          title="Share — catalog, memory levels, export"
         >
-          <Download className="h-3.5 w-3.5" />
+          <Share2 className="h-3.5 w-3.5" />
         </button>
         <button className={iconBtnCls} onClick={onEdit} aria-label={`Edit ${persona.displayName}`}>
           <Pencil className="h-3.5 w-3.5" />
@@ -240,7 +243,7 @@ export function AgentsView() {
       setAddingCatalogId(null);
     }
   }
-  const { savePersona, deletePersona, deleteTeam, deleteManagedAgent, error: publishError } = useAgentPublishing();
+  const { savePersona, deletePersona, deleteTeam, deleteManagedAgent, isPublishing, error: publishError } = useAgentPublishing();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -251,16 +254,33 @@ export function AgentsView() {
     }
   }
 
-  /** Download a persona as a portable .agent.json snapshot (desktop contract). */
-  function handleExport(persona: AgentPersona): void {
-    const snapshot = buildSnapshot(persona);
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${persona.id}.agent.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  /**
+   * Flip a persona's catalog-shared flag by republishing its full record with
+   * the shared tag toggled — same kind:30175 write contract as an edit, so
+   * all desktop-contract fields (namePool, parallelism, allowlist) survive.
+   */
+  async function handleCatalogSharedChange(persona: AgentPersona, shared: boolean): Promise<void> {
+    try {
+      await savePersona(
+        {
+          displayName: persona.displayName,
+          systemPrompt: persona.systemPrompt,
+          avatarUrl: persona.avatarUrl ?? undefined,
+          runtime: persona.runtime ?? undefined,
+          model: persona.model ?? undefined,
+          provider: persona.provider ?? undefined,
+          respondTo: (persona.respondTo as RespondTo | null) ?? "anyone",
+          respondToAllowlist: persona.respondToAllowlist,
+          parallelism: persona.parallelism ?? undefined,
+          namePool: persona.namePool,
+          shared,
+        },
+        persona.id,
+        personas.map((p) => p.id),
+      );
+    } catch {
+      // surfaced via publishError (passed into the share dialog)
+    }
   }
 
   /**
@@ -336,7 +356,7 @@ export function AgentsView() {
                 persona={p}
                 onEdit={() => setDialog({ type: "persona", existing: p })}
                 onDelete={() => confirmDelete(`persona "${p.displayName}"`, () => deletePersona(p.id))}
-                onExport={() => handleExport(p)}
+                onShare={() => setDialog({ type: "personaShare", personaId: p.id })}
               />
             ))}
           </div>
@@ -460,6 +480,23 @@ export function AgentsView() {
         )}
       </Section>
 
+      {dialog?.type === "personaShare" && (() => {
+        // Resolve the live persona each render so the catalog toggle reflects
+        // the relay echo after a shared flip; close if it was deleted.
+        const persona = personas.find((p) => p.id === dialog.personaId);
+        if (!persona) return null;
+        const linkedAgent = agents.find((a) => a.personaId === persona.id);
+        return (
+          <PersonaShareDialog
+            persona={persona}
+            memoryGraph={linkedAgent ? (memoryByAgent.get(linkedAgent.pubkey) ?? null) : null}
+            isPublishing={isPublishing}
+            publishError={publishError}
+            onCatalogSharedChange={(shared) => void handleCatalogSharedChange(persona, shared)}
+            onClose={() => setDialog(null)}
+          />
+        );
+      })()}
       {dialog?.type === "persona" && (
         <PersonaDialog
           existing={dialog.existing}
