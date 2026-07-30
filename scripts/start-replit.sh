@@ -140,17 +140,97 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 1b. Start MinIO (background) — S3-compatible store for media uploads.
-# The relay's media pipeline (PUT /upload) writes blobs to S3; without a
-# local MinIO every upload 500s. Binary lives at bin-media/minio (gitignored);
-# downloaded on first boot. Loopback-only, dev credentials.
+# 1b. Media storage (S3-compatible).
+#
+# Priority order:
+#   1. External S3-compatible bucket: set BUZZ_S3_ENDPOINT (non-loopback),
+#      BUZZ_S3_ACCESS_KEY, BUZZ_S3_SECRET_KEY, BUZZ_S3_BUCKET as secrets.
+#      Works in both dev and prod.
+#   2. Replit App Storage (prod default): when REPLIT_DEPLOYMENT is set and
+#      no external S3 endpoint is configured, start the GCS-S3 proxy sidecar
+#      (scripts/gcs-s3-proxy.mjs) which talks to the Replit-provisioned GCS
+#      bucket via the platform sidecar at 127.0.0.1:1106. Zero configuration
+#      required — the bucket ID and credentials come from the sidecar.
+#   3. Local MinIO (dev fallback): when neither of the above apply, download
+#      and start MinIO with ephemeral .minio-data/. DEV ONLY — data is wiped
+#      on every redeploy.
+#
+# In production, the GCS proxy is preferred over external S3 because it
+# requires no secrets. Supply BUZZ_S3_ENDPOINT to override with your own
+# bucket (e.g. Cloudflare R2, AWS S3, Backblaze B2).
 # ---------------------------------------------------------------------------
+
+# Dev defaults. Any value already set in the environment still wins.
 export BUZZ_S3_ENDPOINT="${BUZZ_S3_ENDPOINT:-http://127.0.0.1:9000}"
 export BUZZ_S3_ACCESS_KEY="${BUZZ_S3_ACCESS_KEY:-buzz_dev}"
 export BUZZ_S3_SECRET_KEY="${BUZZ_S3_SECRET_KEY:-buzz_dev_secret}"
 export BUZZ_S3_BUCKET="${BUZZ_S3_BUCKET:-buzz-media}"
 
-if [[ "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:9000" ]]; then
+_GCS_PROXY_PID=""
+
+if [[ -n "${REPLIT_DEPLOYMENT:-}" && "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:9000" ]]; then
+  # Production with no external S3 configured: use Replit App Storage via the
+  # GCS-S3 proxy. Check that the Replit sidecar is reachable first.
+  SIDECAR_OK=false
+  for _i in $(seq 1 10); do
+    if (exec 3<>/dev/tcp/127.0.0.1/1106) 2>/dev/null; then
+      SIDECAR_OK=true; break
+    fi
+    sleep 0.5
+  done
+
+  if [[ "${SIDECAR_OK}" == true ]]; then
+    echo "==> Starting GCS-S3 proxy (Replit App Storage) on 127.0.0.1:9000..."
+    # REPO_ROOT is not yet set here (it's defined later in the script); use
+    # $(pwd) which is the repo root (set by the cd at the top of this script).
+    node "$(pwd)/scripts/gcs-s3-proxy.mjs" &
+    _GCS_PROXY_PID=$!
+
+    # Wait for the proxy to be ready, but also watch for early exit.
+    # The proxy exits immediately when the App Storage bucket is not provisioned
+    # (sidecar returns empty bucketId); detect that case and fail the boot.
+    _proxy_ready=false
+    for _i in $(seq 1 20); do
+      # If the proxy process has already exited, no point waiting further.
+      if ! kill -0 "${_GCS_PROXY_PID}" 2>/dev/null; then
+        break
+      fi
+      if (exec 3<>/dev/tcp/127.0.0.1/9000) 2>/dev/null; then
+        _proxy_ready=true
+        break
+      fi
+      sleep 0.5
+    done
+
+    if [[ "${_proxy_ready}" != true ]]; then
+      echo "==> FATAL: GCS-S3 proxy failed to start." >&2
+      echo "==> Most likely cause: no App Storage bucket is provisioned for this Repl." >&2
+      echo "==> To fix: open the App Storage tool in the Replit editor, create a bucket," >&2
+      echo "==> then redeploy. Alternatively, set BUZZ_S3_ENDPOINT / BUZZ_S3_ACCESS_KEY /" >&2
+      echo "==> BUZZ_S3_SECRET_KEY / BUZZ_S3_BUCKET as production secrets to use an" >&2
+      echo "==> external S3-compatible bucket (Cloudflare R2, AWS S3, Backblaze B2)." >&2
+      exit 1
+    fi
+    echo "==> GCS-S3 proxy started (PID ${_GCS_PROXY_PID})."
+
+    # Credentials are ignored by the proxy (it uses the sidecar token), but
+    # the relay's S3 client requires non-empty values to build its client.
+    export BUZZ_S3_ACCESS_KEY="gcs_proxy"
+    export BUZZ_S3_SECRET_KEY="gcs_proxy_secret"
+  else
+    echo "==> FATAL: production deployment — no durable media storage available." >&2
+    echo "==> The Replit sidecar at 127.0.0.1:1106 is not reachable." >&2
+    echo "==> Either the App Storage bucket is not provisioned (create one in the" >&2
+    echo "==> App Storage tool), or supply BUZZ_S3_ENDPOINT / BUZZ_S3_ACCESS_KEY /" >&2
+    echo "==> BUZZ_S3_SECRET_KEY / BUZZ_S3_BUCKET as production secrets pointing" >&2
+    echo "==> at an external S3-compatible bucket (Cloudflare R2, AWS S3, etc.)." >&2
+    echo "==> The local MinIO fallback is dev-only: its data dir is ephemeral and" >&2
+    echo "==> every redeploy would wipe all uploaded photos/videos." >&2
+    exit 1
+  fi
+fi
+
+if [[ -z "${REPLIT_DEPLOYMENT:-}" && "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:9000" ]]; then
   MINIO_BIN="bin-media/minio"
   if [[ ! -x "${MINIO_BIN}" ]]; then
     echo "==> Downloading MinIO server binary..."
@@ -531,13 +611,15 @@ RELAY_PID=""
 ACP_PID=""
 STOPPING=false
 
-# When the workflow is stopped, kill the watcher, relay, and ACP worker cleanly.
+# When the workflow is stopped, kill the watcher, relay, ACP worker, and GCS
+# proxy cleanly.
 _cleanup() {
   STOPPING=true
   [[ -n "$RELAY_PID" ]] && kill -TERM "$RELAY_PID" 2>/dev/null || true
   # shellcheck disable=SC2086 — ACP_PID may hold multiple PIDs (one worker per host).
   [[ -n "$ACP_PID"   ]] && kill -TERM $ACP_PID   2>/dev/null || true
   [[ -n "$WATCHER_PID" ]] && kill -TERM "$WATCHER_PID" 2>/dev/null || true
+  [[ -n "$_GCS_PROXY_PID" ]] && kill -TERM "$_GCS_PROXY_PID" 2>/dev/null || true
   rm -f /tmp/buzz-relay.pid /tmp/buzz-acp.pid
 }
 trap '_cleanup' SIGTERM SIGINT

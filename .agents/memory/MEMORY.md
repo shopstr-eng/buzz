@@ -8,3 +8,4 @@
 - [Keyless provider wiring](openrouter-keyless-provider.md) — OpenRouter sole keyless provider in standard app; Anthropic fallback removed 2026-07-29 (git history has it); keyless vs BYOK split on OPENAI_COMPAT_BASE_URL.
 - [NIP-46/NIP-49 web sign-in](nip46-nip49-signin.md) — bunker session in sessionStorage, ncryptsec→nsec at login, lazy restore + reload-on-dead-session; node nostr-tools harness quirks (no global WebSocket, NIP-11 at /).
 - [Agent typing but never responds](agent-typing-no-response.md) — symptom ⇒ response publish 403 (channel-membership, not LLM); kind:9000 repair via bridge; prod DB bytea/timestamptz query quirks.
+- [GCS App Storage proxy for media](gcs-app-storage-proxy.md) — Node.js S3-compatible proxy (scripts/gcs-s3-proxy.mjs) bridges rust-s3 to Replit App Storage via sidecar at 127.0.0.1:1106; dev keeps MinIO; bucket must be provisioned via App Storage tool before first prod deploy.
