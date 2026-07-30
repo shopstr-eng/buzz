@@ -35,7 +35,7 @@ export interface AgentMetricAggregate {
   lastTurnAt: number;
 }
 
-interface TurnMetricPayload {
+export interface TurnMetricPayload {
   harness?: string;
   model?: string;
   timestamp?: string;
@@ -45,7 +45,7 @@ interface TurnMetricPayload {
   turn_counts?: TokenCounts;
 }
 
-interface TokenCounts {
+export interface TokenCounts {
   // Producer serializes camelCase; snake_case kept as a compatibility fallback.
   inputTokens?: number | null;
   outputTokens?: number | null;
@@ -63,6 +63,44 @@ interface TokenCounts {
 
 function num(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * Fold one decrypted turn-metric payload into the per-(agent, model) aggregate.
+ *
+ * Exported for tests. Rules under regression:
+ * - `totalTokens` sums only genuine PER-TURN provider totals, with precedence
+ *   totalTokens > turnTotalTokens > total_tokens > turn_total_tokens.
+ * - Session-cumulative fields (e.g. accumulatedTotalTokens) are never summed —
+ *   doing so would overcount across turns.
+ * - When no per-turn total is present the contribution is 0 (never derived
+ *   from input+output here).
+ */
+export function foldTurnMetric(
+  existing: AgentMetricAggregate | undefined,
+  payload: TurnMetricPayload,
+  agentPubkey: string,
+  createdAt: number,
+): AgentMetricAggregate {
+  const counts = payload.turn ?? payload.usage ?? payload.turn_counts ?? {};
+  return {
+    agentPubkey,
+    model: payload.model ?? existing?.model ?? null,
+    harness: payload.harness ?? existing?.harness ?? null,
+    turns: (existing?.turns ?? 0) + 1,
+    inputTokens: (existing?.inputTokens ?? 0) + num(counts.inputTokens ?? counts.input_tokens),
+    outputTokens: (existing?.outputTokens ?? 0) + num(counts.outputTokens ?? counts.output_tokens),
+    totalTokens:
+      (existing?.totalTokens ?? 0) +
+      num(
+        counts.totalTokens ??
+          counts.turnTotalTokens ??
+          counts.total_tokens ??
+          counts.turn_total_tokens,
+      ),
+    costUsd: (existing?.costUsd ?? 0) + num(counts.costUsd ?? counts.cost_usd),
+    lastTurnAt: Math.max(existing?.lastTurnAt ?? 0, createdAt),
+  };
 }
 
 export function useAgentMetrics(): {
@@ -107,27 +145,11 @@ export function useAgentMetrics(): {
           return;
         }
 
-        const counts = payload.turn ?? payload.usage ?? payload.turn_counts ?? {};
         const mapKey = `${agentPubkey}:${payload.model ?? ""}`;
-        const existing = aggregates.get(mapKey);
-        aggregates.set(mapKey, {
-          agentPubkey,
-          model: payload.model ?? existing?.model ?? null,
-          harness: payload.harness ?? existing?.harness ?? null,
-          turns: (existing?.turns ?? 0) + 1,
-          inputTokens: (existing?.inputTokens ?? 0) + num(counts.inputTokens ?? counts.input_tokens),
-          outputTokens: (existing?.outputTokens ?? 0) + num(counts.outputTokens ?? counts.output_tokens),
-          totalTokens:
-            (existing?.totalTokens ?? 0) +
-            num(
-              counts.totalTokens ??
-                counts.turnTotalTokens ??
-                counts.total_tokens ??
-                counts.turn_total_tokens,
-            ),
-          costUsd: (existing?.costUsd ?? 0) + num(counts.costUsd ?? counts.cost_usd),
-          lastTurnAt: Math.max(existing?.lastTurnAt ?? 0, ev.created_at),
-        });
+        aggregates.set(
+          mapKey,
+          foldTurnMetric(aggregates.get(mapKey), payload, agentPubkey, ev.created_at),
+        );
         setMetrics(
           [...aggregates.values()].sort((a, b) => b.lastTurnAt - a.lastTurnAt),
         );
