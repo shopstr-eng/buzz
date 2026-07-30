@@ -17,6 +17,7 @@ import {
   PERSONA_SLUG_RE,
 } from "../agent-events";
 import { KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT } from "../use-agents";
+import { providerForModel } from "../ui/ModelCombobox";
 
 const NOW = 1_800_000_000;
 const OWNER = "a".repeat(64);
@@ -173,6 +174,89 @@ describe("buildPersonaEvent", () => {
     const toggled = buildPersonaEvent(personaToFormInput(stored, true), "s", NOW);
     expect(toggled.content).toBe(original.content);
     expect(toggled.tags).toEqual([...original.tags, ["shared", "true"]]);
+  });
+
+  it("PersonaDialog edit round-trip preserves desktop-contract fields", () => {
+    // Full desktop-authored persona as the directory hook exposes it,
+    // including contract fields the edit dialog never shows.
+    const stored = {
+      displayName: "Support Bot",
+      systemPrompt: "You help users.",
+      avatarUrl: "https://x.test/a.png",
+      runtime: "buzz-agent",
+      model: "anthropic:claude-opus-4-5",
+      provider: "anthropic",
+      respondTo: "allowlist",
+      respondToAllowlist: [OWNER],
+      parallelism: 3,
+      namePool: ["alpha", "beta"],
+    };
+
+    for (const shared of [false, true]) {
+      const original = buildPersonaEvent(
+        personaToFormInput(stored, shared),
+        "support-bot",
+        NOW,
+      );
+
+      // Mirror PersonaDialog: prefill through personaToFormInput, decompose
+      // into form state, then rebuild the save input exactly as submit() does.
+      const prefill = personaToFormInput(stored, shared);
+      const displayName = prefill.displayName;
+      const systemPrompt = prefill.systemPrompt;
+      const avatarUrl = prefill.avatarUrl ?? "";
+      const runtime = prefill.runtime ?? "";
+      const model = prefill.model ?? "";
+      const provider = prefill.provider ?? "";
+      const respondTo = prefill.respondTo;
+      const allowlistText = (prefill.respondToAllowlist ?? []).join("\n");
+      const respondToAllowlist = allowlistText.split(/[\s,]+/).filter(Boolean);
+      const saved = buildPersonaEvent(
+        {
+          displayName, systemPrompt, avatarUrl, runtime, model,
+          provider: providerForModel(model) || provider,
+          respondTo, respondToAllowlist,
+          parallelism: prefill.parallelism,
+          namePool: prefill.namePool,
+          shared: prefill.shared,
+        },
+        "support-bot",
+        NOW,
+      );
+
+      // Byte-identical payload — desktop-only fields must not be dropped.
+      expect(saved.content).toBe(original.content);
+      expect(saved.tags).toEqual(original.tags);
+      const c = JSON.parse(saved.content);
+      expect(c.name_pool).toEqual(["alpha", "beta"]);
+      expect(c.parallelism).toBe(3);
+      expect(c.respond_to_allowlist).toEqual([OWNER]);
+    }
+  });
+
+  it("PersonaDialog edit round-trip keeps legacy provider when the model has no prefix", () => {
+    const stored = {
+      displayName: "Legacy",
+      systemPrompt: "p",
+      avatarUrl: null,
+      runtime: null,
+      model: "claude-opus-4-5", // bare legacy id — no provider prefix
+      provider: "anthropic",
+      respondTo: null,
+      respondToAllowlist: [],
+      parallelism: null,
+      namePool: [],
+    };
+    const prefill = personaToFormInput(stored, false);
+    const model = prefill.model ?? "";
+    const saved = buildPersonaEvent(
+      { ...prefill, provider: providerForModel(model) || (prefill.provider ?? "") },
+      "legacy",
+      NOW,
+    );
+    const c = JSON.parse(saved.content);
+    expect(c.provider).toBe("anthropic");
+    expect(c.respond_to).toBe("anyone");
   });
 
   it("preserves name_pool verbatim (desktop contract field)", () => {

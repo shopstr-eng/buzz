@@ -7,7 +7,7 @@
 import { useState } from "react";
 import type { AgentPersona } from "../use-agents";
 import { useAgentPublishing } from "../use-agent-publishing";
-import type { RespondTo } from "../agent-events";
+import { personaToFormInput, type RespondTo } from "../agent-events";
 import {
   AgentDialogShell,
   DialogError,
@@ -36,26 +36,30 @@ export function PersonaDialog({
   onClose: () => void;
 }) {
   const { savePersona, isPublishing, error } = useAgentPublishing();
-  const [displayName, setDisplayName] = useState(existing?.displayName ?? "");
-  const [systemPrompt, setSystemPrompt] = useState(existing?.systemPrompt ?? "");
-  const [avatarUrl, setAvatarUrl] = useState(existing?.avatarUrl ?? "");
-  const [runtime, setRuntime] = useState(existing?.runtime ?? "");
-  const [model, setModel] = useState(existing?.model ?? "");
+  // Prefill through the shared round-trip mapper so every desktop-contract
+  // field the write contract carries survives an edit verbatim — the same
+  // helper the catalog share toggle uses (and its tests pin).
+  const [prefill] = useState(() =>
+    existing ? personaToFormInput(existing, existing.shared) : null,
+  );
+  const [displayName, setDisplayName] = useState(prefill?.displayName ?? "");
+  const [systemPrompt, setSystemPrompt] = useState(prefill?.systemPrompt ?? "");
+  const [avatarUrl, setAvatarUrl] = useState(prefill?.avatarUrl ?? "");
+  const [runtime, setRuntime] = useState(prefill?.runtime ?? "");
+  const [model, setModel] = useState(prefill?.model ?? "");
   // No longer editable in the UI — derived from the model's prefix at save
   // time. Kept as a fallback for legacy personas whose model has no prefix.
-  const provider = existing?.provider ?? "";
-  const [respondTo, setRespondTo] = useState<RespondTo>(
-    (existing?.respondTo as RespondTo | null) ?? "anyone",
-  );
-  const [allowlistText, setAllowlistText] = useState((existing?.respondToAllowlist ?? []).join("\n"));
+  const provider = prefill?.provider ?? "";
+  const [respondTo, setRespondTo] = useState<RespondTo>(prefill?.respondTo ?? "anyone");
+  const [allowlistText, setAllowlistText] = useState((prefill?.respondToAllowlist ?? []).join("\n"));
   const [localError, setLocalError] = useState<string | null>(null);
   // Catalog sharing moved to the dedicated share dialog (desktop parity,
   // upstream #3699) — edits preserve the current shared state verbatim.
-  const shared = existing?.shared ?? false;
+  const shared = prefill?.shared ?? false;
   // Desktop-contract fields the dialog doesn't edit — preserved verbatim so
   // saving a desktop-authored persona from web doesn't strip them.
-  const namePool = existing?.namePool;
-  const parallelism = existing?.parallelism ?? undefined;
+  const namePool = prefill?.namePool;
+  const parallelism = prefill?.parallelism;
 
   async function submit() {
     if (!displayName.trim()) {
