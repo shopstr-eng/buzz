@@ -32,7 +32,7 @@ When an upstream merge *replaces* an already-applied migration file (add/add con
 
 ## Environment traps (2026-07-28 merge)
 
-- **Git identity is not configured in this repl** — `git merge upstream/main` fails with "unable to auto-detect email address". Set repo-local identity first (`git config user.name/user.email`).
+- **Git identity: repo config is now set to the user's GitHub identity** (`calvadev⚡️` / `32919103+calvadev@users.noreply.github.com` — GitHub noreply, links commits to their account). But task-agent merge commits can still land with the *replit.com* noreply email (no GitHub link) — before pushing, check `git log origin/main..HEAD --format=%ae` and rewrite offending tip commits via filter-branch (only rewrite commits whose email contains "replit"; upstream commits must keep their authors). Push with `git -c http.extraheader="Authorization: Basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)" push` — inline token never persisted; the Replit-managed git credential gets PUSH_REJECTED.
 - **start-replit.sh builds Rust binaries only-if-missing** — after an upstream merge that touches `crates/`, the running relay/ACP keeps the STALE binary across restarts. Force `cargo build -p <changed-pkg> --release --ignore-rust-version`, then restart the workflow.
 
 **Why:** both produce silent staleness — the merge "succeeds" but the deployed behavior doesn't change.
