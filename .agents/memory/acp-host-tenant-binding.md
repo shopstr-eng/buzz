@@ -13,3 +13,7 @@ The relay resolves community strictly from the Host header. Anything connecting 
 - Start script runs one ACP worker per public host and registers ACP membership in each host's community.
 
 **Why:** two rounds of silent agent failure were caused by loopback community binding (no events delivered, then replies 403'd). Unset env vars preserve legacy single-tenant behavior.
+
+**Dev preview seeding (2026-07-30):** the dev-domain community is usually empty after imports (channels live under the prod custom domain), so the ACP worker logs "discovered 0 channel(s)" and sits idle. start-replit.sh now seeds one open 'general' channel into the REPLIT_DEV_DOMAIN community when it has zero channels (dev only, REPLIT_DEPLOYMENT unset); relay startup reconciliation emits kind:39000/39002 and backfills ACP membership.
+
+**Silent-failure signature:** if reconciliation logs nothing at all AND the ACP agent never gets backfilled as a channel member, suspect a **stale pre-built target/release/buzz-relay** that predates the backfill code (`strings target/release/buzz-relay | grep backfilled` to check). Rebuild with the Nix cargo 1.88 (`cargo build -p buzz-relay --release --ignore-rust-version`). Note `buzz-admin reconcile-channels` only emits discovery events — it does NOT do the ACP membership backfill; only the relay's startup reconciler does.

@@ -372,6 +372,60 @@ if [[ -n "$ACP_PRIVATE_KEY" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# 5c. Dev-only channel seed for the preview community.
+#
+#     The relay is host-tenant-bound: the Replit dev preview connects with the
+#     REPLIT_DEV_DOMAIN Host header, so it binds to that community. After a
+#     fresh import/seed all channels typically live in the production
+#     community (custom domain), leaving the dev community empty — the ACP
+#     worker logs "discovered 0 channel(s)" and the agent can never be tested
+#     from the preview. Seed one open 'general' channel into the dev-domain
+#     community when it has none. Startup reconciliation
+#     (BUZZ_RECONCILE_CHANNELS=true) then emits the kind:39000/39002 discovery
+#     events and backfills ACP agent membership, so the worker discovers it.
+#
+#     Guarded to development only (REPLIT_DEPLOYMENT unset) and to an empty
+#     community, so production data is never touched.
+# ---------------------------------------------------------------------------
+if [[ -z "${REPLIT_DEPLOYMENT:-}" ]] && [[ -n "${REPLIT_DEV_DOMAIN:-}" ]] \
+   && command -v psql >/dev/null 2>&1; then
+  _DEV_HOST="${REPLIT_DEV_DOMAIN}"
+  _DEV_CH_COUNT=$(psql "$DATABASE_URL" -tAc \
+    "SELECT count(*) FROM channels ch JOIN communities c ON c.id = ch.community_id WHERE lower(c.host) = lower('${_DEV_HOST}');" \
+    2>/dev/null || echo "err")
+  if [[ "$_DEV_CH_COUNT" == "0" ]]; then
+    echo "==> Dev community '${_DEV_HOST}' has no channels — seeding 'general' so the agent is testable from the preview..."
+    _SYSTEM_PUBKEY="0000000000000000000000000000000000000000000000000000000000000000"
+    _OWNER_HEX="${RELAY_OWNER_PUBKEY:-}"
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL && echo "==> Dev 'general' channel seeded." \
+      || echo "==> Warning: dev channel seed failed — agent may stay idle in the preview." >&2
+DO \$\$
+DECLARE
+  cid uuid;
+  ch uuid := gen_random_uuid();
+BEGIN
+  SELECT id INTO cid FROM communities WHERE lower(host) = lower('${_DEV_HOST}');
+  IF cid IS NULL THEN
+    RAISE EXCEPTION 'community % not found', '${_DEV_HOST}';
+  END IF;
+  INSERT INTO channels (community_id, id, name, channel_type, visibility, description, created_by)
+  VALUES (cid, ch, 'general', 'stream', 'open', 'General discussion', decode('${_SYSTEM_PUBKEY}','hex'));
+  IF length('${_OWNER_HEX}') = 64 THEN
+    INSERT INTO channel_members (community_id, channel_id, pubkey, role, invited_by)
+    VALUES (cid, ch, decode('${_OWNER_HEX}','hex'), 'owner', decode('${_SYSTEM_PUBKEY}','hex'))
+    ON CONFLICT DO NOTHING;
+  END IF;
+END
+\$\$;
+SQL
+  elif [[ "$_DEV_CH_COUNT" == "err" ]]; then
+    echo "==> Warning: could not check dev community channels (psql error)." >&2
+  else
+    echo "==> Dev community '${_DEV_HOST}' already has ${_DEV_CH_COUNT} channel(s) — skipping dev seed."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # 6. Start the relay
 # ---------------------------------------------------------------------------
 # Expose the ACP private key to the relay process so the admin API can sign
