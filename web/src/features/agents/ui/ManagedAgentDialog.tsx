@@ -9,9 +9,9 @@
 
 import { useState } from "react";
 import { Copy, Check, TriangleAlert } from "lucide-react";
-import type { AgentPersona } from "../use-agents";
+import type { AgentPersona, ManagedAgent } from "../use-agents";
 import { useAgentPublishing } from "../use-agent-publishing";
-import type { RespondTo } from "../agent-events";
+import { agentToFormInput, type RespondTo } from "../agent-events";
 import {
   AgentDialogShell,
   DialogError,
@@ -24,19 +24,24 @@ import { ModelCombobox, providerForModel } from "./ModelCombobox";
 
 export function ManagedAgentDialog({
   personas,
+  existing,
   onClose,
 }: {
   personas: AgentPersona[];
+  existing?: ManagedAgent | null;
   onClose: () => void;
 }) {
-  const { createManagedAgent, isPublishing, error } = useAgentPublishing();
-  const [name, setName] = useState("");
-  const [personaId, setPersonaId] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [model, setModel] = useState("");
-  const [respondTo, setRespondTo] = useState<RespondTo>("owner-only");
-  const [allowlistText, setAllowlistText] = useState("");
-  const [parallelism, setParallelism] = useState(1);
+  const { createManagedAgent, updateManagedAgent, isPublishing, error } = useAgentPublishing();
+  // Edit prefill goes through the tested mapper so every write-contract
+  // field survives the round-trip (see agent-events.test.ts).
+  const [prefill] = useState(() => (existing ? agentToFormInput(existing) : null));
+  const [name, setName] = useState(prefill?.name ?? "");
+  const [personaId, setPersonaId] = useState(prefill?.personaId ?? "");
+  const [systemPrompt, setSystemPrompt] = useState(prefill?.systemPrompt ?? "");
+  const [model, setModel] = useState(prefill?.model ?? "");
+  const [respondTo, setRespondTo] = useState<RespondTo>(prefill?.respondTo ?? "owner-only");
+  const [allowlistText, setAllowlistText] = useState((prefill?.respondToAllowlist ?? []).join("\n"));
+  const [parallelism, setParallelism] = useState(prefill?.parallelism ?? 1);
   const [localError, setLocalError] = useState<string | null>(null);
   const [created, setCreated] = useState<{ pubkey: string; nsec: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -52,19 +57,27 @@ export function ManagedAgentDialog({
       return;
     }
     setLocalError(null);
+    const input = {
+      name,
+      personaId: personaId || undefined,
+      systemPrompt: systemPrompt || undefined,
+      model: model || undefined,
+      // Keyless OpenRouter: the provider is the model string's prefix. On
+      // edit, keep a stored provider that the prefix rule can't re-derive.
+      provider: providerForModel(model) || prefill?.provider || undefined,
+      // Desktop-contract field with no form control — pass through verbatim.
+      personaSourceVersion: prefill?.personaSourceVersion,
+      respondTo,
+      respondToAllowlist,
+      parallelism: Math.max(1, Math.floor(parallelism) || 1),
+    };
     try {
-      const result = await createManagedAgent({
-        name,
-        personaId: personaId || undefined,
-        systemPrompt: systemPrompt || undefined,
-        model: model || undefined,
-        // Keyless OpenRouter: the provider is the model string's prefix.
-        provider: providerForModel(model) || undefined,
-        respondTo,
-        respondToAllowlist,
-        parallelism: Math.max(1, Math.floor(parallelism) || 1),
-      });
-      setCreated(result);
+      if (existing) {
+        await updateManagedAgent(input, existing.id);
+        onClose();
+      } else {
+        setCreated(await createManagedAgent(input));
+      }
     } catch {
       /* surfaced via hook error */
     }
@@ -110,7 +123,7 @@ export function ManagedAgentDialog({
   }
 
   return (
-    <AgentDialogShell title="New managed agent" onClose={onClose}>
+    <AgentDialogShell title={existing ? "Edit managed agent" : "New managed agent"} onClose={onClose}>
       <div className="space-y-4 p-5">
         <DialogError message={localError ?? error} />
         <div>
@@ -182,7 +195,7 @@ export function ManagedAgentDialog({
       <div className="flex justify-end gap-2 border-t border-black/8 px-5 py-3 dark:border-white/8">
         <button className={btnSecondaryCls} onClick={onClose}>Cancel</button>
         <button className={btnPrimaryCls} onClick={submit} disabled={isPublishing}>
-          {isPublishing ? "Publishing…" : "Create agent"}
+          {isPublishing ? "Publishing…" : existing ? "Save changes" : "Create agent"}
         </button>
       </div>
     </AgentDialogShell>

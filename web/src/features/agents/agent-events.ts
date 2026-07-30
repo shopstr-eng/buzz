@@ -164,6 +164,39 @@ export interface ManagedAgentFormInput {
   respondTo: RespondTo;
   respondToAllowlist?: string[];
   parallelism: number;
+  /** Desktop-contract drift indicator; preserved verbatim across web edits (standalone only). */
+  personaSourceVersion?: string;
+}
+
+/**
+ * Map a stored managed agent (kind 30177) back to the form input used when
+ * republishing it. Mirrors personaToFormInput: an edit replaces the FULL
+ * record, so every write-contract field must survive this mapping verbatim
+ * or a web edit would silently reset desktop-authored settings
+ * (respond_to_allowlist, parallelism, persona link, …).
+ */
+export function agentToFormInput(agent: {
+  name: string | null;
+  personaId: string | null;
+  systemPrompt: string | null;
+  model: string | null;
+  provider: string | null;
+  respondTo: string | null;
+  respondToAllowlist: string[];
+  parallelism: number | null;
+  personaSourceVersion: string | null;
+}): ManagedAgentFormInput {
+  return {
+    name: agent.name ?? "",
+    personaId: agent.personaId ?? undefined,
+    systemPrompt: agent.systemPrompt ?? undefined,
+    model: agent.model ?? undefined,
+    provider: agent.provider ?? undefined,
+    respondTo: (agent.respondTo as RespondTo | null) ?? "owner-only",
+    respondToAllowlist: agent.respondToAllowlist,
+    parallelism: agent.parallelism ?? 1,
+    personaSourceVersion: agent.personaSourceVersion ?? undefined,
+  };
 }
 
 export function buildManagedAgentEvent(
@@ -182,6 +215,9 @@ export function buildManagedAgentEvent(
     opt(payload, "system_prompt", input.systemPrompt);
     opt(payload, "model", input.model);
     opt(payload, "provider", input.provider);
+    // Slimming contract: definition-linked agents omit the quad including
+    // persona_source_version; standalone agents keep it verbatim.
+    opt(payload, "persona_source_version", input.personaSourceVersion);
   }
   if (input.respondToAllowlist?.length) payload.respond_to_allowlist = input.respondToAllowlist;
 

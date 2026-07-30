@@ -13,7 +13,7 @@ import {
   Bot, Users, Cpu, Activity, MessageSquare, Wrench, CircleDollarSign,
   Plus, Pencil, Trash2, Upload, Brain, Globe, Share2,
 } from "lucide-react";
-import { useAgentDirectory, type AgentPersona, type AgentTeam } from "../use-agents";
+import { useAgentDirectory, type AgentPersona, type AgentTeam, type ManagedAgent } from "../use-agents";
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
 import { useAgentPublishing } from "../use-agent-publishing";
@@ -34,7 +34,7 @@ type DialogState =
   | { type: "persona"; existing: AgentPersona | null }
   | { type: "personaShare"; personaId: string }
   | { type: "team"; existing: AgentTeam | null }
-  | { type: "agent" }
+  | { type: "agent"; existing: ManagedAgent | null }
   | null;
 
 const iconBtnCls =
@@ -401,7 +401,7 @@ export function AgentsView() {
       </Section>
 
       <Section title="Managed agents" Icon={Cpu} count={agents.length}
-        action={<NewButton label="New agent" onClick={() => setDialog({ type: "agent" })} />}
+        action={<NewButton label="New agent" onClick={() => setDialog({ type: "agent", existing: null })} />}
         empty={dirLoading ? "Loading…" : "No managed agents yet — create one to get an agent key."}>
         {agents.length > 0 && (
           <div className="space-y-2">
@@ -421,6 +421,13 @@ export function AgentsView() {
                       {a.status}
                     </span>
                   )}
+                  <button
+                    className={iconBtnCls}
+                    onClick={() => setDialog({ type: "agent", existing: a })}
+                    aria-label={`Edit ${a.name ?? "agent"}`}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                   <button
                     className={iconBtnCls}
                     onClick={() => confirmDelete(`agent "${a.name ?? truncatePubkey(a.pubkey)}"`, () => deleteManagedAgent(a.id))}
@@ -500,7 +507,7 @@ export function AgentsView() {
         />
       )}
       {dialog?.type === "agent" && (
-        <ManagedAgentDialog personas={personas} onClose={() => setDialog(null)} />
+        <ManagedAgentDialog personas={personas} existing={dialog.existing} onClose={() => setDialog(null)} />
       )}
     </div>
   );

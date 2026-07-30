@@ -33,6 +33,7 @@ export function useAgentPublishing(): {
   saveTeam: (input: TeamFormInput, existingId: string | null) => Promise<string>;
   deleteTeam: (id: string) => Promise<void>;
   createManagedAgent: (input: ManagedAgentFormInput) => Promise<{ pubkey: string; nsec: string }>;
+  updateManagedAgent: (input: ManagedAgentFormInput, agentPubkey: string) => Promise<void>;
   deleteManagedAgent: (id: string) => Promise<void>;
   isPublishing: boolean;
   error: string | null;
@@ -126,6 +127,17 @@ export function useAgentPublishing(): {
     [run, publishTemplate, requireOwner],
   );
 
+  const updateManagedAgent = useCallback(
+    (input: ManagedAgentFormInput, agentPubkey: string) =>
+      run(async () => {
+        requireOwner();
+        // Replace-on-save: republish the FULL record under the existing d-tag
+        // (the agent's pubkey) — no new keypair is generated on edit.
+        await publishTemplate(buildManagedAgentEvent(input, agentPubkey, nowSec()));
+      }),
+    [run, publishTemplate, requireOwner],
+  );
+
   const deleteManagedAgent = useCallback(
     (id: string) =>
       run(async () => {
@@ -141,6 +153,7 @@ export function useAgentPublishing(): {
     saveTeam,
     deleteTeam,
     createManagedAgent,
+    updateManagedAgent,
     deleteManagedAgent,
     isPublishing,
     error,

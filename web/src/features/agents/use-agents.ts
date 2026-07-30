@@ -52,6 +52,13 @@ export interface ManagedAgent {
   personaId: string | null;
   status: string | null;
   pubkey: string;
+  systemPrompt: string | null;
+  model: string | null;
+  provider: string | null;
+  respondTo: string | null;
+  respondToAllowlist: string[];
+  parallelism: number | null;
+  personaSourceVersion: string | null;
 }
 
 type Json = Record<string, unknown>;
@@ -120,6 +127,13 @@ function parseManagedAgent(ev: NostrEvent): ManagedAgent | null {
     personaId: str(c?.persona_id) ?? str(c?.personaId),
     status: str(c?.status),
     pubkey: ev.pubkey,
+    systemPrompt: str(c?.system_prompt) ?? str(c?.systemPrompt),
+    model: str(c?.model),
+    provider: str(c?.provider),
+    respondTo: str(c?.respond_to) ?? str(c?.respondTo),
+    respondToAllowlist: strList(c?.respond_to_allowlist ?? c?.respondToAllowlist),
+    parallelism: typeof c?.parallelism === "number" ? c.parallelism : null,
+    personaSourceVersion: str(c?.persona_source_version) ?? str(c?.personaSourceVersion),
   };
 }
 

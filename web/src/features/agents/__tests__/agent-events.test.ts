@@ -13,6 +13,7 @@ import {
   personaToFormInput,
   buildTeamEvent,
   buildManagedAgentEvent,
+  agentToFormInput,
   buildDirectoryDeleteEvent,
   PERSONA_SLUG_RE,
 } from "../agent-events";
@@ -332,6 +333,95 @@ describe("buildManagedAgentEvent", () => {
     expect(c.model).toBe("m");
     expect(c.provider).toBe("p");
     expect(c).not.toHaveProperty("persona_id");
+  });
+
+  it("ManagedAgentDialog edit round-trip preserves all contract fields", () => {
+    const pk = "b".repeat(64);
+    const variants = [
+      // Persona-linked: runtime config resolves through the persona.
+      {
+        name: "Nightly runner",
+        personaId: "support-bot",
+        systemPrompt: null,
+        model: null,
+        provider: null,
+        respondTo: "allowlist",
+        respondToAllowlist: ["c".repeat(64), "d".repeat(64)],
+        parallelism: 3,
+        personaSourceVersion: null,
+      },
+      // Standalone: inline runtime fields carried in the record.
+      {
+        name: "Solo agent",
+        personaId: null,
+        systemPrompt: "You run nightly jobs.",
+        model: "openai/gpt-5",
+        provider: "openai",
+        respondTo: "anyone",
+        respondToAllowlist: [],
+        parallelism: 2,
+        // Desktop drift indicator — must survive a web edit verbatim.
+        personaSourceVersion: "abc123",
+      },
+    ];
+
+    for (const stored of variants) {
+      const original = buildManagedAgentEvent(agentToFormInput(stored), pk, NOW);
+
+      // Mirror ManagedAgentDialog: prefill through agentToFormInput, decompose
+      // into form state, then rebuild the save input exactly as submit() does.
+      const prefill = agentToFormInput(stored);
+      const name = prefill.name;
+      const personaId = prefill.personaId ?? "";
+      const systemPrompt = prefill.systemPrompt ?? "";
+      const model = prefill.model ?? "";
+      const respondTo = prefill.respondTo;
+      const allowlistText = (prefill.respondToAllowlist ?? []).join("\n");
+      const parallelism = prefill.parallelism;
+
+      const saved = buildManagedAgentEvent(
+        {
+          name,
+          personaId: personaId || undefined,
+          systemPrompt: systemPrompt || undefined,
+          model: model || undefined,
+          provider: providerForModel(model) || prefill.provider || undefined,
+          personaSourceVersion: prefill.personaSourceVersion,
+          respondTo,
+          respondToAllowlist: allowlistText.split(/[\s,]+/).filter(Boolean),
+          parallelism: Math.max(1, Math.floor(parallelism) || 1),
+        },
+        pk,
+        NOW,
+      );
+
+      // Byte-identical payload — no field may be dropped or reset by an edit.
+      expect(saved.content).toBe(original.content);
+      expect(saved.kind).toBe(original.kind);
+      expect(saved.tags).toEqual(original.tags);
+    }
+  });
+
+  it("edit round-trip keeps a stored provider the model prefix can't re-derive", () => {
+    const stored = {
+      name: "Legacy",
+      personaId: null,
+      systemPrompt: "s",
+      model: "custom-model-no-prefix",
+      provider: "legacy-provider",
+      respondTo: "owner-only",
+      respondToAllowlist: [],
+      parallelism: 1,
+      personaSourceVersion: null,
+    };
+    const prefill = agentToFormInput(stored);
+    const model = prefill.model ?? "";
+    const saved = buildManagedAgentEvent(
+      { ...prefill, provider: providerForModel(model) || prefill.provider || undefined },
+      "b".repeat(64),
+      NOW,
+    );
+    expect(JSON.parse(saved.content).provider).toBe("legacy-provider");
   });
 });
 
