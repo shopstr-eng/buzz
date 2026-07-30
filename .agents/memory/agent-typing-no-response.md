@@ -12,7 +12,9 @@ description: Symptom→cause map for the built-in agent showing typing but no re
 
 **Why:** channel membership and relay membership are separate tables/checks; ephemeral kinds skip the channel check, regular kinds don't.
 
-**How to apply:** on this symptom, check `channel_members` for the agent pubkey in that channel before suspecting the LLM path. Repair = owner-signed kind:9000 via the HTTP bridge (`POST https://<host>/events`, NIP-98 auth) — script pattern in `/tmp/acp_repair.py` (pure-python BIP-340 + NIP-98, no deps; /tmp is ephemeral, recreate as needed).
+**Fixed structurally (2026-07-30):** the relay now derives the ACP pubkey from `BUZZ_ACP_PRIVATE_KEY` (config `acp_pubkey`) and (a) treats it as an implicit member in the publish membership check, (b) auto-adds it on stream/forum channel creation, and (c) backfills membership at startup via the channel reconciler (gated on `BUZZ_RECONCILE_CHANNELS`, now defaulted on in start-replit.sh). DM/workflow channels are deliberately excluded from auto-add.
+
+**How to apply:** if this symptom recurs, first confirm the running relay binary predates the fix or `BUZZ_ACP_PRIVATE_KEY` is unset; otherwise check `channel_members` for the agent pubkey in that channel before suspecting the LLM path. Repair = owner-signed kind:9000 via the HTTP bridge (`POST https://<host>/events`, NIP-98 auth) — script pattern in `/tmp/acp_repair.py` (pure-python BIP-340 + NIP-98, no deps; /tmp is ephemeral, recreate as needed).
 
 ## Prod DB query quirks
 

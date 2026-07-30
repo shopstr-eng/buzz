@@ -1919,6 +1919,34 @@ async fn handle_create_group(
         warn!(channel = %channel.id, error = %e, "membership notification emission failed");
     }
 
+    // Auto-add the configured ACP agent as a member so its replies are never
+    // rejected with a membership 403 (the "typing forever" silent failure).
+    // Skipped for DM and workflow channels — the agent joins those only when
+    // explicitly involved — and when the agent itself created the channel
+    // (it's already the owner). Failure is non-fatal: the ingest path also
+    // treats the ACP pubkey as an implicit member.
+    if matches!(
+        channel_type,
+        buzz_db::channel::ChannelType::Stream | buzz_db::channel::ChannelType::Forum
+    ) {
+        if let Some(acp_pubkey) = state.config.acp_pubkey.as_deref() {
+            if acp_pubkey != actor_bytes.as_slice() {
+                if let Err(e) = add_member_with_side_effects(
+                    tenant,
+                    state,
+                    channel.id,
+                    acp_pubkey,
+                    MemberRole::Member,
+                    &actor_bytes,
+                )
+                .await
+                {
+                    warn!(channel = %channel.id, error = %e, "auto-adding ACP agent as member failed");
+                }
+            }
+        }
+    }
+
     info!(channel_id = %channel.id, name = %name, "NIP-29 CREATE_GROUP processed");
     Ok(())
 }
@@ -3141,6 +3169,50 @@ pub async fn reconcile_channel_events(
 
     if reconciled > 0 {
         tracing::info!(count = reconciled, "reconciled channel discovery events");
+    }
+
+    // Backfill ACP agent membership: seeds and backup restores can leave the
+    // agent out of channel_members, which made its replies 403 while typing
+    // indicators still showed. Idempotent — skips channels where the agent is
+    // already a member. DM/workflow channels are excluded (the agent joins
+    // those only when explicitly involved).
+    if let Some(acp_pubkey) = state.config.acp_pubkey.clone() {
+        let mut backfilled = 0u32;
+        for channel in &channels {
+            if channel.channel_type != "stream" && channel.channel_type != "forum" {
+                continue;
+            }
+            if channel.archived_at.is_some() {
+                continue;
+            }
+            let members = match state.db.get_members(tenant.community(), channel.id).await {
+                Ok(m) => m,
+                Err(e) => {
+                    tracing::warn!(channel_id = %channel.id, error = %e, "reconcile: failed to fetch members for ACP backfill");
+                    continue;
+                }
+            };
+            if members.iter().any(|m| m.pubkey == acp_pubkey) {
+                continue;
+            }
+            if let Err(e) = add_member_with_side_effects(
+                tenant,
+                state,
+                channel.id,
+                &acp_pubkey,
+                MemberRole::Member,
+                &channel.created_by,
+            )
+            .await
+            {
+                tracing::warn!(channel_id = %channel.id, error = %e, "reconcile: ACP agent membership backfill failed");
+            } else {
+                backfilled += 1;
+            }
+        }
+        if backfilled > 0 {
+            tracing::info!(count = backfilled, "backfilled ACP agent channel memberships");
+        }
     }
     Ok(())
 }

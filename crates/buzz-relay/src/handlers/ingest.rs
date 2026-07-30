@@ -510,6 +510,18 @@ pub(crate) async fn check_channel_membership(
     pubkey_bytes: &[u8],
     channel: Option<&buzz_db::channel::ChannelRecord>,
 ) -> Result<(), String> {
+    // The configured ACP agent is an implicit member of every channel it
+    // serves: channels created outside the web UI's Connect Agent flow (seed
+    // scripts, backup restores) would otherwise 403 the agent's replies while
+    // typing indicators still show — a silent failure. See config.acp_pubkey.
+    if state
+        .config
+        .acp_pubkey
+        .as_deref()
+        .is_some_and(|acp| acp == pubkey_bytes)
+    {
+        return Ok(());
+    }
     match state
         .is_member_cached(tenant.community(), ch_id, pubkey_bytes)
         .await

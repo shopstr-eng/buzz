@@ -98,6 +98,12 @@ pub struct Config {
     /// Optional hex-encoded private key for the relay's signing keypair.
     /// If absent, a fresh keypair is generated at startup.
     pub relay_private_key: Option<String>,
+    /// Public key (32 bytes) of the ACP agent worker, derived from
+    /// `BUZZ_ACP_PRIVATE_KEY` when that env var is set. The relay treats this
+    /// pubkey as an implicit member of every channel it serves and auto-adds
+    /// it to newly created channels, so agent replies never silently fail
+    /// with a membership 403 after a seed/restore.
+    pub acp_pubkey: Option<Vec<u8>>,
     /// Optional Unix Domain Socket path. When set, the relay also listens on this
     /// UDS for traffic (e.g. service mesh sidecar). Health probes still use TCP.
     pub uds_path: Option<String>,
@@ -622,6 +628,22 @@ impl Config {
 
         let relay_private_key = std::env::var("BUZZ_RELAY_PRIVATE_KEY").ok();
 
+        // Derive the ACP agent pubkey from its private key so the relay can
+        // treat the agent as an implicit channel member (see side_effects.rs
+        // and ingest.rs). A malformed key is a warning, not a fatal error —
+        // the relay works without an agent.
+        let acp_pubkey = std::env::var("BUZZ_ACP_PRIVATE_KEY")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .and_then(|key| match nostr::Keys::parse(&key) {
+                Ok(keys) => Some(keys.public_key().to_bytes().to_vec()),
+                Err(e) => {
+                    warn!(error = %e, "BUZZ_ACP_PRIVATE_KEY is set but invalid — agent auto-membership disabled");
+                    None
+                }
+            });
+
         let uds_path = std::env::var("BUZZ_UDS_PATH")
             .ok()
             .map(|s| s.trim().to_string())
@@ -935,6 +957,7 @@ impl Config {
             require_auth_token,
             cors_origins,
             relay_private_key,
+            acp_pubkey,
             uds_path,
             health_port,
             metrics_port,

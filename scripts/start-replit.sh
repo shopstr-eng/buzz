@@ -39,6 +39,9 @@ export BUZZ_REQUIRE_AUTH_TOKEN="${BUZZ_REQUIRE_AUTH_TOKEN:-true}"
 export BUZZ_REQUIRE_RELAY_MEMBERSHIP="${BUZZ_REQUIRE_RELAY_MEMBERSHIP:-true}"
 export BUZZ_SERVE_GIT_WEB_GUI="${BUZZ_SERVE_GIT_WEB_GUI:-true}"
 export BUZZ_AUTO_MIGRATE="${BUZZ_AUTO_MIGRATE:-false}"
+# Run channel reconciliation at startup: emits missing discovery events and
+# backfills ACP agent membership after seeds/restores (see side_effects.rs).
+export BUZZ_RECONCILE_CHANNELS="${BUZZ_RECONCILE_CHANNELS:-true}"
 export RUST_LOG="${RUST_LOG:-buzz_relay=info,buzz_db=info,tower_http=warn}"
 export REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}"
 # Standard Replit app containers reserve 127.0.0.1:8080 for a platform service
