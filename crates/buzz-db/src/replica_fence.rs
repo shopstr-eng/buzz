@@ -14,7 +14,7 @@
 //!    `S = clock_timestamp()`, then scan `pg_stat_activity` for the oldest
 //!    open transaction, then — **last** — commit heartbeat token `M` via a
 //!    single-row `UPDATE replica_heartbeat ... RETURNING token, epoch`
-//!    (migration 0026). Because the single-row UPDATE serializes all pods'
+//!    (migration 0027). Because the single-row UPDATE serializes all pods'
 //!    probes, tokens are globally commit-ordered. A reader **session** that
 //!    observes `token >= M` on its own connection has, by WAL/storage replay
 //!    order, also replayed every commit that preceded M's commit; every
@@ -531,8 +531,8 @@ pub enum ProbeError {
         /// Number of other client backends with masked/unknown state.
         masked: i64,
     },
-    /// The single heartbeat row (migration 0026) is missing on the writer.
-    #[error("replica_heartbeat row missing on the writer — migration 0026 not applied?")]
+    /// The single heartbeat row (migration 0027) is missing on the writer.
+    #[error("replica_heartbeat row missing on the writer — migration 0027 not applied?")]
     HeartbeatRowMissing,
 }
 
