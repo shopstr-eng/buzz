@@ -9,6 +9,11 @@ import { useState } from "react";
 import { Bot, Check, Download, FileText, Loader2, Users } from "lucide-react";
 import { humanFileSize, type MessageAttachment } from "@/shared/lib/message-attachments";
 import { MAX_SNAPSHOT_JSON_BYTES } from "@/features/agents/lib/agent-snapshot";
+import {
+  AGENT_PNG_CHUNK_KEYWORD,
+  TEAM_PNG_CHUNK_KEYWORD,
+  extractPngSnapshotJson,
+} from "@/features/agents/lib/png-text-chunk";
 
 async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buf);
@@ -17,20 +22,39 @@ async function sha256Hex(buf: ArrayBuffer): Promise<string> {
     .join("");
 }
 
+const PNG_NAME_RE = /\.png$/i;
+// Desktop format-specific fetch caps (commands/personas/snapshot/import.rs and
+// commands/team_snapshot.rs): .agent.png 10 MiB, .team.png 50 MiB.
+const MAX_AGENT_PNG_BYTES = 10 * 1024 * 1024;
+const MAX_TEAM_PNG_BYTES = 50 * 1024 * 1024;
+
+function snapshotByteCap(att: MessageAttachment): number {
+  if (!PNG_NAME_RE.test(att.name)) return MAX_SNAPSHOT_JSON_BYTES;
+  return att.kind === "team-snapshot" ? MAX_TEAM_PNG_BYTES : MAX_AGENT_PNG_BYTES;
+}
+
 /**
  * Verified snapshot download (desktop fetchSnapshotBytes parity, browser
- * flavor): bounded size, and SHA-256 checked when the imeta carried one.
+ * flavor): bounded size (format-specific cap), SHA-256 checked when the
+ * imeta carried one. `.agent.png` / `.team.png` snapshots have their JSON
+ * manifest extracted from the PNG tEXt chunk (browser-side desktop parity);
+ * `.json` snapshots decode as plain text.
  */
 async function fetchSnapshotText(att: MessageAttachment): Promise<string> {
   const res = await fetch(att.url);
   if (!res.ok) throw new Error(`Download failed (HTTP ${res.status}).`);
   const buf = await res.arrayBuffer();
-  const limit = att.size ?? MAX_SNAPSHOT_JSON_BYTES;
-  if (buf.byteLength > Math.min(limit, MAX_SNAPSHOT_JSON_BYTES)) {
+  const cap = snapshotByteCap(att);
+  if (buf.byteLength > Math.min(att.size ?? cap, cap)) {
     throw new Error("Snapshot is larger than expected.");
   }
   if (att.sha256 && (await sha256Hex(buf)) !== att.sha256.toLowerCase()) {
     throw new Error("Snapshot failed its checksum — refusing to import.");
+  }
+  if (PNG_NAME_RE.test(att.name)) {
+    const keyword =
+      att.kind === "team-snapshot" ? TEAM_PNG_CHUNK_KEYWORD : AGENT_PNG_CHUNK_KEYWORD;
+    return extractPngSnapshotJson(new Uint8Array(buf), keyword);
   }
   return new TextDecoder().decode(buf);
 }

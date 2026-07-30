@@ -67,9 +67,10 @@ const MD_LINK_RE = /(!?)\[((?:\\.|[^\]\\])*)\]\((https?:\/\/[^\s)]+)\)/g;
 
 /** Snapshot filenames the send side produces (desktop + web share flows). */
 const SNAPSHOT_EXT_RE = /\.(agent|team)\.(json|png)$/i;
-const AGENT_JSON_RE = /\.agent\.json$/i;
-// .team.png stays a plain file card — the web has no PNG tEXt-chunk decoder.
-const TEAM_JSON_RE = /\.team\.json$/i;
+// .png snapshots carry their manifest in a PNG tEXt chunk that the card's
+// import path decodes browser-side (png-text-chunk.ts, desktop parity).
+const AGENT_SNAPSHOT_RE = /\.agent\.(json|png)$/i;
+const TEAM_SNAPSHOT_RE = /\.team\.(json|png)$/i;
 
 function unescapeLabel(label: string): string {
   return label.replace(/\\([\\[\]])/g, "$1");
@@ -172,9 +173,9 @@ export function extractAttachments(
       attachments.push({
         url,
         name,
-        kind: AGENT_JSON_RE.test(name)
+        kind: AGENT_SNAPSHOT_RE.test(name)
           ? "agent-snapshot"
-          : TEAM_JSON_RE.test(name)
+          : TEAM_SNAPSHOT_RE.test(name)
             ? "team-snapshot"
             : "file",
         mime: entry?.mime,

@@ -65,11 +65,18 @@ describe("extractAttachments", () => {
     expect(attachments[0].kind).toBe("team-snapshot");
   });
 
-  it("keeps .team.png as a plain file card (no web PNG decoder)", () => {
+  it("classifies .team.png links as team-snapshot (PNG tEXt decoder)", () => {
     const url = "https://media.example/blob/ops.team.png";
     const { attachments } = extractAttachments(`[Ops.team.png](${url})`);
     expect(attachments).toHaveLength(1);
-    expect(attachments[0].kind).toBe("file");
+    expect(attachments[0].kind).toBe("team-snapshot");
+  });
+
+  it("classifies .agent.png links as agent-snapshot", () => {
+    const url = "https://media.example/blob/helper.agent.png";
+    const { attachments } = extractAttachments(`[Helper.agent.png](${url})`);
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].kind).toBe("agent-snapshot");
   });
 
   it("treats non-agent imeta files as generic file attachments", () => {
