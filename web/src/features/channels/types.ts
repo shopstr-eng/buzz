@@ -30,6 +30,8 @@ export interface ChatMessage {
   isPending?: boolean;
   /** created_at of the latest applied kind:40003 edit, if any */
   editedAt?: number;
+  /** NIP-92 `imeta` tags (uploaded attachments), verbatim from the event */
+  imeta?: string[][];
 }
 
 /** Nostr event kinds used by Buzz chat */

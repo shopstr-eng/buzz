@@ -32,6 +32,8 @@ interface Props {
   /** Matches useSendMessage's send: (content, replyToId, mentionPubkeys) */
   onSend: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
   onClose: () => void;
+  /** Import a fetched .agent.json snapshot shared into the chat */
+  onImportAgent?: (jsonText: string) => Promise<void>;
 }
 
 /** Collect root + all descendants by walking replyToId chains. */
@@ -69,6 +71,7 @@ export function ThreadPanel({
   customEmojiUrls,
   onSend,
   onClose,
+  onImportAgent,
 }: Props) {
   const threadMessages = useMemo(() => collectThread(root, messages), [root, messages]);
   const [sending, setSending] = useState(false);
@@ -117,6 +120,7 @@ export function ThreadPanel({
               onDelete={onDelete ? () => onDelete(msg) : undefined}
               customEmoji={customEmoji}
               customEmojiUrls={customEmojiUrls}
+              onImportAgent={onImportAgent}
             />
           </div>
         ))}

@@ -8,6 +8,8 @@ import { EmojiPicker } from "./EmojiPicker";
 import { ProfilePopover } from "./ProfilePopover";
 import { canonicalNpubKey } from "@/shared/lib/mention-npub";
 import { relativeTime } from "@/shared/lib/relative-time";
+import { extractAttachments } from "@/shared/lib/message-attachments";
+import { AttachmentCard } from "./AttachmentCard";
 import type { Profile } from "@/shared/hooks/use-profiles";
 
 interface Props {
@@ -52,6 +54,8 @@ interface Props {
    * Used by ContentWithMentions to replace pubkey chips with real names.
    */
   mentionNames?: Map<string, string>;
+  /** Import a fetched .agent.json snapshot shared into the chat */
+  onImportAgent?: (jsonText: string) => Promise<void>;
 }
 
 function avatarColor(pubkey: string): string {
@@ -140,6 +144,73 @@ function renderCustomEmojiTokens(
   if (last === 0) return [text];
   if (last < text.length) parts.push(text.slice(last));
   return parts;
+}
+
+/** Markdown links left in the text after attachment extraction. */
+const MD_TEXT_LINK_RE = /\[((?:\\.|[^\]\\])*)\]\((https?:\/\/[^\s)]+)\)/g;
+
+/**
+ * Linkify remaining markdown `[label](url)` links, routing the plain-text
+ * segments through mention/custom-emoji rendering.
+ */
+function ContentBody({
+  content,
+  mentionNames,
+  customEmojiUrls,
+}: {
+  content: string;
+  mentionNames?: Map<string, string>;
+  customEmojiUrls?: Map<string, string>;
+}) {
+  const segments: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  MD_TEXT_LINK_RE.lastIndex = 0;
+  while ((match = MD_TEXT_LINK_RE.exec(content)) !== null) {
+    if (match.index > last) {
+      segments.push(
+        <ContentWithMentions
+          key={`t${last}`}
+          content={content.slice(last, match.index)}
+          mentionNames={mentionNames}
+          customEmojiUrls={customEmojiUrls}
+        />,
+      );
+    }
+    const label = match[1].replace(/\\([\\[\]])/g, "$1").trim() || match[2];
+    segments.push(
+      <a
+        key={`l${match.index}`}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-violet-600 underline decoration-violet-600/40 hover:decoration-violet-600 dark:text-violet-400 dark:decoration-violet-400/40 dark:hover:decoration-violet-400"
+      >
+        {label}
+      </a>,
+    );
+    last = match.index + match[0].length;
+  }
+  if (segments.length === 0) {
+    return (
+      <ContentWithMentions
+        content={content}
+        mentionNames={mentionNames}
+        customEmojiUrls={customEmojiUrls}
+      />
+    );
+  }
+  if (last < content.length) {
+    segments.push(
+      <ContentWithMentions
+        key={`t${last}`}
+        content={content.slice(last)}
+        mentionNames={mentionNames}
+        customEmojiUrls={customEmojiUrls}
+      />,
+    );
+  }
+  return <>{segments}</>;
 }
 
 function ContentWithMentions({
@@ -418,6 +489,7 @@ export function MessageRow({
   profile,
   replyToProfile,
   mentionNames,
+  onImportAgent,
 }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -429,10 +501,15 @@ export function MessageRow({
     ? "You"
     : (profile?.name ?? truncatePubkey(message.pubkey));
   const timeStr = useMemo(() => relativeTime(message.createdAt), [message.createdAt]);
-  const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/i.test(message.content);
+  const { text: bodyText, attachments } = useMemo(
+    () => extractAttachments(message.content, message.imeta),
+    [message.content, message.imeta],
+  );
+  const hasMention = /@[0-9a-f]{6,8}\u2026[0-9a-f]{3,6}|nostr:npub1/i.test(bodyText);
   const hasCustomEmoji = customEmojiUrls?.size
-    ? /:[a-z0-9_+-]+:/.test(message.content)
+    ? /:[a-z0-9_+-]+:/.test(bodyText)
     : false;
+  const hasMarkdownLink = bodyText.includes("](");
 
   return (
     <div
@@ -497,16 +574,22 @@ export function MessageRow({
           />
         )}
 
-        <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
-          {hasMention || hasCustomEmoji
-            ? <ContentWithMentions content={message.content} mentionNames={mentionNames} customEmojiUrls={customEmojiUrls} />
-            : message.content}
-          {message.editedAt && !showHeader && (
-            <span className="ml-1 text-[11px] italic text-black/30 dark:text-white/30">
-              (edited)
-            </span>
-          )}
-        </p>
+        {(bodyText || attachments.length === 0) && (
+          <p className="break-words text-sm leading-relaxed text-black/90 dark:text-white/90">
+            {hasMention || hasCustomEmoji || hasMarkdownLink
+              ? <ContentBody content={bodyText} mentionNames={mentionNames} customEmojiUrls={customEmojiUrls} />
+              : bodyText}
+            {message.editedAt && !showHeader && (
+              <span className="ml-1 text-[11px] italic text-black/30 dark:text-white/30">
+                (edited)
+              </span>
+            )}
+          </p>
+        )}
+
+        {attachments.map((att) => (
+          <AttachmentCard key={att.url} attachment={att} onImportAgent={onImportAgent} />
+        ))}
 
         {reactions && onAddReaction && (
           <ReactionRow reactions={reactions} onAdd={onAddReaction} customEmojiUrls={customEmojiUrls} />

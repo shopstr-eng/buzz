@@ -74,3 +74,8 @@ deploy/charts/*/charts/*.tgz
 
 # Local data exports (never commit relay data)
 backups/
+
+# Local MinIO (dev media store) — binary + data, never committed
+bin-media/
+.minio-data/
+/tmp/minio.log

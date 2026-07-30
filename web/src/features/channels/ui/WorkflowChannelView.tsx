@@ -34,6 +34,7 @@ import { useSendMessage } from "../use-send-message";
 import { useChannelMembers } from "../use-channel-members";
 import { useReactions } from "../use-reactions";
 import { useRelay } from "@/shared/context/relay-context";
+import { useAgentSnapshotImport } from "../../agents/use-agent-snapshot-import";
 import { WebhookHeadersDialog } from "./WebhookHeadersDialog";
 import { MessageList } from "./MessageList";
 import { MessageComposer } from "./MessageComposer";
@@ -606,6 +607,7 @@ function AgentChatPanel({ channel }: { channel: Channel }) {
   const { send, isSending } = useSendMessage(channel.groupId, addOptimistic);
   const { members } = useChannelMembers(channel.groupId);
   const { reactions, addReaction } = useReactions(channel.groupId, identity?.pubkey);
+  const { importSnapshot } = useAgentSnapshotImport();
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
 
   const isReady = connectionState === "ready";
@@ -631,6 +633,7 @@ function AgentChatPanel({ channel }: { channel: Channel }) {
         reactions={reactions}
         onAddReaction={(msgId, emoji) => addReaction(msgId, emoji)}
         onReply={(msg) => setReplyTo(msg)}
+        onImportAgent={async (jsonText) => { await importSnapshot(jsonText); }}
       />
       <MessageComposer
         channelName={channel.name}

@@ -40,6 +40,8 @@ interface Props {
    *  parent.  Merged with author-only profiles so agent names and @-mention chips
    *  resolve even before the member has sent any messages. */
   memberProfiles?: Map<string, import("@/shared/hooks/use-profiles").Profile>;
+  /** Import a fetched .agent.json snapshot shared into the chat */
+  onImportAgent?: (jsonText: string) => Promise<void>;
 }
 
 /** shortKey matches the format inserted by MessageComposer: 8hex + … + 4hex */
@@ -122,6 +124,7 @@ export function MessageList({
   customEmoji,
   customEmojiUrls,
   memberProfiles,
+  onImportAgent,
 }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -290,6 +293,7 @@ export function MessageList({
             onBan={onBan ? () => onBan(msg) : undefined}
             onUnban={onUnban ? () => onUnban(msg) : undefined}
             onUntimeout={onUntimeout ? () => onUntimeout(msg) : undefined}
+            onImportAgent={onImportAgent}
             replyToMessage={
               replyToMsg
                 ? {

@@ -140,6 +140,52 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# 1b. Start MinIO (background) — S3-compatible store for media uploads.
+# The relay's media pipeline (PUT /upload) writes blobs to S3; without a
+# local MinIO every upload 500s. Binary lives at bin-media/minio (gitignored);
+# downloaded on first boot. Loopback-only, dev credentials.
+# ---------------------------------------------------------------------------
+export BUZZ_S3_ENDPOINT="${BUZZ_S3_ENDPOINT:-http://127.0.0.1:9000}"
+export BUZZ_S3_ACCESS_KEY="${BUZZ_S3_ACCESS_KEY:-buzz_dev}"
+export BUZZ_S3_SECRET_KEY="${BUZZ_S3_SECRET_KEY:-buzz_dev_secret}"
+export BUZZ_S3_BUCKET="${BUZZ_S3_BUCKET:-buzz-media}"
+
+if [[ "${BUZZ_S3_ENDPOINT}" == "http://127.0.0.1:9000" ]]; then
+  MINIO_BIN="bin-media/minio"
+  if [[ ! -x "${MINIO_BIN}" ]]; then
+    echo "==> Downloading MinIO server binary..."
+    mkdir -p bin-media
+    curl -fsSL -o "${MINIO_BIN}" https://dl.min.io/server/minio/release/linux-amd64/minio \
+      && chmod +x "${MINIO_BIN}" \
+      || echo "==> WARNING: MinIO download failed — media uploads will not work." >&2
+  fi
+  if [[ -x "${MINIO_BIN}" ]]; then
+    if ! (exec 3<>/dev/tcp/127.0.0.1/9000) 2>/dev/null; then
+      echo "==> Starting MinIO on 127.0.0.1:9000..."
+      mkdir -p .minio-data
+      MINIO_ROOT_USER="${BUZZ_S3_ACCESS_KEY}" MINIO_ROOT_PASSWORD="${BUZZ_S3_SECRET_KEY}" \
+        nohup "${MINIO_BIN}" server .minio-data --address 127.0.0.1:9000 --console-address 127.0.0.1:9001 \
+        >/tmp/minio.log 2>&1 &
+      for _ in $(seq 1 20); do
+        if (exec 3<>/dev/tcp/127.0.0.1/9000) 2>/dev/null; then break; fi
+        sleep 0.5
+      done
+    else
+      echo "==> MinIO already running."
+    fi
+    # Ensure the media bucket exists (idempotent; curl speaks SigV4 natively).
+    _bucket_status=$(curl -s -o /dev/null -w '%{http_code}' -X PUT \
+      --user "${BUZZ_S3_ACCESS_KEY}:${BUZZ_S3_SECRET_KEY}" \
+      --aws-sigv4 "aws:amz:us-east-1:s3" \
+      "http://127.0.0.1:9000/${BUZZ_S3_BUCKET}" || echo "000")
+    case "${_bucket_status}" in
+      200|409) echo "==> MinIO bucket '${BUZZ_S3_BUCKET}' ready (${_bucket_status})." ;;
+      *) echo "==> WARNING: MinIO bucket create returned ${_bucket_status} — media uploads may fail." >&2 ;;
+    esac
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Helper: resolve a pre-built binary or fall back to cargo run
 # Usage: run_bin <binary-name> <cargo-package> [args...]
 # ---------------------------------------------------------------------------

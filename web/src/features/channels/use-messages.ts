@@ -74,6 +74,7 @@ function eventToMessage(ev: NostrEvent): ChatMessage {
   const replyToId = ev.tags.find(
     (t) => t[0] === "e" && (t[3] === "reply" || !t[3]),
   )?.[1];
+  const imeta = ev.tags.filter((t) => t[0] === "imeta");
   return {
     id: ev.id,
     pubkey: ev.pubkey,
@@ -81,6 +82,7 @@ function eventToMessage(ev: NostrEvent): ChatMessage {
     createdAt: ev.created_at,
     kind: ev.kind,
     replyToId,
+    ...(imeta.length > 0 ? { imeta } : {}),
   };
 }
 

@@ -68,6 +68,12 @@ The relay looks up its community by the host from `RELAY_URL`. A row must exist 
 
 `scripts/start-replit.sh` prefers **pre-built binaries** in `target/release/` — after any merge touching `crates/` or `Cargo.lock`, rebuild all five (`buzz-relay buzz-admin buzz-agent buzz-acp buzz-dev-mcp`) or the workflow runs stale code. Release builds exceed the 5-min shell limit; re-run the same `cargo build` foreground command repeatedly — incremental progress persists between runs (detached/background processes get reaped with the shell session). Also: workflow restarts can leave a stale `buzz-relay` holding the metrics port (9102) → new instance panics `Address already in use` and crash-loops; `kill -9` the old PID first.
 
+## Media uploads need local MinIO (provisioned by start-replit.sh)
+
+The relay's media pipeline stores blobs in S3 (default endpoint `http://localhost:9000`); with nothing listening there, every `PUT /upload` 500s after auth passes. start-replit.sh now downloads a MinIO binary to `bin-media/` (gitignored, ~120MB), runs it on 127.0.0.1:9000 with dev creds (`buzz_dev`/`buzz_dev_secret`, data in `.minio-data/`), and creates the `buzz-media` bucket via `curl --aws-sigv4` (no `mc` needed). Setting `BUZZ_S3_ENDPOINT` to anything else skips all of this.
+
+**Debugging ladder for uploads:** 403 = membership (signer must be a relay member of the community bound to the request Host); 422 "invalid image data" = the relay fully decodes images — bad chunk CRCs or hand-crafted payloads fail even if `file` says the image is valid; 500 = S3/storage. A live check exists at `web/src/shared/lib/__tests__/blossom-upload.e2e.test.ts` (skipped unless `E2E_RELAY_URL` + `E2E_UPLOAD_SECKEY` are set; relay owner key qualifies as member). Node `fetch` silently drops a custom `Host` header — test through `https://$REPLIT_DEV_DOMAIN`, not loopback.
+
 ## startup script order
 
 `scripts/start-replit.sh` must:
