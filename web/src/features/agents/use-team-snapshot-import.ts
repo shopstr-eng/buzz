@@ -4,6 +4,11 @@
  * member as a NEW persona (fresh slug), then mint a NEW team (fresh id)
  * grouping them. Imports never overwrite existing personas or teams,
  * matching the desktop always-mint rule and the agent-snapshot import.
+ *
+ * If any publish fails midway, already-published member personas are rolled
+ * back via delete events so no stray members linger; a clean retry then
+ * re-mints everything without duplicates. If rollback itself partially fails,
+ * the error names the members left behind so the user can remove them.
  */
 
 import { useCallback, useEffect, useRef } from "react";
@@ -17,7 +22,7 @@ export function useTeamSnapshotImport(): {
   importTeamSnapshot: (jsonText: string) => Promise<string>;
 } {
   const { personas } = useAgentDirectory();
-  const { savePersona, saveTeam } = useAgentPublishing();
+  const { savePersona, saveTeam, deletePersona } = useAgentPublishing();
 
   // Ref so importTeamSnapshot stays stable while the directory streams in.
   const personasRef = useRef(personas);
@@ -35,25 +40,50 @@ export function useTeamSnapshotImport(): {
       // taken list so two same-named members in one snapshot never collide.
       const takenSlugs = personasRef.current.map((p) => p.id);
       const personaIds: string[] = [];
-      for (const member of members) {
-        const input = snapshotToPersonaInput(member);
-        const slug = await savePersona(input, null, takenSlugs);
-        takenSlugs.push(slug);
-        personaIds.push(slug);
-      }
+      try {
+        for (const member of members) {
+          const input = snapshotToPersonaInput(member);
+          const slug = await savePersona(input, null, takenSlugs);
+          takenSlugs.push(slug);
+          personaIds.push(slug);
+        }
 
-      await saveTeam(
-        {
-          name: team.name.trim(),
-          description: team.description?.trim() || undefined,
-          instructions: team.instructions?.trim() || undefined,
-          personaIds,
-        },
-        null, // fresh team id — never overwrite an existing team
-      );
+        await saveTeam(
+          {
+            name: team.name.trim(),
+            description: team.description?.trim() || undefined,
+            instructions: team.instructions?.trim() || undefined,
+            personaIds,
+          },
+          null, // fresh team id — never overwrite an existing team
+        );
+      } catch (e) {
+        const reason = e instanceof Error ? e.message : "Publish failed.";
+        if (personaIds.length === 0) {
+          throw new Error(`Team import failed: ${reason}`);
+        }
+        // Roll back already-published members so a retry starts clean and
+        // no stray personas linger without a team.
+        const leftover: string[] = [];
+        for (const id of personaIds) {
+          try {
+            await deletePersona(id);
+          } catch {
+            leftover.push(id);
+          }
+        }
+        if (leftover.length > 0) {
+          throw new Error(
+            `Team import failed: ${reason} Cleanup couldn't remove ${leftover.length} already-created member${leftover.length === 1 ? "" : "s"} (${leftover.join(", ")}) — remove them from Agents before retrying.`,
+          );
+        }
+        throw new Error(
+          `Team import failed: ${reason} Already-created members were removed, so it's safe to retry.`,
+        );
+      }
       return team.name.trim();
     },
-    [savePersona, saveTeam],
+    [savePersona, saveTeam, deletePersona],
   );
 
   return { importTeamSnapshot };
