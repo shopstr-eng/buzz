@@ -227,6 +227,7 @@ function ChatChannelView({ channel }: Props) {
           isLoading={isLoading}
           canFetchOlder={canFetchOlder}
           onFetchOlder={fetchOlder}
+          resetKey={channel.groupId}
           reactions={reactions}
           onAddReaction={(msgId, emoji, url) => addReaction(msgId, emoji, url)}
           customEmoji={customEmoji}

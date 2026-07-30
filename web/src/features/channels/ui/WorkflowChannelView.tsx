@@ -627,6 +627,7 @@ function AgentChatPanel({ channel }: { channel: Channel }) {
         isLoading={isLoading}
         canFetchOlder={canFetchOlder}
         onFetchOlder={fetchOlder}
+        resetKey={channel.groupId}
         reactions={reactions}
         onAddReaction={(msgId, emoji) => addReaction(msgId, emoji)}
         onReply={(msg) => setReplyTo(msg)}

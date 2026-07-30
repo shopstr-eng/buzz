@@ -14,6 +14,10 @@ interface Props {
   isLoading: boolean;
   canFetchOlder: boolean;
   onFetchOlder: () => void;
+  /** Identifies the conversation being shown; when it changes (channel switch)
+   *  the view snaps to the latest message instead of keeping the old scroll
+   *  position. */
+  resetKey?: string;
   reactions?: ReactionsMap;
   /** emoji is unicode or `:shortcode:`; emojiUrl set for custom emoji (NIP-30) */
   onAddReaction?: (messageId: string, emoji: string, emojiUrl?: string) => void;
@@ -101,6 +105,7 @@ export function MessageList({
   isLoading,
   canFetchOlder,
   onFetchOlder,
+  resetKey,
   reactions,
   onAddReaction,
   onReply,
@@ -121,6 +126,7 @@ export function MessageList({
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef(0);
+  const prevResetKeyRef = useRef<string | undefined>(undefined);
 
   // Collect unique author pubkeys across all messages for profile subscription,
   // plus pubkeys referenced by nostr:npub1… mention tokens in message content so
@@ -174,15 +180,28 @@ export function MessageList({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const channelChanged = resetKey !== prevResetKeyRef.current;
+    const wasEmpty = prevLengthRef.current === 0;
     const newMessages = messages.length > prevLengthRef.current;
+    prevResetKeyRef.current = resetKey;
     prevLengthRef.current = messages.length;
+    if (messages.length === 0) return;
+    if (channelChanged || wasEmpty) {
+      // Opening a channel (or the first history page arriving): anchor on the
+      // latest message. Instant, not smooth — the user should land there, not
+      // watch a scroll through history.
+      bottomRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+      return;
+    }
     if (!newMessages) return;
+    // Streaming in: follow the tail only when the user is already near it, so
+    // reading history isn't yanked away by incoming messages.
     const distanceFromBottom =
       container.scrollHeight - container.scrollTop - container.clientHeight;
     if (distanceFromBottom < 200) {
       bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [messages, resetKey]);
 
   if (isLoading) {
     return (
