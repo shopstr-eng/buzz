@@ -205,6 +205,7 @@ Standard kinds as substrate. Custom kinds only where genuinely novel.
 | **Workflows**       | —                                                  | 46001-46012  | No NIP equivalent                  |
 | **Job dispatch**    | —                                                  | 43001-43006  | Delegation trees                   |
 | **Project binding** | 30617 (NIP-34)                                     | `buzz-` tags | Channel, visibility                |
+| **Multi-repo projects** | —                                              | 30621 ([NIP-MP](docs/nips/NIP-MP.md)) | Cross-owner grouping is unexpressible in per-repo tags |
 | **Audit**           | —                                                  | 48001        | Hash-chain tamper-evident log      |
 
 If Buzz disappears tomorrow, your repos still work on gitworkshop.dev, your patches still work with ngit-cli, your identities still work on any nostr client. Centralized deployment, decentralized protocol.
@@ -221,6 +222,7 @@ If Buzz disappears tomorrow, your repos still work on gitworkshop.dev, your patc
 | Blossom media storage (SHA-256, S3)                   | ✅ Ships today                                        |
 | Approval gates                                        | 🚧 Infrastructure exists; executor wiring in progress |
 | Project binding (kind:30617 + `buzz-` tags)           | 📋 Designed                                           |
+| Multi-repo projects (kind:30621, [NIP-MP](docs/nips/NIP-MP.md)) | 📋 Designed                              |
 | Git hosting (smart HTTP + NIP-34)                     | ✅ Ships today                                        |
 | Merge coordinator                                     | 📋 Designed                                           |
 | NIP-34 issues (kind:1621)                             | 📋 Designed                                           |

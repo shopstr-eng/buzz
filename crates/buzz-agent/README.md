@@ -129,7 +129,7 @@ Everything is environment variables. No flags, no config files. (We are a subpro
 
 | Variable                                | Default                     | Notes                                                                                                                                     |
 | --------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `BUZZ_AGENT_PROVIDER`                   | —                           | Required. `anthropic`, `openai`, `databricks`, or `databricks_v2`. No implicit fallback — the agent errors at startup when this is unset. |
+| `BUZZ_AGENT_PROVIDER`                   | —                           | Required. `anthropic`, `openai`, `openrouter`, `databricks`, or `databricks_v2`. No implicit fallback — the agent errors at startup when this is unset. |
 | `ANTHROPIC_API_KEY`                     | —                           | Required when provider=anthropic.                                                                                                         |
 | `ANTHROPIC_MODEL`                       | —                           | Required when provider=anthropic.                                                                                                         |
 | `ANTHROPIC_BASE_URL`                    | `https://api.anthropic.com` |                                                                                                                                           |
@@ -138,6 +138,9 @@ Everything is environment variables. No flags, no config files. (We are a subpro
 | `OPENAI_COMPAT_MODEL`                   | —                           | Required when provider=openai.                                                                                                            |
 | `OPENAI_COMPAT_BASE_URL`                | `https://api.openai.com/v1` | Point at vLLM, llama.cpp, OpenRouter, Ollama, etc.                                                                                        |
 | `OPENAI_COMPAT_API`                     | `auto`                      | `auto` \| `chat` \| `responses`. `auto` picks Responses for `*.openai.com`, Chat Completions everywhere else.                             |
+| `OPENROUTER_API_KEY`                    | —                           | Required when provider=openrouter.                                                                                                      |
+| `OPENROUTER_MODEL`                      | —                           | Required when provider=openrouter. Use OpenRouter's `vendor/model` id, e.g. `anthropic/claude-sonnet-4.5`.                                |
+| `OPENROUTER_BASE_URL`                   | `https://openrouter.ai/api/v1` |                                                                                                                                      |
 | `DATABRICKS_HOST`                       | —                           | Required when provider=databricks or provider=databricks_v2.                                                                              |
 | `DATABRICKS_MODEL`                      | —                           | Required when provider=databricks or provider=databricks_v2.                                                                              |
 | `DATABRICKS_TOKEN`                      | —                           | Optional static bearer escape hatch. If unset, Databricks uses browser OAuth + refresh cache.                                             |
@@ -166,7 +169,7 @@ Everything is environment variables. No flags, no config files. (We are a subpro
 | vLLM                     | `openai`              | `POST {base}/chat/completions`                      | any tool-calling model                         |
 | llama.cpp                | `openai`              | `POST {base}/chat/completions`                      | any tool-calling GGUF                          |
 | Ollama                   | `openai`              | `POST {base}/chat/completions`                      | llama3.1, qwen2.5-coder                        |
-| OpenRouter               | `openai`              | `POST {base}/chat/completions`                      | anything they route                            |
+| OpenRouter               | `openrouter`          | `POST {base}/chat/completions`                      | anything they route (extended-thinking replay, provider-agnostic tool calling) |
 | Block Gateway            | `openai`              | `POST {base}/chat/completions`                      | gpt-5, claude                                  |
 | Databricks               | `databricks`          | `POST {host}/serving-endpoints/{model}/invocations` | goose-claude-4-6-sonnet                        |
 | Databricks AI Gateway v2 | `databricks_v2`       | `POST {host}/ai-gateway/{provider}/v1/...`          | databricks-gpt-5-5, databricks-claude-opus-4-7 |
