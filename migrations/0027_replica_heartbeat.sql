@@ -26,13 +26,21 @@
 -- and deliberately deployment-global (no community_id) — it describes the
 -- replication topology, not tenant data.
 
-CREATE TABLE replica_heartbeat (
+-- IF NOT EXISTS / conflict guards: production databases seeded by copying the
+-- dev schema (rather than by running migrations) already have this table but
+-- no _sqlx_migrations row for it; the migration must apply cleanly over a
+-- pre-seeded table as well as on a fresh database.
+CREATE TABLE IF NOT EXISTS replica_heartbeat (
     id    smallint PRIMARY KEY CHECK (id = 1),
     epoch uuid     NOT NULL DEFAULT gen_random_uuid(),
     token bigint   NOT NULL DEFAULT 0
 );
 
-INSERT INTO replica_heartbeat (id) VALUES (1);
+INSERT INTO replica_heartbeat (id) VALUES (1)
+ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO _operator_global_tables (table_name, reason) VALUES
-    ('replica_heartbeat', 'single-row replication freshness token; describes deployment topology, never tenant data');
+INSERT INTO _operator_global_tables (table_name, reason)
+SELECT 'replica_heartbeat', 'single-row replication freshness token; describes deployment topology, never tenant data'
+WHERE NOT EXISTS (
+    SELECT 1 FROM _operator_global_tables WHERE table_name = 'replica_heartbeat'
+);
