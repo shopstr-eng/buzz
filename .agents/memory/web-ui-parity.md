@@ -82,3 +82,4 @@ All 8 remaining desktop↔web gaps closed (votes, DM polish, working indicator, 
 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.
+- **JSON key order is part of the wire contract (2026-07-30):** desktop suppresses republishes by comparing raw content BYTES (retained row vs serde serialization of its content structs). Web builders for kinds 30175/30176/30177 must insert keys in the exact desktop struct order; vitest pins the exact serialized strings. Never "clean up" key ordering in web/src/features/agents/agent-events.ts.

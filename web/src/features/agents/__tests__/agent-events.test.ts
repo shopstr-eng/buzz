@@ -260,6 +260,32 @@ describe("buildPersonaEvent", () => {
     expect(c.respond_to).toBe("anyone");
   });
 
+  it("pins exact serialized key order to the desktop struct (byte-compared by desktop)", () => {
+    // Desktop PersonaEventContent order: display_name, system_prompt,
+    // avatar_url, runtime, model, provider, name_pool, respond_to,
+    // respond_to_allowlist, parallelism.
+    const ev = buildPersonaEvent(
+      {
+        displayName: "Support Bot",
+        systemPrompt: "You help users.",
+        avatarUrl: "https://x.test/a.png",
+        runtime: "buzz-agent",
+        model: "claude-opus-4-5",
+        provider: "anthropic",
+        namePool: ["alpha", "beta"],
+        respondTo: "allowlist",
+        respondToAllowlist: [OWNER],
+        parallelism: 3,
+        shared: false,
+      },
+      "support-bot",
+      NOW,
+    );
+    expect(ev.content).toBe(
+      `{"display_name":"Support Bot","system_prompt":"You help users.","avatar_url":"https://x.test/a.png","runtime":"buzz-agent","model":"claude-opus-4-5","provider":"anthropic","name_pool":["alpha","beta"],"respond_to":"allowlist","respond_to_allowlist":["${OWNER}"],"parallelism":3}`,
+    );
+  });
+
   it("preserves name_pool verbatim (desktop contract field)", () => {
     const withPool = JSON.parse(
       buildPersonaEvent({ ...base, namePool: ["alpha", "beta"] }, "s", NOW).content,
@@ -400,6 +426,40 @@ describe("buildManagedAgentEvent", () => {
       expect(saved.kind).toBe(original.kind);
       expect(saved.tags).toEqual(original.tags);
     }
+  });
+
+  it("pins exact serialized key order to the desktop struct (byte-compared by desktop)", () => {
+    // Desktop suppresses republishes by comparing raw content bytes against
+    // its own serde serialization of ManagedAgentEventContent, so key order
+    // is part of the contract: name, persona_id, system_prompt, model,
+    // provider, persona_source_version, parallelism, respond_to,
+    // respond_to_allowlist.
+    const standalone = buildManagedAgentEvent(
+      {
+        name: "Solo",
+        systemPrompt: "You run.",
+        model: "m",
+        provider: "p",
+        personaSourceVersion: "abc123",
+        respondTo: "allowlist",
+        respondToAllowlist: ["c".repeat(64)],
+        parallelism: 2,
+      },
+      "b".repeat(64),
+      NOW,
+    );
+    expect(standalone.content).toBe(
+      `{"name":"Solo","system_prompt":"You run.","model":"m","provider":"p","persona_source_version":"abc123","parallelism":2,"respond_to":"allowlist","respond_to_allowlist":["${"c".repeat(64)}"]}`,
+    );
+
+    const linked = buildManagedAgentEvent(
+      { name: "Linked", personaId: "support-bot", respondTo: "owner-only", parallelism: 1 },
+      "b".repeat(64),
+      NOW,
+    );
+    expect(linked.content).toBe(
+      '{"name":"Linked","persona_id":"support-bot","parallelism":1,"respond_to":"owner-only"}',
+    );
   });
 
   it("edit round-trip keeps a stored provider the model prefix can't re-derive", () => {

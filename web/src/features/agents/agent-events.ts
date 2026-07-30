@@ -103,6 +103,11 @@ export function buildPersonaEvent(
   slug: string,
   now: number,
 ): UnsignedNostrEvent {
+  // KEY ORDER IS PART OF THE CONTRACT: keys mirror desktop's
+  // PersonaEventContent struct order (display_name, system_prompt,
+  // avatar_url, runtime, model, provider, name_pool, respond_to,
+  // respond_to_allowlist, parallelism) because desktop suppresses
+  // republishes by comparing raw content bytes. Do not reorder.
   const payload: Record<string, unknown> = {
     display_name: input.displayName.trim(),
     system_prompt: input.systemPrompt,
@@ -204,10 +209,15 @@ export function buildManagedAgentEvent(
   agentPubkey: string,
   now: number,
 ): UnsignedNostrEvent {
+  // KEY ORDER IS PART OF THE CONTRACT: desktop's republish-suppression
+  // (reconcile.rs retain_agent_record) compares raw content BYTES against
+  // its own serde serialization of ManagedAgentEventContent. Keys must be
+  // inserted in the exact desktop struct order (name, persona_id,
+  // system_prompt, model, provider, persona_source_version, parallelism,
+  // respond_to, respond_to_allowlist) or a value-identical web edit looks
+  // "changed" and triggers a spurious desktop republish.
   const payload: Record<string, unknown> = {
     name: input.name.trim(),
-    parallelism: input.parallelism,
-    respond_to: input.respondTo,
   };
   if (input.personaId) {
     payload.persona_id = input.personaId;
@@ -219,6 +229,8 @@ export function buildManagedAgentEvent(
     // persona_source_version; standalone agents keep it verbatim.
     opt(payload, "persona_source_version", input.personaSourceVersion);
   }
+  payload.parallelism = input.parallelism;
+  payload.respond_to = input.respondTo;
   if (input.respondToAllowlist?.length) payload.respond_to_allowlist = input.respondToAllowlist;
 
   return {
