@@ -15,11 +15,12 @@ import type { PersonaFormInput, RespondTo } from "../agent-events";
 
 export const KIND_PERSONA = 30175;
 
-export interface CatalogPersona {
-  /** "<authorPubkey>:<dTag>" — dedupe/provenance key. */
-  coordinate: string;
-  authorPubkey: string;
-  createdAt: number;
+/**
+ * Sanitized persona definition fields as they appear in shared content —
+ * shared between kind:30175 catalog personas and the embedded member
+ * projections of kind:30178 team-catalog events (same JSON schema).
+ */
+export interface PersonaProjection {
   displayName: string;
   avatarUrl: string | null;
   systemPrompt: string;
@@ -30,6 +31,13 @@ export interface CatalogPersona {
   /** "allowlist" is downgraded to "owner-only" by the contract. */
   respondTo: "owner-only" | "anyone" | null;
   parallelism: number | null;
+}
+
+export interface CatalogPersona extends PersonaProjection {
+  /** "<authorPubkey>:<dTag>" — dedupe/provenance key. */
+  coordinate: string;
+  authorPubkey: string;
+  createdAt: number;
 }
 
 /** Exactly one ["shared","true"] tag — no more, no less. */
@@ -69,17 +77,12 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-/** Parse one persona event into a catalog entry (shared check included). */
-export function parseCatalogPersona(ev: NostrEvent): CatalogPersona | null {
-  if (!personaEventIsShared(ev)) return null;
-  const dTags = ev.tags.filter((t) => t[0] === "d" && typeof t[1] === "string");
-  if (dTags.length !== 1) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(ev.content);
-  } catch {
-    return null;
-  }
+/**
+ * Parse a sanitized persona-definition object (persona event content, or an
+ * embedded team-catalog member projection — same schema) into its fields.
+ * Returns null when the object has no usable display_name.
+ */
+export function parsePersonaProjection(parsed: unknown): PersonaProjection | null {
   if (!isObject(parsed) || typeof parsed.display_name !== "string" || !parsed.display_name.trim()) {
     return null;
   }
@@ -101,9 +104,6 @@ export function parseCatalogPersona(ev: NostrEvent): CatalogPersona | null {
       ? parsed.parallelism
       : null;
   return {
-    coordinate: `${ev.pubkey}:${dTags[0][1]}`,
-    authorPubkey: ev.pubkey,
-    createdAt: ev.created_at,
     displayName: parsed.display_name,
     avatarUrl,
     systemPrompt: typeof parsed.system_prompt === "string" ? parsed.system_prompt : "",
@@ -115,6 +115,27 @@ export function parseCatalogPersona(ev: NostrEvent): CatalogPersona | null {
       : [],
     respondTo,
     parallelism,
+  };
+}
+
+/** Parse one persona event into a catalog entry (shared check included). */
+export function parseCatalogPersona(ev: NostrEvent): CatalogPersona | null {
+  if (!personaEventIsShared(ev)) return null;
+  const dTags = ev.tags.filter((t) => t[0] === "d" && typeof t[1] === "string");
+  if (dTags.length !== 1) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(ev.content);
+  } catch {
+    return null;
+  }
+  const projection = parsePersonaProjection(parsed);
+  if (!projection) return null;
+  return {
+    ...projection,
+    coordinate: `${ev.pubkey}:${dTags[0][1]}`,
+    authorPubkey: ev.pubkey,
+    createdAt: ev.created_at,
   };
 }
 

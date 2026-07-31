@@ -23,6 +23,8 @@ import { useEngrams } from "../use-engrams";
 import { MemorySection } from "./MemorySection";
 import { useAgentCatalog } from "../use-agent-catalog";
 import { catalogToPersonaInput, type CatalogPersona } from "../lib/agent-catalog";
+import { type CatalogTeam } from "../lib/team-catalog";
+import { useCatalogTeamImport } from "../use-catalog-team-import";
 import { CatalogSection } from "./CatalogSection";
 import { PersonaDialog } from "./PersonaDialog";
 import { PersonaShareDialog } from "./PersonaShareDialog";
@@ -228,11 +230,14 @@ export function AgentsView() {
   );
   const {
     entries: catalogEntries,
+    teams: catalogTeams,
     copied: catalogCopied,
     markCopied,
     isLoading: catalogLoading,
   } = useAgentCatalog();
+  const { importCatalogTeam } = useCatalogTeamImport();
   const [addingCatalogId, setAddingCatalogId] = useState<string | null>(null);
+  const [catalogTeamError, setCatalogTeamError] = useState<string | null>(null);
 
   /** Copy a shared catalog persona into the owner's private list (fresh slug). */
   async function handleAddCatalog(entry: CatalogPersona): Promise<void> {
@@ -242,6 +247,20 @@ export function AgentsView() {
       markCopied(entry.coordinate);
     } catch {
       // surfaced via publishError
+    } finally {
+      setAddingCatalogId(null);
+    }
+  }
+
+  /** Copy a shared catalog team (all members + team) into the owner's private lists. */
+  async function handleAddCatalogTeam(team: CatalogTeam): Promise<void> {
+    setAddingCatalogId(team.coordinate);
+    setCatalogTeamError(null);
+    try {
+      await importCatalogTeam(team);
+      markCopied(team.coordinate);
+    } catch (e) {
+      setCatalogTeamError(e instanceof Error ? e.message : "Team import failed.");
     } finally {
       setAddingCatalogId(null);
     }
@@ -354,16 +373,21 @@ export function AgentsView() {
         )}
       </Section>
 
-      <Section title="Community catalog" Icon={Globe} count={catalogEntries.length}
+      <Section title="Community catalog" Icon={Globe} count={catalogEntries.length + catalogTeams.length}
         empty={catalogLoading
           ? "Loading shared agents…"
-          : "No shared agents yet. Personas members share to the catalog appear here."}>
-        {catalogEntries.length > 0 && (
+          : "No shared agents or teams yet. Personas and teams members share to the catalog appear here."}>
+        {catalogTeamError && (
+          <p className="mb-2 text-[11px] text-red-600 dark:text-red-400">{catalogTeamError}</p>
+        )}
+        {(catalogEntries.length > 0 || catalogTeams.length > 0) && (
           <CatalogSection
             entries={catalogEntries}
+            teams={catalogTeams}
             copied={catalogCopied}
             addingId={addingCatalogId}
             onAdd={(e) => void handleAddCatalog(e)}
+            onAddTeam={(t) => void handleAddCatalogTeam(t)}
           />
         )}
       </Section>

@@ -89,3 +89,10 @@ All 8 remaining desktop↔web gaps closed (votes, DM polish, working indicator, 
 **Why:** Implemented to close the gap between what the web UI showed and what the desktop Buzz client supports.
 **How to apply:** All hooks/components are wired. To add reactions to a new chat surface, import `useReactions` and pass `reactions`/`onAddReaction` down to `MessageList`.
 - **JSON key order is part of the wire contract (2026-07-30):** desktop suppresses republishes by comparing raw content BYTES (retained row vs serde serialization of its content structs). Web builders for kinds 30175/30176/30177 must insert keys in the exact desktop struct order; vitest pins the exact serialized strings. Never "clean up" key ordering in web/src/features/agents/agent-events.ts.
+
+## Shared team catalog (2026-07-31, kind:30178)
+- **30178 content schema (web-defined per NIP-AP):** `{ v:1, name, description?/tagline?, instructions?, members:[<persona-content projections>] }` — members reuse the 30175 content field names; parse with the shared persona-projection parser (allowlist→owner-only downgrade applies to embedded members too).
+- **Catalog reads page the kind, no `#shared` REQ filter** — same ruling as 30175; relay gates foreign unshared heads server-side but own unshared heads come back, so client re-checks the shared tag on the latest head per (author,d).
+- **Team d-tags are ids, not slugs** (UUID or `builtin-team:x`, colons legal); provenance coordinates are prefixed `team/<pubkey>:<d>` to keep the localStorage copies list disjoint from persona coordinates.
+- **Catalog team import = always-mint** (fresh member slugs shared:false, fresh team UUID) with member rollback on failure — mirrors the team-snapshot import; import UI copy must state a shared team includes EVERY member's instructions (NIP-AP MUST).
+- Web still has no 30178 *publisher* (no team share UI) — desktop/upstream publishes; web is read+import only as of 2026-07-31.
