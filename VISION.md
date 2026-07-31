@@ -170,6 +170,12 @@ Agents aren't monolithic. A persona bundles a model and a system prompt. A team 
 
 ---
 
+## Remote Agents
+
+An agent's identity, history, and presence live on the relay — so the machine running it is replaceable. The desktop deploys agents onto remote infrastructure through swappable provider binaries, and after deploy retains no substrate control channel: status, steering, and shutdown all flow over the relay, and the agent bounds its own lifetime. See [VISION_REMOTE_AGENTS.md](VISION_REMOTE_AGENTS.md) for the full picture.
+
+---
+
 ## Culture Features
 
 _(Planned design — not yet implemented)_
@@ -209,22 +215,23 @@ Greenfield. Agent swarms build in parallel, integrating at the event store bound
 
 ## Status
 
-|     | Area                                                                                                                                     |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| ✅  | Core relay, auth, pub/sub, search, audit                                                                                                 |
-| ✅  | MCP server — full feature surface                                                                                                        |
-| ✅  | ACP agent harness — goose, codex, claude code                                                                                            |
-| ✅  | Desktop client (Tauri) — Stream, Home, Forum, DMs, Agents, Workflows, Search, Settings, Profiles, Presence                               |
-| ✅  | Channel features — messaging, threads, reactions, canvases, media uploads, editing, deletion, typing indicators, NIP-29, soft-delete     |
-| ✅  | Workflow engine — YAML-as-code, execution traces, message/reaction/schedule/webhook triggers                                             |
-| ✅  | Identity — NIP-05, public profiles, NIP-98 auth, agent protection                                                                        |
-| ✅  | Agent CLI — `buzz-cli`, mirrors and extends the MCP surface                                                                              |
-| ✅  | Agent personas and teams — desktop-managed, built-in defaults, operator-defined                                                          |
-| 🚧  | Workflow approval gates — infrastructure exists (DB, API, UI); executor doesn't persist/resume (WF-08)                                   |
-| ✅  | Huddles — WebSocket Opus voice relay + lifecycle events (recording/tracks planned)                                                       |
-| ✅  | Buzz Mesh — relay-gated shared AI compute (mesh-llm over iroh); members pool GPUs, agents consume via a local OpenAI-compatible endpoint |
-| 🚧  | Mobile client — Flutter app (channels, forum, search, profile, pairing); in active development                                           |
-| 📋  | Developer portal, push notifications, culture features                                                                                   |
+| | Area |
+|-|------|
+| ✅ | Core relay, auth, pub/sub, search, audit |
+| ✅ | MCP server — full feature surface |
+| ✅ | ACP agent harness — goose, codex, claude code |
+| ✅ | Desktop client (Tauri) — Stream, Home, Forum, DMs, Agents, Workflows, Search, Settings, Profiles, Presence |
+| ✅ | Channel features — messaging, threads, reactions, canvases, media uploads, editing, deletion, typing indicators, NIP-29, soft-delete |
+| ✅ | Workflow engine — YAML-as-code, execution traces, message/reaction/schedule/webhook triggers |
+| ✅ | Identity — NIP-05, public profiles, NIP-98 auth, agent protection |
+| ✅ | Agent CLI — `buzz-cli`, mirrors and extends the MCP surface |
+| ✅ | Agent personas and teams — desktop-managed, built-in defaults, operator-defined |
+| 🚧 | Workflow approval gates — infrastructure exists (DB, API, UI); executor doesn't persist/resume (WF-08) |
+| ✅ | Huddles — WebSocket Opus voice relay + lifecycle events (recording/tracks planned) |
+| ✅ | Buzz Mesh — relay-gated shared AI compute (mesh-llm over iroh); members pool GPUs, agents consume via a local OpenAI-compatible endpoint |
+| 🚧 | Mobile client — Flutter app (channels, forum, search, profile, pairing); in active development |
+| 📋 | Remote agents — provider-based deployment to remote substrates (Kubernetes first); spec in review |
+| 📋 | Developer portal, push notifications, culture features |
 
 ---
 
