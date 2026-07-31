@@ -18,6 +18,12 @@ The ACP monitors kind:9 for `!rotate`, `!cancel`, `!shutdown` from the owner pub
 ## Full parity analysis
 A complete desktop↔web gap analysis (per-feature tables + phasing A–E) lives at `docs/web-parity-analysis.md` (2026-07-27). Update it as gaps close.
 
+## 2026-07-31 parity round (40-commit upstream merge)
+- **Presence cadence is contract, not preference** — desktop heartbeats kind:20001 every 60s and the relay TTL is 3× that (180s, desktop `presence.ts`: "the relay owns the authoritative TTL"). Any client heartbeating slower than the TTL renders perpetually offline. Web matches: 60s heartbeat + TTL-aware rendering (stale entries → offline) + 30s sweep re-render.
+- **kind:44200 cache-read tokens** — per-turn field is `turnCacheReadTokens` on the wire (camelCase; snake fallback), from `UsageUpdatePayload.turn_cache_read_tokens`. Sum per-turn only; NEVER sum `cumulative_cache_read_tokens`. Preserve None ("didn't report") vs Some(0) ("confirmed none") — web carries a `cachedInputReported` flag.
+- **Empty edit = delete** — desktop deletes a message when the edit text is cleared to empty (with confirmation). Web routes empty edit submits to the kind:5 delete flow behind `window.confirm`.
+- **Deferred to follow-up tasks**: shared team catalog (kind:30178, relay now gates reads on the `shared` tag), channel topic display/editing, NIP-RS manual-unread override (`ov_*` groups live ONLY in the primary read-state coordinate; validate the complete ov_s/ov_c/ov_b group before any decode/merge).
+
 ## Phase A done (2026-07-27) — key decisions
 - **Self-delete publishes kind 5** (not 9005) with `h+e` tags — matches desktop; 9005 is the moderation variant. Relay accepts both for ingest.
 - **Read state + pinned channels sync via kind:30078 (DONE 2026-07-28)** — desktop's NIP-RS slot format (nip44-to-self) is mirrored in `use-sync-30078.ts`. STILL TRUE: never publish plaintext 30078 (would corrupt desktop's blobs); degrade to local-only when nip44 is unavailable.

@@ -20,6 +20,8 @@ interface Props {
   editing?: ChatMessage | null;
   onClearEdit?: () => void;
   onEditSave?: (messageId: string, content: string, newMentionPubkeys?: string[]) => Promise<void>;
+  /** Desktop parity: submitting an edit cleared to empty deletes the message. */
+  onEditDelete?: (messageId: string) => void | Promise<void>;
   /** When true, shows workflow-specific slash command hints */
   hasWorkflows?: boolean;
   /** Fired on keystroke so the parent can broadcast typing indicators */
@@ -99,6 +101,7 @@ export function MessageComposer({
   editing,
   onClearEdit,
   onEditSave,
+  onEditDelete,
   hasWorkflows,
   onTyping,
   timeoutRejection,
@@ -132,7 +135,21 @@ export function MessageComposer({
 
   async function handleSend() {
     const content = value.trim();
-    if (!content || isSending || disabled) return;
+    if (isSending || disabled) return;
+
+    // Desktop parity: clearing an edit to empty deletes the message.
+    if (!content) {
+      if (editing && onEditDelete) {
+        setValue("");
+        setMentionedPubkeys(new Set());
+        setPicker(null);
+        setSlashPicker(null);
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+        await onEditDelete(editing.id);
+        onClearEdit?.();
+      }
+      return;
+    }
 
     if (editing && onEditSave) {
       // Desktop edit semantics: p-tag ONLY mentions absent from the original

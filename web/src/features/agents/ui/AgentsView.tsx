@@ -113,6 +113,9 @@ function MetricRow({ metric }: { metric: AgentMetricAggregate }) {
             : metric.inputTokens + metric.outputTokens
           ).toLocaleString()}{" "}
           tokens
+          {metric.cachedInputReported && (
+            <> · {metric.cachedInputTokens.toLocaleString()} cached</>
+          )}
         </p>
       </div>
       {metric.costUsd > 0 && (

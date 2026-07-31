@@ -31,6 +31,12 @@ export interface AgentMetricAggregate {
    *  0 when no turn carried a provider total — callers fall back to
    *  input+output. Never derive by summing input+output here (NIP-AM). */
   totalTokens: number;
+  /** Sum of per-turn cache-read token counts (upstream #3999). Meaningful
+   *  only when `cachedInputReported` — a turn with no cache field contributes
+   *  nothing, distinguishing "provider confirmed 0" from "didn't report". */
+  cachedInputTokens: number;
+  /** True once any turn carried a cache-read field (incl. an explicit 0). */
+  cachedInputReported: boolean;
   costUsd: number;
   lastTurnAt: number;
 }
@@ -54,11 +60,15 @@ export interface TokenCounts {
    *  harness/provider doesn't report one (e.g. goose). */
   totalTokens?: number | null;
   turnTotalTokens?: number | null;
+  /** Per-turn cache-read tokens (upstream #3999); absent when the provider
+   *  doesn't report cache usage — never the session-cumulative counter. */
+  turnCacheReadTokens?: number | null;
   input_tokens?: number | null;
   output_tokens?: number | null;
   cost_usd?: number | null;
   total_tokens?: number | null;
   turn_total_tokens?: number | null;
+  turn_cache_read_tokens?: number | null;
 }
 
 function num(v: unknown): number {
@@ -83,6 +93,7 @@ export function foldTurnMetric(
   createdAt: number,
 ): AgentMetricAggregate {
   const counts = payload.turn ?? payload.usage ?? payload.turn_counts ?? {};
+  const turnCacheRead = counts.turnCacheReadTokens ?? counts.turn_cache_read_tokens;
   return {
     agentPubkey,
     model: payload.model ?? existing?.model ?? null,
@@ -98,6 +109,8 @@ export function foldTurnMetric(
           counts.total_tokens ??
           counts.turn_total_tokens,
       ),
+    cachedInputTokens: (existing?.cachedInputTokens ?? 0) + num(turnCacheRead),
+    cachedInputReported: (existing?.cachedInputReported ?? false) || turnCacheRead != null,
     costUsd: (existing?.costUsd ?? 0) + num(counts.costUsd ?? counts.cost_usd),
     lastTurnAt: Math.max(existing?.lastTurnAt ?? 0, createdAt),
   };

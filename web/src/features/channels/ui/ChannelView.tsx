@@ -310,6 +310,10 @@ function ChatChannelView({ channel }: Props) {
           editing={editing}
           onClearEdit={() => setEditing(null)}
           onEditSave={editMessage}
+          onEditDelete={async (id) => {
+            // Desktop parity: an edit cleared to empty is a delete request.
+            if (window.confirm("Delete this message?")) await deleteMessage(id);
+          }}
           onTyping={notifyTyping}
           timeoutRejection={timeoutRejection}
         />

@@ -3,7 +3,11 @@
  *
  * Events carry content = "online" | "away" | "offline", no tags. The desktop
  * derives status from OS idle detection; the web approximates it with tab
- * visibility (hidden → away) plus a 4-minute heartbeat.
+ * visibility (hidden → away) plus a 60-second heartbeat.
+ *
+ * Cadence mirrors the desktop (presence.ts): heartbeat every 60s and the
+ * relay's authoritative TTL is 3× that (180s), so entries older than the TTL
+ * render as offline even when no explicit "offline" event arrives.
  *
  * `usePresenceLifecycle` mounts the global subscription + own publishing —
  * call it ONCE (sidebar). `usePresenceMap` is a cheap reader for any row.
@@ -15,7 +19,9 @@ import { getSignFn } from "@/shared/lib/identity";
 import type { NostrEvent } from "@/shared/lib/relay-connection";
 
 export const KIND_PRESENCE = 20001;
-const HEARTBEAT_MS = 4 * 60 * 1000;
+const HEARTBEAT_MS = 60_000;
+/** Relay-owned presence TTL (matches desktop PRESENCE_TTL_SECONDS): 3× heartbeat. */
+const PRESENCE_TTL_SECONDS = 3 * (HEARTBEAT_MS / 1000);
 
 export type PresenceStatus = "online" | "away" | "offline";
 
@@ -36,7 +42,15 @@ export function usePresenceMap(): Map<string, PresenceStatus> {
       listeners.delete(fn);
     };
   }, []);
-  return new Map([...presenceMap.entries()].map(([k, v]) => [k, v.status]));
+  // TTL-aware read: a heartbeat older than the relay TTL has expired
+  // server-side — render offline rather than a stale "online"/"away".
+  const now = Math.floor(Date.now() / 1000);
+  return new Map(
+    [...presenceMap.entries()].map(([k, v]) => [
+      k,
+      v.status !== "offline" && now - v.ts > PRESENCE_TTL_SECONDS ? "offline" : v.status,
+    ]),
+  );
 }
 
 /** Mount once: subscribes to all presence and publishes the user's own. */
@@ -60,7 +74,13 @@ export function usePresenceLifecycle(): void {
         emit();
       },
     );
-    return unsub;
+    // Fixed-cadence re-render so TTL-expired entries flip to offline even
+    // when no new presence events arrive (desktop backstop-poll equivalent).
+    const sweep = setInterval(emit, 30_000);
+    return () => {
+      unsub();
+      clearInterval(sweep);
+    };
   }, [connection, connectionState]);
 
   // Own presence: online now, heartbeat while visible, away when tab hidden.

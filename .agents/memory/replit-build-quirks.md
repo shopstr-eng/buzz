@@ -13,6 +13,10 @@ export PATH=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/home/runner/workspac
 cargo run -p buzz-relay --release --ignore-rust-version
 ```
 
+## Background builds die with the shell call
+
+`(cargo build ... &)` in a subshell gets killed when the ShellExec call ends — silently, with an empty log. Use `setsid nohup cargo build ... > /tmp/build.log 2>&1 < /dev/null &` to detach. And never poll with `pgrep -f "cargo build"` from a shell whose own command line contains that string — it matches itself and reports a dead build as running; use `pgrep -x cargo` instead. Foreground builds in repeated 5-min chunks (per the tool timeout) also work fine.
+
 ## tokio-websockets AVX-512 patch
 
 `tokio-websockets 0.13.x` uses `#[target_feature(enable = "avx512f")]` which is an unstable Rust feature until 1.89.0. All 0.13.x versions have this issue.
