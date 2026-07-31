@@ -14,6 +14,7 @@ function eventToChannel(ev: NostrEvent): Channel | null {
 
   const name = ev.tags.find((t) => t[0] === "name")?.[1] ?? groupId;
   const about = ev.tags.find((t) => t[0] === "about")?.[1];
+  const topic = ev.tags.find((t) => t[0] === "topic")?.[1];
   const picture = ev.tags.find((t) => t[0] === "picture")?.[1];
   const isPrivate = ev.tags.some((t) => t[0] === "private");
   const channelType = (ev.tags.find((t) => t[0] === "t")?.[1] ?? "stream") as ChannelType;
@@ -23,7 +24,7 @@ function eventToChannel(ev: NostrEvent): Channel | null {
       ? ev.tags.filter((t) => t[0] === "p").map((t) => t[1])
       : undefined;
 
-  return { groupId, name, about, picture, isPrivate, channelType, model, participantPubkeys };
+  return { groupId, name, about, topic, picture, isPrivate, channelType, model, participantPubkeys };
 }
 
 export function useChannels(): {

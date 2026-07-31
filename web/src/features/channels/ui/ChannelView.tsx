@@ -125,11 +125,14 @@ function ChatChannelView({ channel }: Props) {
           <h1 className="text-sm font-semibold text-black dark:text-white">
             {channel.name}
           </h1>
-          {channel.about && (
+          {(channel.topic || channel.about) && (
             <>
               <div className="h-3.5 w-px bg-black/15 dark:bg-white/15" />
-              <p className="min-w-0 truncate text-xs text-black/50 dark:text-white/50">
-                {channel.about}
+              <p
+                className="min-w-0 truncate text-xs text-black/50 dark:text-white/50"
+                title={channel.topic || channel.about}
+              >
+                {channel.topic || channel.about}
               </p>
             </>
           )}

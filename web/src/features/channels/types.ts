@@ -7,6 +7,8 @@ export interface Channel {
   groupId: string;
   name: string;
   about?: string;
+  /** Channel topic — `topic` tag on kind 39000 (set via kind:9002 `["topic", …]`) */
+  topic?: string;
   picture?: string;
   isPrivate: boolean;
   channelType: ChannelType;

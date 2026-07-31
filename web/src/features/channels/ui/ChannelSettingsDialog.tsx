@@ -21,6 +21,7 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
   const { connection } = useRelay();
   const [name, setName] = useState(channel.name);
   const [about, setAbout] = useState(channel.about ?? "");
+  const [topic, setTopic] = useState(channel.topic ?? "");
   const [templateSaved, setTemplateSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,22 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
         content: "",
       });
       connection.publish(signed);
+
+      // Topic changes mirror desktop's set-topic contract exactly: a
+      // standalone kind:9002 carrying only ["h", …] + ["topic", …] tags.
+      const trimmedTopic = topic.trim();
+      if (trimmedTopic !== (channel.topic ?? "")) {
+        const topicSigned = await signFn({
+          kind: KIND_EDIT_METADATA,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ["h", channel.groupId],
+            ["topic", trimmedTopic],
+          ],
+          content: "",
+        });
+        connection.publish(topicSigned);
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save settings.");
@@ -89,6 +106,18 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
           onChange={(e) => setName(e.target.value)}
           maxLength={60}
           className="mb-3 w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-black focus:border-black/30 focus:outline-none dark:border-white/15 dark:text-white dark:focus:border-white/30"
+        />
+
+        <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">
+          Topic
+        </label>
+        <input
+          type="text"
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          maxLength={200}
+          placeholder="What is this channel about right now?"
+          className="mb-3 w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm text-black placeholder:text-black/35 focus:border-black/30 focus:outline-none dark:border-white/15 dark:text-white dark:placeholder:text-white/35 dark:focus:border-white/30"
         />
 
         <label className="mb-1 block text-xs font-medium text-black/60 dark:text-white/60">

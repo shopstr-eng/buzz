@@ -68,6 +68,7 @@ function SystemMessageRow({
       actor?: string;
       target?: string;
       public_reason?: string;
+      topic?: string;
     };
     switch (p.type) {
       case "member_added":
@@ -82,6 +83,11 @@ function SystemMessageRow({
         break;
       case "channel_created":
         text = `${name(p.actor)} created the channel`;
+        break;
+      case "topic_changed":
+        text = p.topic
+          ? `${name(p.actor)} set the topic to "${p.topic}"`
+          : `${name(p.actor)} cleared the topic`;
         break;
       case "message_deleted":
         text = p.public_reason
