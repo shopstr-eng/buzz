@@ -23,6 +23,11 @@ export interface SendError {
   message: string;
 }
 
+/** A timeout rejection tagged with the composer that triggered it. */
+export interface OriginTimeoutRejection extends TimeoutRejection {
+  origin: SendOrigin;
+}
+
 export function useSendMessage(
   groupId: string | null,
   addOptimistic: (msg: ChatMessage) => void,
@@ -41,13 +46,13 @@ export function useSendMessage(
    * When an origin is given, only clears an error from that composer.
    */
   clearError: (origin?: SendOrigin) => void;
-  /** Set when the relay rejected a send because the user is timed out. */
-  timeoutRejection: TimeoutRejection | null;
+  /** Set when the relay rejected a send because the user is timed out, tagged with the composer that sent. */
+  timeoutRejection: OriginTimeoutRejection | null;
 } {
   const { connection, identity } = useRelay();
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<SendError | null>(null);
-  const [timeoutRejection, setTimeoutRejection] = useState<TimeoutRejection | null>(null);
+  const [timeoutRejection, setTimeoutRejection] = useState<OriginTimeoutRejection | null>(null);
 
   const send = useCallback(
     async (
@@ -106,7 +111,7 @@ export function useSendMessage(
           const msg = err instanceof Error ? err.message : String(err);
           const rejection = parseTimeoutRejection(msg);
           if (rejection) {
-            setTimeoutRejection(rejection);
+            setTimeoutRejection({ ...rejection, origin });
           } else {
             setError({ origin, message: msg });
           }

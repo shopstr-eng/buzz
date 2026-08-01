@@ -35,6 +35,8 @@ interface Props {
   sendError?: string | null;
   /** Clears a previous send rejection (e.g. when the user starts typing again). */
   onClearSendError?: () => void;
+  /** Set when the relay rejected a thread reply because the user is timed out. */
+  timeoutRejection?: { expiresAtMs: number | null } | null;
   onClose: () => void;
   /** Import a fetched .agent.json snapshot shared into the chat */
   onImportAgent?: (jsonText: string) => Promise<void>;
@@ -77,6 +79,7 @@ export function ThreadPanel({
   onSend,
   sendError,
   onClearSendError,
+  timeoutRejection,
   onClose,
   onImportAgent,
   onImportTeam,
@@ -156,6 +159,7 @@ export function ThreadPanel({
           members={members}
           profiles={profiles}
           onTyping={onClearSendError}
+          timeoutRejection={timeoutRejection}
         />
       </div>
     </div>

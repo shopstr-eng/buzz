@@ -335,7 +335,7 @@ function ChatChannelView({ channel }: Props) {
             clearSendError("main");
             notifyTyping();
           }}
-          timeoutRejection={timeoutRejection}
+          timeoutRejection={timeoutRejection?.origin === "main" ? timeoutRejection : null}
         />
           </>
         ) : (
@@ -361,6 +361,7 @@ function ChatChannelView({ channel }: Props) {
           onImportTeam={async (jsonText) => { await importTeamSnapshot(jsonText); }}
           onSend={(content, replyToId, mentions) => send(content, replyToId, mentions, "thread")}
           sendError={sendError?.origin === "thread" ? sendError.message : null}
+          timeoutRejection={timeoutRejection?.origin === "thread" ? timeoutRejection : null}
           onClearSendError={() => clearSendError("thread")}
           onClose={() => setThreadRoot(null)}
         />
