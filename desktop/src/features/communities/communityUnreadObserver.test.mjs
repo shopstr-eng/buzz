@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   extractHiddenDmIds,
   extractMemberChannelIds,
+  clearReadStateEventCache,
   fetchAllReadStateEvents,
+  fetchAllReadStateEventsCached,
   fetchCommunityUnread,
   resolveObservedChannels,
 } from "./communityUnreadObserver.ts";
@@ -1032,5 +1034,196 @@ test("fetchCommunityUnread forced-unread with null baseline + synced marker pres
     readForcedUnread: () => ({ [CHANNEL_ID]: null }),
   });
 
+  assert.deepEqual(result, { hasUnread: false, mentionCount: 0 });
+});
+
+// ── Read-state enumeration cache tests ──────────────────────────────────
+
+test("fetchAllReadStateEventsCached: repeated polls use a single since-bounded delta, not re-enumeration", async () => {
+  clearReadStateEventCache();
+  const key = "relay-a\n" + PUBKEY;
+
+  // First call: full enumeration (2 pages).
+  const page1 = [
+    readStateEvent({ dTag: "read-state:a", created_at: 1_000 }),
+    readStateEvent({ dTag: "read-state:b", created_at: 900 }),
+    readStateEvent({ dTag: "read-state:c", created_at: 800 }),
+  ];
+  const page2 = [readStateEvent({ dTag: "read-state:old", created_at: 10 })];
+  const relay1 = relayFor([() => page1, () => page2]);
+  const first = await fetchAllReadStateEventsCached(relay1, PUBKEY, key, 0);
+  assert.equal(relay1.requests.length, 2);
+  assert.equal(first.length, 4);
+
+  // Second call within TTL: exactly ONE fetch, bounded by since.
+  const relay2 = relayFor([
+    () => [readStateEvent({ dTag: "read-state:a", created_at: 1_100 })],
+  ]);
+  const second = await fetchAllReadStateEventsCached(
+    relay2,
+    PUBKEY,
+    key,
+    30_000,
+  );
+  assert.equal(relay2.requests.length, 1);
+  assert.equal(relay2.requests[0].since, 1_000 - 300);
+  assert.equal(relay2.requests[0].until, undefined);
+  // Newer replacement for coordinate `a` wins; old coordinates still present.
+  assert.equal(second.length, 4);
+  const a = second.find((e) => e.tags.some((t) => t[1] === "read-state:a"));
+  assert.equal(a.created_at, 1_100);
+  assert.ok(second.some((e) => e.tags.some((t) => t[1] === "read-state:old")));
+});
+
+test("fetchAllReadStateEventsCached: override-carrying ancient coordinate survives delta polls (task-44 non-regression)", async () => {
+  clearReadStateEventCache();
+  const key = "relay-b\n" + PUBKEY;
+  const ancient = readStateEvent({
+    dTag: "read-state:ancient",
+    created_at: 5,
+    contexts: {
+      [CHANNEL_ID]: 40,
+      [`ov_s:${CHANNEL_ID}`]: 1,
+      [`ov_c:${CHANNEL_ID}`]: 0,
+      [`ov_b:${CHANNEL_ID}`]: 40,
+    },
+  });
+  const relay1 = relayFor([
+    () => [
+      readStateEvent({ dTag: "read-state:r1", created_at: 1_000_000 }),
+      readStateEvent({ dTag: "read-state:r2", created_at: 999_000 }),
+    ],
+    () => [ancient],
+  ]);
+  await fetchAllReadStateEventsCached(relay1, PUBKEY, key, 0);
+
+  // Delta poll returns nothing new — the ancient coordinate must still be there.
+  const relay2 = relayFor([() => []]);
+  const events = await fetchAllReadStateEventsCached(
+    relay2,
+    PUBKEY,
+    key,
+    60_000,
+  );
+  assert.equal(relay2.requests.length, 1);
+  assert.ok(
+    events.some((e) => e.tags.some((t) => t[1] === "read-state:ancient")),
+  );
+});
+
+test("fetchAllReadStateEventsCached: TTL expiry triggers a fresh full enumeration", async () => {
+  clearReadStateEventCache();
+  const key = "relay-c\n" + PUBKEY;
+  const relay1 = relayFor([
+    () => [readStateEvent({ dTag: "read-state:a", created_at: 100 })],
+  ]);
+  await fetchAllReadStateEventsCached(relay1, PUBKEY, key, 0);
+
+  const relay2 = relayFor([
+    () => [readStateEvent({ dTag: "read-state:a", created_at: 100 })],
+  ]);
+  await fetchAllReadStateEventsCached(relay2, PUBKEY, key, 5 * 60_000);
+  // Full load: tag-free, no since horizon.
+  assert.equal(relay2.requests[0].since, undefined);
+  assert.equal(relay2.requests[0].until, undefined);
+});
+
+test("fetchAllReadStateEventsCached: full delta page falls back to full enumeration", async () => {
+  clearReadStateEventCache();
+  const key = "relay-d\n" + PUBKEY;
+  const relay1 = relayFor([
+    () => [readStateEvent({ dTag: "read-state:a", created_at: 100 })],
+  ]);
+  await fetchAllReadStateEventsCached(relay1, PUBKEY, key, 0);
+
+  const fullPage = Array.from({ length: 500 }, (_, i) =>
+    readStateEvent({ dTag: `read-state:${i}`, created_at: 200 + i }),
+  );
+  const relay2 = relayFor([
+    () => fullPage, // truncatable delta
+    () => fullPage, // full-load page 1 (cap=500 → continue)
+    () => [], // full-load page 2 → discharged
+  ]);
+  await fetchAllReadStateEventsCached(relay2, PUBKEY, key, 30_000);
+  assert.equal(relay2.requests.length, 3);
+  assert.equal(relay2.requests[1].since, undefined);
+});
+
+test("fetchCommunityUnread with readStateCacheKey routes through the cache", async () => {
+  clearReadStateEventCache();
+  const key = "relay-e\n" + PUBKEY;
+
+  const makeRelay = (readStateResponses) =>
+    relayFor([
+      // 1. member events
+      () => [
+        event({
+          tags: [
+            ["d", CHANNEL_ID],
+            ["p", PUBKEY],
+          ],
+        }),
+      ],
+      // 2. metadata
+      () => [
+        event({
+          tags: [
+            ["d", CHANNEL_ID],
+            ["t", "stream"],
+          ],
+        }),
+      ],
+      // 3. visibility
+      () => [],
+      // 4+. read-state fetch(es)
+      ...readStateResponses,
+      // mutes
+      () => [],
+      // unread
+      () => [],
+      // mentions
+      () => [],
+    ]);
+
+  const relay1 = makeRelay([
+    () => [
+      readStateEvent({
+        dTag: "read-state:s",
+        created_at: 90,
+        contexts: { [CHANNEL_ID]: 95 },
+      }),
+    ],
+  ]);
+  await fetchCommunityUnread({
+    client: relay1,
+    pubkey: PUBKEY,
+    nowSeconds: 100,
+    nowMs: 0,
+    readStateCacheKey: key,
+    decryptReadState: async (v) => v,
+    decryptMutes: async (v) => v,
+    readThreadRelationships: readRelationships(),
+    readForcedUnread: () => ({}),
+  });
+
+  const relay2 = makeRelay([() => []]);
+  const result = await fetchCommunityUnread({
+    client: relay2,
+    pubkey: PUBKEY,
+    nowSeconds: 100,
+    nowMs: 30_000,
+    readStateCacheKey: key,
+    decryptReadState: async (v) => v,
+    decryptMutes: async (v) => v,
+    readThreadRelationships: readRelationships(),
+    readForcedUnread: () => ({}),
+  });
+
+  // Second poll's read-state fetch is a delta (since set), and the cached
+  // marker still covers the channel.
+  const readStateReq = relay2.requests.find(
+    (r) => Array.isArray(r.authors) && r.authors[0] === PUBKEY && !r["#d"],
+  );
+  assert.notEqual(readStateReq.since, undefined);
   assert.deepEqual(result, { hasUnread: false, mentionCount: 0 });
 });

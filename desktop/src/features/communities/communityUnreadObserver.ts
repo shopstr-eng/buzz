@@ -189,12 +189,126 @@ export async function fetchAllReadStateEvents(
   return collected;
 }
 
+// ── Read-state enumeration cache ────────────────────────────────────────
+//
+// The full-state load above is complete but potentially multi-page. The rail
+// polls every community every 30s, so a user with a long history would pay
+// that enumeration repeatedly even when nothing changed. The cache keeps the
+// latest event per coordinate (kind 3xxxx replaceable semantics: only the
+// newest event per d-tag matters) keyed by (relayUrl, pubkey), and refreshes
+// it between full loads with a single `since`-bounded delta fetch.
+//
+// Safety of the delta:
+// - The initial (and periodic) full enumeration collects EVERY coordinate,
+//   including override-carrying ones whose last republish is ancient — the
+//   task-44 guarantee. Those stay in the cache; a delta can only add or
+//   replace-with-newer, never drop them.
+// - Any change to a coordinate is a republish with a fresh created_at, so it
+//   lands inside the delta window. An overlap margin absorbs modest clock
+//   skew between devices, and a periodic full reload self-heals anything a
+//   skewed delta could still miss.
+// - A delta that fills its page may be truncated → fall back to a full load.
+const READ_STATE_CACHE_FULL_REFRESH_MS = 5 * 60_000;
+const READ_STATE_DELTA_OVERLAP_SECONDS = 300;
+
+type ReadStateCacheEntry = {
+  byCoordinate: Map<string, RelayEvent>;
+  newestCreatedAt: number;
+  fullLoadAtMs: number;
+};
+
+const readStateEventCache = new Map<string, ReadStateCacheEntry>();
+
+export function clearReadStateEventCache(): void {
+  readStateEventCache.clear();
+}
+
+function coordinateKey(event: RelayEvent): string {
+  return event.tags.find((tag) => tag[0] === "d")?.[1] ?? `id:${event.id}`;
+}
+
+function mergeIntoEntry(
+  entry: ReadStateCacheEntry,
+  events: RelayEvent[],
+): void {
+  for (const event of events) {
+    const key = coordinateKey(event);
+    const existing = entry.byCoordinate.get(key);
+    if (!existing || event.created_at > existing.created_at) {
+      entry.byCoordinate.set(key, event);
+    }
+    if (event.created_at > entry.newestCreatedAt) {
+      entry.newestCreatedAt = event.created_at;
+    }
+  }
+}
+
+async function fullLoadIntoCache(
+  client: CommunityUnreadRelay,
+  pubkey: string,
+  cacheKey: string,
+  nowMs: number,
+): Promise<RelayEvent[]> {
+  const events = await fetchAllReadStateEvents(client, pubkey);
+  const entry: ReadStateCacheEntry = {
+    byCoordinate: new Map(),
+    newestCreatedAt: 0,
+    fullLoadAtMs: nowMs,
+  };
+  mergeIntoEntry(entry, events);
+  readStateEventCache.set(cacheKey, entry);
+  return [...entry.byCoordinate.values()];
+}
+
+/**
+ * Cached wrapper around `fetchAllReadStateEvents`. Performs the complete
+ * enumeration on first use and every `READ_STATE_CACHE_FULL_REFRESH_MS`;
+ * between full loads it issues a single delta fetch bounded by `since`
+ * (newest cached created_at minus an overlap margin) and merges the result
+ * into the cached per-coordinate map.
+ */
+export async function fetchAllReadStateEventsCached(
+  client: CommunityUnreadRelay,
+  pubkey: string,
+  cacheKey: string,
+  nowMs: number = Date.now(),
+): Promise<RelayEvent[]> {
+  const cached = readStateEventCache.get(cacheKey);
+  if (
+    !cached ||
+    nowMs - cached.fullLoadAtMs >= READ_STATE_CACHE_FULL_REFRESH_MS
+  ) {
+    return fullLoadIntoCache(client, pubkey, cacheKey, nowMs);
+  }
+
+  const since = Math.max(
+    0,
+    cached.newestCreatedAt - READ_STATE_DELTA_OVERLAP_SECONDS,
+  );
+  const delta = await client.fetchEvents({
+    kinds: [KIND_READ_STATE],
+    authors: [pubkey],
+    since,
+    limit: READ_STATE_FETCH_LIMIT,
+  });
+  if (delta.length >= READ_STATE_FETCH_LIMIT) {
+    // Page may be truncated by the relay cap — cannot trust the delta.
+    return fullLoadIntoCache(client, pubkey, cacheKey, nowMs);
+  }
+  mergeIntoEntry(cached, delta);
+  return [...cached.byCoordinate.values()];
+}
+
 export async function pollCommunityUnread(
   community: Community,
   pubkey: string,
 ): Promise<CommunityUnreadObserverResult> {
   return withReadOnlyRelayClient(community.relayUrl, (client) =>
-    fetchCommunityUnread({ client, pubkey }),
+    fetchCommunityUnread({
+      client,
+      pubkey,
+      readStateCacheKey: `${community.relayUrl}\n${pubkey.toLowerCase()}`,
+    }),
   );
 }
 
@@ -206,6 +320,13 @@ export async function fetchCommunityUnread(args: {
   decryptMutes?: (ciphertext: string) => Promise<string>;
   readThreadRelationships?: (pubkey: string) => ThreadRelationships;
   readForcedUnread?: (pubkey: string) => ForcedUnreadMap;
+  /**
+   * When set, read-state enumeration goes through the (relayUrl, pubkey)
+   * cache: full load on first use / periodic refresh, cheap delta otherwise.
+   * When omitted (tests, one-shot callers) every call is a full load.
+   */
+  readStateCacheKey?: string;
+  nowMs?: number;
 }): Promise<CommunityUnreadObserverResult> {
   const { client, pubkey } = args;
   const normalizedPubkey = pubkey.toLowerCase();
@@ -221,7 +342,14 @@ export async function fetchCommunityUnread(args: {
   }
 
   const [readStateEvents, mutesEvents] = await Promise.all([
-    fetchAllReadStateEvents(client, pubkey),
+    args.readStateCacheKey !== undefined
+      ? fetchAllReadStateEventsCached(
+          client,
+          pubkey,
+          args.readStateCacheKey,
+          args.nowMs,
+        )
+      : fetchAllReadStateEvents(client, pubkey),
     client.fetchEvents({
       kinds: [KIND_CHANNEL_MUTES],
       authors: [pubkey],
