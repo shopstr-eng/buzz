@@ -1233,20 +1233,9 @@ struct ProjectRejection {
     message: String,
 }
 
-impl std::fmt::Display for ProjectRejection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}] {}", self.rule, self.message)
-    }
-}
+impl std::error::Error for ProjectRejection {}
 
-impl ProjectRejection {
-    fn new(rule: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            rule,
-            message: message.into(),
-        }
-    }
-}
+impl std::error::Error for ProjectRejection {}
 
 /// Validate the envelope of a kind:30621 NIP-MP project event.
 ///

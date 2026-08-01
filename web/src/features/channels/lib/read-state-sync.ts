@@ -25,7 +25,10 @@ export function parseSlotJson(plaintext: string): ReadStateSlot | null {
     if (!p.contexts || typeof p.contexts !== "object" || Array.isArray(p.contexts)) return null;
     const contexts: Record<string, number> = {};
     for (const [k, v] of Object.entries(p.contexts as Record<string, unknown>)) {
-      if (typeof v === "number" && Number.isFinite(v) && v > 0) contexts[k] = v;
+      // ov_* override counters legitimately carry 0 (e.g. ov_c in a live
+      // group); group-level validation happens later in splitContexts.
+      const min = k.startsWith("ov_") ? 0 : 1;
+      if (typeof v === "number" && Number.isFinite(v) && v >= min) contexts[k] = v;
     }
     return { v: 1, client_id: p.client_id, contexts };
   } catch {
@@ -48,33 +51,59 @@ export function mergeContexts(
 /** Channel-level markers = bare keys (desktop's msg:/thread: excluded). */
 export function channelMarkers(contexts: Record<string, number>): Array<[string, number]> {
   return Object.entries(contexts).filter(
-    ([k]) => !k.startsWith("msg:") && !k.startsWith("thread:"),
+    ([k]) => !k.startsWith("msg:") && !k.startsWith("thread:") && !k.startsWith("ov_"),
   );
 }
 
+export interface BuiltSlot {
+  json: string;
+  /** false when the slot exceeds the budget even after all frontier eviction. */
+  fits: boolean;
+}
+
 /**
- * Serialize a slot, pruning OLDEST bare-channel markers first when over
- * budget. msg:/thread: keys are never pruned — they are other clients' data
- * we must carry. (Pruning is safe: merge is monotonic, so a pruned key
- * re-merges from the originating client's slot.)
+ * Serialize a slot from RAW frontier entries plus canonical ov_* override
+ * wire entries (see unread-override.ts). Frontier keys are escaped on encode
+ * (esc: prefix for raw ids starting with ov_/esc: — NIP-RS Reserved
+ * Namespace). When over budget, evict OLDEST bare-channel markers first, then
+ * oldest msg:/thread: markers. ov_* entries are durable and NEVER evicted;
+ * if they alone exceed the budget, `fits` is false and the caller MUST NOT
+ * publish (NIP-RS terminal behaviour at the ceiling — visible failure, never
+ * silent degradation). Frontier eviction is safe: merge is monotonic, so a
+ * pruned key re-merges from the originating client's slot.
  */
+export function buildSlot(
+  clientId: string,
+  frontier: Record<string, number>,
+  overrideEntries: Record<string, number> = {},
+  budget = READ_STATE_BUDGET_BYTES,
+): BuiltSlot {
+  const escaped: Record<string, number> = {};
+  for (const [k, v] of Object.entries(frontier)) {
+    escaped[k.startsWith("ov_") || k.startsWith("esc:") ? `esc:${k}` : k] = v;
+  }
+  const encode = (ctx: Record<string, number>) =>
+    JSON.stringify({ v: 1, client_id: clientId, contexts: { ...ctx, ...overrideEntries } });
+  let json = encode(escaped);
+  if (json.length <= budget) return { json, fits: true };
+  const bare = channelMarkers(escaped).sort((x, y) => x[1] - y[1]);
+  const granular = Object.entries(escaped)
+    .filter(([k]) => k.startsWith("msg:") || k.startsWith("thread:"))
+    .sort((x, y) => x[1] - y[1]);
+  const working = { ...escaped };
+  for (const [key] of [...bare, ...granular]) {
+    delete working[key];
+    json = encode(working);
+    if (json.length <= budget) return { json, fits: true };
+  }
+  return { json, fits: false };
+}
+
+/** Legacy frontier-only serializer (kept for the no-override publish path). */
 export function buildSlotPlaintext(
   clientId: string,
   contexts: Record<string, number>,
   budget = READ_STATE_BUDGET_BYTES,
 ): string {
-  const encode = (ctx: Record<string, number>) =>
-    JSON.stringify({ v: 1, client_id: clientId, contexts: ctx });
-  let json = encode(contexts);
-  if (json.length <= budget) return json;
-  const prunable = channelMarkers(contexts)
-    .sort((x, y) => x[1] - y[1])
-    .map(([k]) => k);
-  const working = { ...contexts };
-  for (const key of prunable) {
-    delete working[key];
-    json = encode(working);
-    if (json.length <= budget) return json;
-  }
-  return json;
+  return buildSlot(clientId, contexts, {}, budget).json;
 }

@@ -456,13 +456,11 @@ The subscriber uses a **dedicated** `redis::aio::PubSub` connection — not from
 **Presence:** `SET buzz:presence:{pubkey_hex} {status} EX 180` — 180-second TTL (3× the 60-second heartbeat interval). Single missed heartbeat does not cause presence flap.
 
 **Typing indicators:**
-
 ```
 ZADD buzz:typing:{channel_id} {now_unix} {pubkey_hex}
 ZREMRANGEBYSCORE buzz:typing:{channel_id} -inf {now - 5.0}
 EXPIRE buzz:typing:{channel_id} 60
 ```
-
 5-second activity window. 60-second key TTL prevents orphaned empty sets.
 
 **Does NOT:** implement the rate limiter. Does NOT store events. `PubSubManager` is not `Clone` — callers use `Arc<PubSubManager>`.

@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { avatarColor } from "@/shared/lib/avatar-color";
 import {
-  AlarmClock, BookMarked, Bot, Hash, Home, Lock, MessageCircle, Settings, Wifi, WifiOff, Loader, LogOut,
+  AlarmClock, BookMarked, Bot, Hash, Home, Lock, MessageCircle, MoreHorizontal, Settings, Wifi, WifiOff, Loader, LogOut,
   Zap, MessageSquare, Plus, Pencil, Pin, PinOff, Search,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../use-channels";
-import { useReadState, type ChannelUnread } from "../use-read-state";
+import { getChannelMarker, useReadState, type ChannelUnread } from "../use-read-state";
+import { markChannelUnread } from "../use-sync-30078";
 import { usePinnedChannels } from "../use-pinned-channels";
 import { usePresenceLifecycle } from "../use-presence";
 import { useUserStatusLifecycle, useUserStatusMap } from "../use-user-status";
@@ -114,6 +116,20 @@ function ChannelItem({
   const { location } = useRouterState();
   const isActive = location.pathname === `/channels/${channel.groupId}`;
   const hasUnread = !isActive && unread && unread.count > 0;
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  function handleMarkUnread() {
+    setMenuOpen(false);
+    const result = markChannelUnread(channel.groupId, getChannelMarker(channel.groupId));
+    if (result.ok) return;
+    const message =
+      result.reason === "not-ready"
+        ? "Mark unread isn't ready yet — read state is still syncing."
+        : result.reason === "budget-exceeded"
+          ? "Too many channels have been marked unread — the read-state budget is full."
+          : "Mark unread is no longer available for this channel.";
+    toast.error(message);
+  }
 
   return (
     <div className="group relative">
@@ -145,7 +161,7 @@ function ChannelItem({
           onClick={onTogglePin}
           title={isPinned ? "Unpin channel" : "Pin channel"}
           aria-label={isPinned ? "Unpin channel" : "Pin channel"}
-          className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 transition-opacity ${
+          className={`absolute right-6 top-1/2 -translate-y-1/2 rounded p-0.5 transition-opacity ${
             isPinned
               ? "text-black/40 opacity-100 dark:text-white/40"
               : "text-black/30 opacity-0 group-hover:opacity-100 dark:text-white/30"
@@ -153,6 +169,36 @@ function ChannelItem({
         >
           {isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
         </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setMenuOpen((o) => !o)}
+        title="Channel actions"
+        aria-label="Channel actions"
+        className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-black/30 transition-opacity hover:bg-black/10 dark:text-white/30 dark:hover:bg-white/10 ${
+          menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
+        <MoreHorizontal className="h-3 w-3" />
+      </button>
+      {menuOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close channel actions"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setMenuOpen(false)}
+          />
+          <div className="absolute right-0 top-full z-20 mt-0.5 w-40 rounded-md border border-black/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-zinc-900">
+            <button
+              type="button"
+              onClick={handleMarkUnread}
+              className="w-full px-3 py-1.5 text-left text-xs text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/5"
+            >
+              Mark as unread
+            </button>
+          </div>
+        </>
       )}
     </div>
   );

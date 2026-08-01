@@ -65,6 +65,7 @@ These constraints ensure a buggy or malicious hook cannot trap the agent.
 Hooks are **off by default**. The operator must explicitly opt in via
 `MCP_HOOK_SERVERS`.
 
+
 ### Not a hook: the reply guard
 
 `buzz-agent` has one in-process objection at the `_Stop` gate that is **not** an

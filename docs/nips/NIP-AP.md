@@ -216,6 +216,7 @@ surface per-event errors.
 
 Agents spawned from a persona carry [NIP-OA](NIP-OA.md) owner attestation — an `auth` tag proving that `pubkey_o` authorized the agent's key. The persona event itself does not contain attestation; it is the _definition_ from which attestation is issued at spawn time.
 
+
 ## Team catalog projection: kind:30178
 
 Kind `30178` is the **shareable projection of a team**: owner-authored, parameterized replaceable, addressed by `(pubkey_o, 30178, d)` where `d` is the team's stable local id. Its `content` is a versioned JSON body carrying sanitized team fields plus ordered, *embedded* member definition projections. The content schema is defined by the client that publishes it; this section specifies only the envelope and the relay's contract.
@@ -248,6 +249,7 @@ Kind `30178` is the **shareable projection of a team**: owner-authored, paramete
 - The relay is NOT required to validate that `content` parses as valid `PersonaEventContent` JSON. Relays are dumb stores per Nostr convention; content validation is a client responsibility.
 - The relay MUST enforce that the `d` tag is non-empty (standard NIP-33 requirement for parameterized replaceable events).
 - The relay MUST enforce shared-tag shape: if a `shared` tag is present, it MUST consist of **exactly two elements** — `["shared", "true"]`. Extra elements (e.g. `["shared","true","extra"]`), wrong values (`["shared","false"]`), missing values (`["shared"]`), or duplicate `shared` tags are all rejected with `invalid:`. The two-element exact-shape constraint is required so that the relay's SQL visibility clause (`tags @> '[["shared","true"]]'`) never matches a stored malformed tag via JSONB containment supersets.
+
 
 ### Ingest validation: kind:30178
 

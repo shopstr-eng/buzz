@@ -118,6 +118,7 @@ After decryption, clients MUST apply the following validation rules:
 
 Context identifier format is not prescribed by this NIP. Clients choose identifiers appropriate to their context type (e.g., a NIP-28 channel event ID, a NIP-29 group address, a pubkey for DMs). Interoperability between different client implementations on context ID conventions is outside the scope of this NIP.
 
+
 #### Reserved Namespace
 
 The key prefix stem `ov_` (3 bytes) and the escape marker `esc:` (4 bytes) are reserved for the manual-unread override layer defined below. Clients MUST escape any raw context ID that begins with `ov_` or `esc:` when using it as a frontier key in the `contexts` map:
@@ -251,41 +252,53 @@ a dominated key a peer still carries does not force a write that changes nothing
 semantically. This is backwards-safe: it only suppresses writes with no semantic
 effect.
 
-##### Backwards Compatibility
+## Backwards Compatibility
 
-A client that does not implement this scheme treats `thread:<root>` and
-`msg:<event-id>` keys as ordinary opaque contexts. It carries the keys through
-the merge unchanged (already required by the Merge Rule) and simply computes no
-thread/message-level unread state. There is no validation change and no interop
-break: an unaware client and an aware client can share a blob and both produce
-correct results for the contexts they understand.
+This NIP introduces no changes to existing event kinds and adds no new kind, wire message, or relay-stored read-state logic. It uses only standard NIP-01 event storage, NIP-33 addressable event semantics, NIP-44 encryption, and NIP-78 application data conventions. Clients that do not implement this NIP are unaffected, as are clients that implement everything but the manual-unread override layer.
 
-##### Example
+The override layer is the exception, and it is a relay-compatibility one rather than a client one. Its full-state load carries the completeness guarantee only against a relay that satisfies the ordering, capacity, floor, push, and barrier requirements enumerated in Full-State Load. Against a relay known or evidenced not to conform, every load resolves to *cannot prove complete* and the actions that depend on a complete load report as failed; against an undetectably nonconforming relay, a load may still return *complete*, and the completeness guarantee does not apply to that verdict. In either case the layer still runs and still merges, and frontier sync is unaffected.
 
-Two blobs merge to the following effective state for a symbolically named thread
-`X` and its parent channel (real `thread:` keys use 64-character lowercase hex
-event IDs):
+## Example
+
+A user runs two clients: a desktop app and a mobile app. Each has a random `<slot-id>` with no relationship to its `client_id`.
+
+Desktop blob (`d` tag: `read-state:a3f8c2e1d4b7906f5e2a1c8d3b6e9f04`), decrypted content:
 
 ```json
 {
-  "thread:X": 100,
-  "<channelId>": 150
+  "v": 1,
+  "client_id": "desktop-v2-prod",
+  "contexts": {
+    "ctx:AAA": 1700000100,
+    "ctx:BBB": 1700000050
+  }
 }
 ```
 
-The thread's effective frontier is computed through the channel parent term:
+Mobile blob (`d` tag: `read-state:7b1d5a3e9c2f804d6e1b3a7c5d8f2e06`), decrypted content:
 
-```
-effective(thread:X) = max(merged[thread:X], merged[<channelId>])
-                    = max(100, 150) = 150
+```json
+{
+  "v": 1,
+  "client_id": "mobile-ios-v1",
+  "contexts": {
+    "ctx:AAA": 1700000200,
+    "ctx:CCC": 1700000080
+  }
+}
 ```
 
-A thread reply with `created_at = 140` is `<= 150`, so it reads as **read** (the
-channel frontier already covers it). A reply with `created_at = 160` is `> 150`,
-so the thread reads as **unread**. The thread's own entry (`100`) is dominated by
-the channel frontier (`150`) and is therefore inert — a client MAY evict it
-before publishing. The same rule applies to `msg:<event-id>` entries for
-individual replies.
+The `d` tag slot IDs are random and reveal nothing about the client identity. The `client_id` values inside the encrypted content identify which device owns each blob.
+
+Merged effective state:
+
+```json
+{
+  "ctx:AAA": 1700000200,
+  "ctx:BBB": 1700000050,
+  "ctx:CCC": 1700000080
+}
+```
 
 #### Timestamp Accuracy
 
