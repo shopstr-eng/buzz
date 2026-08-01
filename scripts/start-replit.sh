@@ -272,6 +272,31 @@ if [[ ( -z "${REPLIT_DEPLOYMENT:-}" || "${_GCS_FALLBACK_MINIO:-false}" == true )
 fi
 
 # ---------------------------------------------------------------------------
+# 1c. Storage-metrics gate.
+#
+# The hourly bucket sweep (buzz_storage_* gauges for the admin dashboard)
+# needs a listable bucket. If the storage backend above failed to come up
+# (e.g. MinIO download failed, or the prod fallback has no working bucket),
+# the sweep would retry on every usage tick and spam ERROR logs. Probe
+# ListObjectsV2 once at boot and enable metrics only when it succeeds.
+# An explicit BUZZ_STORAGE_METRICS value from the environment always wins.
+# ---------------------------------------------------------------------------
+if [[ -z "${BUZZ_STORAGE_METRICS:-}" ]]; then
+  _list_status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 \
+    --user "${BUZZ_S3_ACCESS_KEY}:${BUZZ_S3_SECRET_KEY}" \
+    --aws-sigv4 "aws:amz:us-east-1:s3" \
+    "${BUZZ_S3_ENDPOINT}/${BUZZ_S3_BUCKET}?list-type=2&max-keys=1" || echo "000")
+  if [[ "${_list_status}" == "200" ]]; then
+    export BUZZ_STORAGE_METRICS="on"
+    echo "==> Storage listing confirmed (${BUZZ_S3_ENDPOINT}/${BUZZ_S3_BUCKET}) — storage metrics enabled."
+  else
+    export BUZZ_STORAGE_METRICS="off"
+    echo "==> WARNING: bucket list probe returned ${_list_status} — disabling storage metrics" >&2
+    echo "==> WARNING: (sweep would spam errors). Fix media storage to re-enable them." >&2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Helper: resolve a pre-built binary or fall back to cargo run
 # Usage: run_bin <binary-name> <cargo-package> [args...]
 # ---------------------------------------------------------------------------
