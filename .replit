@@ -10,6 +10,9 @@ expertMode = true
 path = "scripts/post-merge.sh"
 timeoutMs = 180000
 
+[objectStorage]
+defaultBucketId = "replit-objstore-8e89a5d2-66a4-4635-a33f-79527f6fd3cc"
+
 [userenv]
 
 [userenv.shared]
