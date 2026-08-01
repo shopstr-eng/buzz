@@ -31,7 +31,7 @@ interface Props {
   customEmojiUrls?: Map<string, string>;
   /** Matches useSendMessage's send: (content, replyToId, mentionPubkeys) */
   onSend: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
-  /** Relay rejection of the last send (OK-false reason), shared with the main composer. */
+  /** Relay rejection of the last thread send (OK-false reason); main-composer rejections are not shown here. */
   sendError?: string | null;
   /** Clears a previous send rejection (e.g. when the user starts typing again). */
   onClearSendError?: () => void;

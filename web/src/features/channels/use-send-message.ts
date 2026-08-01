@@ -14,33 +14,55 @@ import {
   type TimeoutRejection,
 } from "../moderation/use-moderation";
 
+/** Which composer initiated a send — used to show a rejection only next to it. */
+export type SendOrigin = "main" | "thread";
+
+/** A send rejection tagged with the composer that triggered it. */
+export interface SendError {
+  origin: SendOrigin;
+  message: string;
+}
+
 export function useSendMessage(
   groupId: string | null,
   addOptimistic: (msg: ChatMessage) => void,
   removeOptimistic?: (messageId: string) => void,
 ): {
-  send: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
+  send: (
+    content: string,
+    replyToId?: string,
+    mentionPubkeys?: string[],
+    origin?: SendOrigin,
+  ) => Promise<void>;
   isSending: boolean;
-  error: string | null;
-  /** Clears a previous send rejection (e.g. when the user starts typing again). */
-  clearError: () => void;
+  error: SendError | null;
+  /**
+   * Clears a previous send rejection (e.g. when the user starts typing again).
+   * When an origin is given, only clears an error from that composer.
+   */
+  clearError: (origin?: SendOrigin) => void;
   /** Set when the relay rejected a send because the user is timed out. */
   timeoutRejection: TimeoutRejection | null;
 } {
   const { connection, identity } = useRelay();
   const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SendError | null>(null);
   const [timeoutRejection, setTimeoutRejection] = useState<TimeoutRejection | null>(null);
 
   const send = useCallback(
-    async (content: string, replyToId?: string, mentionPubkeys?: string[]) => {
+    async (
+      content: string,
+      replyToId?: string,
+      mentionPubkeys?: string[],
+      origin: SendOrigin = "main",
+    ) => {
       if (!connection || !identity || !groupId) return;
       const trimmed = content.trim();
       if (!trimmed) return;
 
       const signFn = getSignFn();
       if (!signFn) {
-        setError("No signing key available. Please log in again.");
+        setError({ origin, message: "No signing key available. Please log in again." });
         return;
       }
 
@@ -86,13 +108,14 @@ export function useSendMessage(
           if (rejection) {
             setTimeoutRejection(rejection);
           } else {
-            setError(msg);
+            setError({ origin, message: msg });
           }
         });
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to send message.",
-        );
+        setError({
+          origin,
+          message: err instanceof Error ? err.message : "Failed to send message.",
+        });
       } finally {
         setIsSending(false);
       }
@@ -100,7 +123,11 @@ export function useSendMessage(
     [connection, identity, groupId, addOptimistic, removeOptimistic],
   );
 
-  const clearError = useCallback(() => setError(null), []);
+  const clearError = useCallback(
+    (origin?: SendOrigin) =>
+      setError((prev) => (prev && origin && prev.origin !== origin ? prev : null)),
+    [],
+  );
 
   return { send, isSending, error, clearError, timeoutRejection };
 }

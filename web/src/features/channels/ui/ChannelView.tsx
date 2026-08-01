@@ -306,9 +306,9 @@ function ChatChannelView({ channel }: Props) {
         )}
 
         {/* Relay rejection of a plain send (permissions, validation) */}
-        {sendError && (
+        {sendError?.origin === "main" && (
           <div className="shrink-0 px-4 pb-1 text-[11px] text-red-600 dark:text-red-400">
-            {sendError}
+            {sendError.message}
           </div>
         )}
 
@@ -332,7 +332,7 @@ function ChatChannelView({ channel }: Props) {
             if (window.confirm("Delete this message?")) await deleteMessage(id);
           }}
           onTyping={() => {
-            clearSendError();
+            clearSendError("main");
             notifyTyping();
           }}
           timeoutRejection={timeoutRejection}
@@ -359,9 +359,9 @@ function ChatChannelView({ channel }: Props) {
           customEmojiUrls={customEmojiUrls}
           onImportAgent={async (jsonText) => { await importSnapshot(jsonText); }}
           onImportTeam={async (jsonText) => { await importTeamSnapshot(jsonText); }}
-          onSend={(content, replyToId, mentions) => send(content, replyToId, mentions)}
-          sendError={sendError}
-          onClearSendError={clearSendError}
+          onSend={(content, replyToId, mentions) => send(content, replyToId, mentions, "thread")}
+          sendError={sendError?.origin === "thread" ? sendError.message : null}
+          onClearSendError={() => clearSendError("thread")}
           onClose={() => setThreadRoot(null)}
         />
       )}
