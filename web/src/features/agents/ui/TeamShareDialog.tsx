@@ -5,7 +5,7 @@
  * full instructions, including members whose own personas are private.
  */
 
-import { AlertCircle, BookUser, Bot } from "lucide-react";
+import { AlertCircle, BookUser, Bot, RefreshCw } from "lucide-react";
 import type { AgentPersona, AgentTeam } from "../use-agents";
 import { AgentDialogShell, DialogError } from "./agent-dialog-shell";
 
@@ -14,6 +14,7 @@ export function TeamShareDialog({
   members,
   missingMemberCount,
   shared,
+  isStale,
   isPublishing,
   publishError,
   onSharedChange,
@@ -25,6 +26,8 @@ export function TeamShareDialog({
   /** personaIds that no longer resolve to a persona (deleted) — excluded from the share. */
   missingMemberCount: number;
   shared: boolean;
+  /** Shared, but the published snapshot no longer matches the current team/member fields. */
+  isStale: boolean;
   isPublishing: boolean;
   publishError: string | null;
   /** Publishes the 30178 projection with/without the ["shared","true"] tag. */
@@ -40,6 +43,30 @@ export function TeamShareDialog({
           Anyone in this community can find it and import a copy. Changes you
           make later won’t sync until you re-share.
         </p>
+
+        {shared && isStale && (
+          <div
+            className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+            data-testid="team-share-stale-warning"
+          >
+            <RefreshCw className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p>
+                The shared snapshot is <strong>out of date</strong> — the team or
+                its members changed since it was published. The catalog still
+                shows the old version.
+              </p>
+              <button
+                className="mt-1.5 rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+                disabled={isPublishing}
+                onClick={() => onSharedChange(true)}
+                data-testid="team-share-stale-reshare"
+              >
+                Re-share current version
+              </button>
+            </div>
+          </div>
+        )}
 
         <div
           className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"

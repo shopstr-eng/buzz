@@ -236,6 +236,51 @@ export function buildTeamCatalogEvent(
   };
 }
 
+/** Structural deep-equal for JSON values (key order insensitive, array order sensitive). */
+function jsonDeepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => jsonDeepEqual(v, b[i]));
+  }
+  if (
+    typeof a === "object" && a !== null && !Array.isArray(a) &&
+    typeof b === "object" && b !== null && !Array.isArray(b)
+  ) {
+    const ka = Object.keys(a as Record<string, unknown>);
+    const kb = Object.keys(b as Record<string, unknown>);
+    if (ka.length !== kb.length) return false;
+    return ka.every((k) =>
+      jsonDeepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+    );
+  }
+  return false;
+}
+
+/**
+ * True when the published kind:30178 head content no longer matches the
+ * projection we would publish NOW from the current team + member personas —
+ * i.e. the shared snapshot has gone stale after edits. Comparison is
+ * structural (key-order insensitive) so byte-level serializer differences
+ * between clients never produce false "stale" flags. Unparseable published
+ * content counts as stale (re-sharing repairs it).
+ */
+export function teamCatalogSnapshotIsStale(
+  publishedContent: string,
+  team: { name: string; description?: string | null; instructions?: string | null },
+  members: TeamCatalogMemberSource[],
+): boolean {
+  let published: unknown;
+  try {
+    published = JSON.parse(publishedContent);
+  } catch {
+    return true;
+  }
+  const expected = JSON.parse(
+    buildTeamCatalogEvent(team, members, "stale-check", true, 0).content,
+  ) as unknown;
+  return !jsonDeepEqual(expected, published);
+}
+
 export interface ManagedAgentFormInput {
   name: string;
   /** When set, runtime config resolves through the persona — inline fields are omitted ("slimming"). */

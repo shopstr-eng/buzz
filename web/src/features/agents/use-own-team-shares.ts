@@ -15,12 +15,17 @@ export function useOwnTeamShares(): {
   sharedTeamIds: Set<string>;
   /** Every team id with ANY kind:30178 head (shared or not) — a delete must also retract these. */
   catalogTeamIds: Set<string>;
+  /** Latest head content per team id — used to detect stale shared snapshots. */
+  catalogContentByTeamId: Map<string, string>;
   isLoading: boolean;
 } {
   const { connection, connectionState, identity } = useRelay();
   const me = identity?.pubkey;
   const [sharedTeamIds, setSharedTeamIds] = useState<Set<string>>(new Set());
   const [catalogTeamIds, setCatalogTeamIds] = useState<Set<string>>(new Set());
+  const [catalogContentByTeamId, setCatalogContentByTeamId] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -33,12 +38,15 @@ export function useOwnTeamShares(): {
     function recompute(): void {
       const next = new Set<string>();
       const all = new Set<string>();
+      const contents = new Map<string, string>();
       for (const [teamId, ev] of heads) {
         all.add(teamId);
+        contents.set(teamId, ev.content);
         if (personaEventIsShared(ev)) next.add(teamId);
       }
       setSharedTeamIds(next);
       setCatalogTeamIds(all);
+      setCatalogContentByTeamId(contents);
     }
 
     const unsub = connection.subscribe(
@@ -64,5 +72,5 @@ export function useOwnTeamShares(): {
     return unsub;
   }, [connection, connectionState, me]);
 
-  return { sharedTeamIds, catalogTeamIds, isLoading };
+  return { sharedTeamIds, catalogTeamIds, catalogContentByTeamId, isLoading };
 }

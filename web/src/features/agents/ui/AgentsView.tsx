@@ -17,7 +17,7 @@ import { useAgentDirectory, type AgentPersona, type AgentTeam, type ManagedAgent
 import { useAgentActivity, type AgentActivityItem } from "../use-agent-frames";
 import { useAgentMetrics, type AgentMetricAggregate } from "../use-agent-metrics";
 import { useAgentPublishing } from "../use-agent-publishing";
-import { personaToFormInput } from "../agent-events";
+import { personaToFormInput, teamCatalogSnapshotIsStale } from "../agent-events";
 import { parseSnapshot, snapshotToPersonaInput } from "../lib/agent-snapshot";
 import { useEngrams } from "../use-engrams";
 import { MemorySection } from "./MemorySection";
@@ -269,7 +269,7 @@ export function AgentsView() {
     }
   }
   const { savePersona, deletePersona, deleteTeam, setTeamShared, deleteManagedAgent, isPublishing, error: publishError } = useAgentPublishing();
-  const { sharedTeamIds, catalogTeamIds } = useOwnTeamShares();
+  const { sharedTeamIds, catalogTeamIds, catalogContentByTeamId } = useOwnTeamShares();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -305,14 +305,29 @@ export function AgentsView() {
    * readers never need the members' private persona heads.
    */
   async function handleTeamSharedChange(team: AgentTeam, shared: boolean): Promise<void> {
-    const members = team.personaIds
-      .map((id) => personas.find((p) => p.id === id))
-      .filter((p): p is AgentPersona => p !== undefined);
     try {
-      await setTeamShared(team, members, shared);
+      await setTeamShared(team, resolveTeamMembers(team), shared);
     } catch {
       // surfaced via publishError (passed into the share dialog)
     }
+  }
+
+  /** Team members that still resolve to a local persona (deleted ones drop out). */
+  function resolveTeamMembers(team: AgentTeam): AgentPersona[] {
+    return team.personaIds
+      .map((id) => personas.find((p) => p.id === id))
+      .filter((p): p is AgentPersona => p !== undefined);
+  }
+
+  /**
+   * A shared team's published kind:30178 snapshot is stale when the current
+   * team/member fields would project differently than the published content.
+   */
+  function teamShareIsStale(team: AgentTeam): boolean {
+    if (!sharedTeamIds.has(team.id)) return false;
+    const published = catalogContentByTeamId.get(team.id);
+    if (published === undefined) return false;
+    return teamCatalogSnapshotIsStale(published, team, resolveTeamMembers(team));
   }
 
   /**
@@ -431,6 +446,17 @@ export function AgentsView() {
                       <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
                         shared
                       </span>
+                    )}
+                    {teamShareIsStale(t) && (
+                      <button
+                        className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 hover:bg-amber-200 disabled:opacity-50 dark:bg-amber-900/40 dark:text-amber-400 dark:hover:bg-amber-900/60"
+                        disabled={isPublishing}
+                        onClick={() => void handleTeamSharedChange(t, true)}
+                        title="The shared snapshot no longer matches this team — click to re-share the current version."
+                        data-testid={`team-stale-reshare-${t.id}`}
+                      >
+                        out of date — re-share
+                      </button>
                     )}
                   </p>
                   {t.description && (
@@ -578,15 +604,14 @@ export function AgentsView() {
         // echo after a shared flip; close if the team was deleted.
         const team = teams.find((t) => t.id === dialog.teamId);
         if (!team) return null;
-        const members = team.personaIds
-          .map((id) => personas.find((p) => p.id === id))
-          .filter((p): p is AgentPersona => p !== undefined);
+        const members = resolveTeamMembers(team);
         return (
           <TeamShareDialog
             team={team}
             members={members}
             missingMemberCount={team.personaIds.length - members.length}
             shared={sharedTeamIds.has(team.id)}
+            isStale={teamShareIsStale(team)}
             isPublishing={isPublishing}
             publishError={publishError}
             onSharedChange={(shared) => void handleTeamSharedChange(team, shared)}
