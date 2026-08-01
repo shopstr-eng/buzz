@@ -1,4 +1,4 @@
-modules = ["rust-stable", "nodejs-20", "bash", "python-base-3.13", "postgresql-16"]
+modules = ["rust-stable", "nodejs-20", "bash", "postgresql-16", "python-base-3.13"]
 
 [nix]
 channel = "stable-25_05"
@@ -10,35 +10,22 @@ expertMode = true
 path = "scripts/post-merge.sh"
 timeoutMs = 180000
 
-[objectStorage]
-defaultBucketId = "replit-objstore-8e89a5d2-66a4-4635-a33f-79527f6fd3cc"
-
 [userenv]
 
 [userenv.shared]
 BUZZ_AUTO_MIGRATE = "false"
 BUZZ_BIND_ADDR = "0.0.0.0:5000"
 BUZZ_GIT_CONFORMANCE_PROBE = "false"
-BUZZ_REQUIRE_AUTH_TOKEN = "true"
+BUZZ_MEDIA_BASE_URL = "https://1c0b1ec3-3745-44bf-80d6-1143b67e10f0-00-1neui5hpbvv8a.janeway.replit.dev/media"
 BUZZ_REQUIRE_RELAY_MEMBERSHIP = "true"
 BUZZ_SERVE_GIT_WEB_GUI = "true"
+BUZZ_ADMIN_WEB_DIR = "/home/runner/workspace/admin-web/dist"
+BUZZ_WEB_DIR = "/home/runner/workspace/web/dist"
 REDIS_URL = "redis://127.0.0.1:6379"
+RELAY_URL = "wss://1c0b1ec3-3745-44bf-80d6-1143b67e10f0-00-1neui5hpbvv8a.janeway.replit.dev"
 RELAY_OWNER_PUBKEY = "b67348f092c3821745acc619a353cc8d7ed16401d422e41204a78500ee04a2f7"
 RUST_LOG = "buzz_relay=info,buzz_db=info,tower_http=warn"
-
-[userenv.production]
-BUZZ_CUSTOM_DOMAINS = "buzz.shopstrmarkets.com"
-BUZZ_AGENT_PROVIDER = "openai"
-OPENAI_COMPAT_API = "chat"
-OPENAI_COMPAT_MODEL = "anthropic/claude-opus-4.5"
-
-[userenv.development]
-OPENAI_COMPAT_MODEL = "anthropic/claude-opus-4.5"
-
-[deployment]
-deploymentTarget = "cloudrun"
-run = ["bash", "scripts/start-replit.sh"]
-build = ["bash", "scripts/prepare-deploy.sh"]
+BUZZ_REQUIRE_AUTH_TOKEN = "true"
 
 [workflows]
 runButton = "Project"
@@ -69,16 +56,5 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
-localPort = 9102
-externalPort = 3000
-
-[[ports]]
-localPort = 18081
+localPort = 8080
 externalPort = 8080
-
-[[ports]]
-localPort = 18327
-externalPort = 3001
-
-[objectStorage]
-defaultBucketID = "replit-objstore-8e89a5d2-66a4-4635-a33f-79527f6fd3cc"
