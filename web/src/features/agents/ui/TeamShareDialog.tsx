@@ -5,8 +5,11 @@
  * full instructions, including members whose own personas are private.
  */
 
-import { AlertCircle, BookUser, Bot, RefreshCw } from "lucide-react";
+import { AlertCircle, BookUser, Bot, Download, RefreshCw } from "lucide-react";
 import type { AgentPersona, AgentTeam } from "../use-agents";
+import { buildTeamSnapshot } from "../lib/team-snapshot";
+import { TEAM_PNG_CHUNK_KEYWORD, encodePngWithSnapshotJson } from "../lib/png-text-chunk";
+import { downloadBytes } from "../lib/snapshot-download";
 import { AgentDialogShell, DialogError } from "./agent-dialog-shell";
 
 export function TeamShareDialog({
@@ -34,6 +37,18 @@ export function TeamShareDialog({
   onSharedChange: (shared: boolean) => void;
   onClose: () => void;
 }) {
+  /** Download a .team.json or .team.png snapshot of the team + members. */
+  function handleExport(format: "json" | "png"): void {
+    const snapshot = buildTeamSnapshot(team, members);
+    const jsonText = JSON.stringify(snapshot, null, 2);
+    if (format === "json") {
+      downloadBytes(new TextEncoder().encode(jsonText), `${team.id}.team.json`, "application/json");
+      return;
+    }
+    const png = encodePngWithSnapshotJson(jsonText, TEAM_PNG_CHUNK_KEYWORD);
+    downloadBytes(png, `${team.id}.team.png`, "image/png");
+  }
+
   return (
     <AgentDialogShell title={`Share ${team.name}`} onClose={onClose}>
       <div className="space-y-4 p-5">
@@ -117,6 +132,27 @@ export function TeamShareDialog({
               out of the share.
             </p>
           )}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            disabled={members.length === 0}
+            onClick={() => handleExport("json")}
+            data-testid="team-share-export"
+          >
+            <Download className="h-4 w-4 shrink-0 text-black/40 dark:text-white/40" />
+            Export (.team.json)
+          </button>
+          <button
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            disabled={members.length === 0}
+            onClick={() => handleExport("png")}
+            data-testid="team-share-export-png"
+          >
+            <Download className="h-4 w-4 shrink-0 text-black/40 dark:text-white/40" />
+            Export (.team.png)
+          </button>
         </div>
 
         <div className="flex items-start gap-3 rounded-lg border border-black/8 px-3 py-3 dark:border-white/8">

@@ -12,8 +12,10 @@
  * member personas — a snapshot never overwrites existing directory entries.
  */
 
+import type { AgentPersona, AgentTeam } from "../use-agents";
 import {
   MAX_SNAPSHOT_JSON_BYTES,
+  buildSnapshot,
   validateSnapshotObject,
   type AgentSnapshot,
 } from "./agent-snapshot";
@@ -40,6 +42,24 @@ export type TeamSnapshotParseResult =
 
 function byteLength(s: string): number {
   return new TextEncoder().encode(s).length;
+}
+
+/**
+ * Export: build a portable team snapshot from a team plus its resolved member
+ * personas. Members reuse the agent-snapshot builder at memory level "none" —
+ * team exports never bundle memories (matching the catalog contract's
+ * "memories and secrets aren't included" rule).
+ */
+export function buildTeamSnapshot(team: AgentTeam, members: AgentPersona[]): TeamSnapshot {
+  const meta: TeamSnapshotMeta = { name: team.name };
+  if (team.description) meta.description = team.description;
+  if (team.instructions) meta.instructions = team.instructions;
+  return {
+    format: TEAM_SNAPSHOT_FORMAT,
+    version: TEAM_SNAPSHOT_VERSION,
+    team: meta,
+    members: members.map((m) => buildSnapshot(m)),
+  };
 }
 
 /** Import: validate raw .team.json text against the desktop contract. */

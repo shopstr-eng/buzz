@@ -33,6 +33,8 @@ import {
   selectMemoryEntries,
   type SnapshotMemoryLevel,
 } from "../lib/agent-snapshot";
+import { AGENT_PNG_CHUNK_KEYWORD, encodePngWithSnapshotJson } from "../lib/png-text-chunk";
+import { dataUrlToBytes, downloadBytes } from "../lib/snapshot-download";
 import { AgentDialogShell, DialogError, labelCls, inputCls } from "./agent-dialog-shell";
 
 const SHARE_LEVELS: { value: SnapshotMemoryLevel; label: string }[] = [
@@ -157,17 +159,23 @@ export function PersonaShareDialog({
     return uploadMediaBytes(bytes, fileName, "application/json");
   }
 
-  /** Download a .agent.json snapshot at the chosen memory level. */
-  function handleExport(): void {
+  /** Download a .agent.json or .agent.png snapshot at the chosen memory level. */
+  function handleExport(format: "json" | "png"): void {
     if (!confirmMemoryShare(effectiveLevel, "export", [])) return;
     const { bytes, fileName } = encodeSnapshot(effectiveLevel);
-    const blob = new Blob([bytes.slice().buffer], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (format === "json") {
+      downloadBytes(bytes, fileName, "application/json");
+      return;
+    }
+    // PNG: embed the manifest in a buzz_agent_snapshot tEXt chunk, using the
+    // persona's PNG avatar as the image body when available (desktop parity).
+    const avatarBytes = persona.avatarUrl ? dataUrlToBytes(persona.avatarUrl) : null;
+    const png = encodePngWithSnapshotJson(
+      new TextDecoder().decode(bytes),
+      AGENT_PNG_CHUNK_KEYWORD,
+      avatarBytes,
+    );
+    downloadBytes(png, `${persona.id}.agent.png`, "image/png");
   }
 
   /** Upload the snapshot and copy its blob URL to the clipboard. */
@@ -422,15 +430,26 @@ export function PersonaShareDialog({
           </button>
         </div>
 
-        <button
-          className="flex w-full items-center gap-2 rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
-          disabled={isActionPending}
-          onClick={handleExport}
-          data-testid="persona-share-export"
-        >
-          <Download className="h-4 w-4 shrink-0 text-black/40 dark:text-white/40" />
-          Export agent (.agent.json)
-        </button>
+        <div className="flex gap-2">
+          <button
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            disabled={isActionPending}
+            onClick={() => handleExport("json")}
+            data-testid="persona-share-export"
+          >
+            <Download className="h-4 w-4 shrink-0 text-black/40 dark:text-white/40" />
+            Export (.agent.json)
+          </button>
+          <button
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-black/15 px-3 py-2 text-sm font-medium text-black/70 hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:text-white/70 dark:hover:bg-white/10"
+            disabled={isActionPending}
+            onClick={() => handleExport("png")}
+            data-testid="persona-share-export-png"
+          >
+            <Download className="h-4 w-4 shrink-0 text-black/40 dark:text-white/40" />
+            Export (.agent.png)
+          </button>
+        </div>
 
         <div className="flex items-start gap-3 rounded-lg border border-black/8 px-3 py-3 dark:border-white/8">
           <BookUser className="mt-0.5 h-4 w-4 shrink-0 text-black/40 dark:text-white/40" />
