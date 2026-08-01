@@ -31,6 +31,10 @@ interface Props {
   customEmojiUrls?: Map<string, string>;
   /** Matches useSendMessage's send: (content, replyToId, mentionPubkeys) */
   onSend: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
+  /** Relay rejection of the last send (OK-false reason), shared with the main composer. */
+  sendError?: string | null;
+  /** Clears a previous send rejection (e.g. when the user starts typing again). */
+  onClearSendError?: () => void;
   onClose: () => void;
   /** Import a fetched .agent.json snapshot shared into the chat */
   onImportAgent?: (jsonText: string) => Promise<void>;
@@ -71,6 +75,8 @@ export function ThreadPanel({
   customEmoji,
   customEmojiUrls,
   onSend,
+  sendError,
+  onClearSendError,
   onClose,
   onImportAgent,
   onImportTeam,
@@ -134,6 +140,13 @@ export function ThreadPanel({
         )}
       </div>
 
+      {/* Relay rejection of a thread reply (permissions, validation) */}
+      {sendError && (
+        <div className="shrink-0 px-3 pb-1 text-[11px] text-red-600 dark:text-red-400">
+          {sendError}
+        </div>
+      )}
+
       {/* Thread composer */}
       <div className="shrink-0 border-t border-black/10 p-2 dark:border-white/10">
         <MessageComposer
@@ -142,6 +155,7 @@ export function ThreadPanel({
           isSending={sending}
           members={members}
           profiles={profiles}
+          onTyping={onClearSendError}
         />
       </div>
     </div>

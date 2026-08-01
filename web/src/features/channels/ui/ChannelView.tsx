@@ -360,6 +360,8 @@ function ChatChannelView({ channel }: Props) {
           onImportAgent={async (jsonText) => { await importSnapshot(jsonText); }}
           onImportTeam={async (jsonText) => { await importTeamSnapshot(jsonText); }}
           onSend={(content, replyToId, mentions) => send(content, replyToId, mentions)}
+          sendError={sendError}
+          onClearSendError={clearSendError}
           onClose={() => setThreadRoot(null)}
         />
       )}
