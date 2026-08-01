@@ -14,6 +14,7 @@ import { KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT } from "./use-agents";
 import {
   buildPersonaEvent,
   buildTeamEvent,
+  buildTeamCatalogEvent,
   buildManagedAgentEvent,
   buildDirectoryDeleteEvent,
   slugifyPersonaName,
@@ -21,6 +22,7 @@ import {
   type PersonaFormInput,
   type TeamFormInput,
   type ManagedAgentFormInput,
+  type TeamCatalogMemberSource,
 } from "./agent-events";
 
 function nowSec(): number {
@@ -32,6 +34,11 @@ export function useAgentPublishing(): {
   deletePersona: (id: string) => Promise<void>;
   saveTeam: (input: TeamFormInput, existingId: string | null) => Promise<string>;
   deleteTeam: (id: string) => Promise<void>;
+  setTeamShared: (
+    team: { id: string; name: string; description: string | null; instructions: string | null },
+    members: TeamCatalogMemberSource[],
+    shared: boolean,
+  ) => Promise<void>;
   createManagedAgent: (input: ManagedAgentFormInput) => Promise<{ pubkey: string; nsec: string }>;
   updateManagedAgent: (input: ManagedAgentFormInput, agentPubkey: string) => Promise<void>;
   deleteManagedAgent: (id: string) => Promise<void>;
@@ -114,6 +121,25 @@ export function useAgentPublishing(): {
     [run, publishTemplate, requireOwner],
   );
 
+  /**
+   * Publish (share) or republish-without-tag (unshare) the team's kind:30178
+   * catalog projection. Sharing embeds a sanitized projection of EVERY member
+   * — including members whose own personas are private — so callers must
+   * surface that warning before invoking this.
+   */
+  const setTeamShared = useCallback(
+    (
+      team: { id: string; name: string; description: string | null; instructions: string | null },
+      members: TeamCatalogMemberSource[],
+      shared: boolean,
+    ) =>
+      run(async () => {
+        requireOwner();
+        await publishTemplate(buildTeamCatalogEvent(team, members, team.id, shared, nowSec()));
+      }),
+    [run, publishTemplate, requireOwner],
+  );
+
   const createManagedAgent = useCallback(
     (input: ManagedAgentFormInput) =>
       run(async () => {
@@ -152,6 +178,7 @@ export function useAgentPublishing(): {
     deletePersona,
     saveTeam,
     deleteTeam,
+    setTeamShared,
     createManagedAgent,
     updateManagedAgent,
     deleteManagedAgent,

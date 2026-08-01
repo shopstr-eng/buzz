@@ -12,6 +12,7 @@
 
 import type { UnsignedNostrEvent } from "@/shared/lib/nostr-signer";
 import { KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT } from "./use-agents";
+import { KIND_TEAM_CATALOG, TEAM_CATALOG_CONTENT_VERSION } from "./lib/team-catalog";
 
 export type RespondTo = "owner-only" | "allowlist" | "anyone";
 
@@ -155,6 +156,82 @@ export function buildTeamEvent(
     kind: KIND_TEAM,
     created_at: now,
     tags: [["d", teamId]],
+    content: JSON.stringify(payload),
+  };
+}
+
+/**
+ * Fields a team-catalog member projection is built FROM — the persona's
+ * stored definition fields. respond_to_allowlist is deliberately absent
+ * from the output projection (sanitization contract), and "allowlist"
+ * respond_to downgrades to "owner-only" (a copy has no allowlist context).
+ */
+export interface TeamCatalogMemberSource {
+  displayName: string;
+  systemPrompt: string;
+  avatarUrl: string | null;
+  runtime: string | null;
+  model: string | null;
+  provider: string | null;
+  namePool: string[];
+  respondTo: string | null;
+  parallelism: number | null;
+}
+
+/** Build one sanitized member projection object (snake_case wire schema). */
+function buildTeamCatalogMember(member: TeamCatalogMemberSource): Record<string, unknown> {
+  // Same key order as the persona content contract (display_name,
+  // system_prompt, avatar_url, runtime, model, provider, name_pool,
+  // respond_to, parallelism) — and NEVER respond_to_allowlist or any
+  // secret-bearing field: the projection is community-readable plaintext.
+  const m: Record<string, unknown> = {
+    display_name: member.displayName.trim(),
+    system_prompt: member.systemPrompt,
+  };
+  opt(m, "avatar_url", member.avatarUrl ?? undefined);
+  opt(m, "runtime", member.runtime ?? undefined);
+  opt(m, "model", member.model ?? undefined);
+  opt(m, "provider", member.provider ?? undefined);
+  if (member.namePool.length) m.name_pool = member.namePool;
+  const respondTo = member.respondTo === "allowlist" ? "owner-only" : member.respondTo;
+  if (respondTo === "owner-only" || respondTo === "anyone") m.respond_to = respondTo;
+  if (member.parallelism && member.parallelism > 1) m.parallelism = member.parallelism;
+  return m;
+}
+
+/**
+ * Build the kind:30178 team-catalog projection (NIP-AP): the owner-authored,
+ * shareable snapshot of a team with EMBEDDED sanitized member projections.
+ * `shared: true` adds the exact ["shared","true"] tag (community-readable);
+ * `shared: false` republishes the head WITHOUT the tag — that is unsharing,
+ * which retracts the projection from foreign readers (NIP-33 newest wins).
+ */
+export function buildTeamCatalogEvent(
+  team: { name: string; description?: string | null; instructions?: string | null },
+  members: TeamCatalogMemberSource[],
+  teamId: string,
+  shared: boolean,
+  now: number,
+): UnsignedNostrEvent {
+  // Versioned body: { v: 1, name, description?, instructions?, members }.
+  const payload: Record<string, unknown> = {
+    v: TEAM_CATALOG_CONTENT_VERSION,
+    name: team.name.trim(),
+  };
+  opt(payload, "description", team.description ?? undefined);
+  opt(payload, "instructions", team.instructions ?? undefined);
+  payload.members = members.map(buildTeamCatalogMember);
+
+  // Envelope per NIP-AP: exactly one non-empty d tag (the team id — UUIDs
+  // and builtin-team:* ids are legal here) and, when sharing, the exact
+  // two-element ["shared","true"] tag shape the relay enforces.
+  const tags: string[][] = [["d", teamId]];
+  if (shared) tags.push(["shared", "true"]);
+
+  return {
+    kind: KIND_TEAM_CATALOG,
+    created_at: now,
+    tags,
     content: JSON.stringify(payload),
   };
 }

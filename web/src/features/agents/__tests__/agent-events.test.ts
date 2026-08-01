@@ -12,6 +12,8 @@ import {
   buildPersonaEvent,
   personaToFormInput,
   buildTeamEvent,
+  buildTeamCatalogEvent,
+  type TeamCatalogMemberSource,
   buildManagedAgentEvent,
   agentToFormInput,
   buildDirectoryDeleteEvent,
@@ -318,6 +320,89 @@ describe("buildTeamEvent", () => {
     );
     expect(c.instructions).toBe("Be brief.");
     expect(c.description).toBe("d");
+  });
+});
+
+describe("buildTeamCatalogEvent", () => {
+  const member: TeamCatalogMemberSource = {
+    displayName: "Helper",
+    systemPrompt: "You help.",
+    avatarUrl: "https://example.com/a.png",
+    runtime: "goose",
+    model: "claude-opus-4",
+    provider: "anthropic",
+    namePool: ["Alpha", "Beta"],
+    respondTo: "anyone",
+    parallelism: 4,
+  };
+  const team = { name: "Support Crew", description: "Handles inbound", instructions: "Be nice." };
+
+  it("emits the v1 envelope: d = team id, exact shared tag, versioned body", () => {
+    const ev = buildTeamCatalogEvent(team, [member], "team-uuid-1", true, NOW);
+    expect(ev.kind).toBe(30178);
+    expect(ev.created_at).toBe(NOW);
+    expect(ev.tags).toEqual([["d", "team-uuid-1"], ["shared", "true"]]);
+    const c = JSON.parse(ev.content);
+    expect(c.v).toBe(1);
+    expect(c.name).toBe("Support Crew");
+    expect(c.description).toBe("Handles inbound");
+    expect(c.instructions).toBe("Be nice.");
+    expect(c.members).toHaveLength(1);
+    expect(c.members[0]).toEqual({
+      display_name: "Helper",
+      system_prompt: "You help.",
+      avatar_url: "https://example.com/a.png",
+      runtime: "goose",
+      model: "claude-opus-4",
+      provider: "anthropic",
+      name_pool: ["Alpha", "Beta"],
+      respond_to: "anyone",
+      parallelism: 4,
+    });
+  });
+
+  it("unsharing republishes without the shared tag", () => {
+    const ev = buildTeamCatalogEvent(team, [member], "team-uuid-1", false, NOW);
+    expect(ev.tags).toEqual([["d", "team-uuid-1"]]);
+  });
+
+  it("omits optional team fields when empty and keeps builtin-team ids verbatim", () => {
+    const ev = buildTeamCatalogEvent({ name: "Bare" }, [], "builtin-team:welcome", true, NOW);
+    expect(ev.tags[0]).toEqual(["d", "builtin-team:welcome"]);
+    const c = JSON.parse(ev.content);
+    expect(c).not.toHaveProperty("description");
+    expect(c).not.toHaveProperty("instructions");
+    expect(c.members).toEqual([]);
+  });
+
+  it("sanitizes members: allowlist downgrades to owner-only and never leaks the allowlist", () => {
+    const ev = buildTeamCatalogEvent(
+      team,
+      [{ ...member, respondTo: "allowlist", namePool: [], parallelism: 1, avatarUrl: null, runtime: null, model: null, provider: null }],
+      "t",
+      true,
+      NOW,
+    );
+    const m = JSON.parse(ev.content).members[0];
+    expect(m).toEqual({ display_name: "Helper", system_prompt: "You help.", respond_to: "owner-only" });
+    expect(JSON.stringify(m)).not.toContain("allowlist");
+  });
+
+  it("round-trips through the catalog parser (share → foreign read)", async () => {
+    const { parseCatalogTeam } = await import("../lib/team-catalog");
+    const ev = buildTeamCatalogEvent(team, [member], "team-uuid-1", true, NOW);
+    const parsed = parseCatalogTeam({
+      ...ev,
+      id: "e".repeat(64),
+      pubkey: OWNER,
+      sig: "s",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    expect(parsed).not.toBeNull();
+    expect(parsed!.name).toBe("Support Crew");
+    expect(parsed!.tagline).toBe("Handles inbound");
+    expect(parsed!.instructions).toBe("Be nice.");
+    expect(parsed!.members.map((m) => m.displayName)).toEqual(["Helper"]);
   });
 });
 

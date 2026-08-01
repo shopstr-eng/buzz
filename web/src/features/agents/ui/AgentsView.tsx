@@ -29,6 +29,8 @@ import { CatalogSection } from "./CatalogSection";
 import { PersonaDialog } from "./PersonaDialog";
 import { PersonaShareDialog } from "./PersonaShareDialog";
 import { TeamDialog } from "./TeamDialog";
+import { TeamShareDialog } from "./TeamShareDialog";
+import { useOwnTeamShares } from "../use-own-team-shares";
 import { ManagedAgentDialog } from "./ManagedAgentDialog";
 import { truncatePubkey } from "@/shared/lib/pubkey";
 
@@ -36,6 +38,7 @@ type DialogState =
   | { type: "persona"; existing: AgentPersona | null }
   | { type: "personaShare"; personaId: string }
   | { type: "team"; existing: AgentTeam | null }
+  | { type: "teamShare"; teamId: string }
   | { type: "agent"; existing: ManagedAgent | null }
   | null;
 
@@ -265,7 +268,8 @@ export function AgentsView() {
       setAddingCatalogId(null);
     }
   }
-  const { savePersona, deletePersona, deleteTeam, deleteManagedAgent, isPublishing, error: publishError } = useAgentPublishing();
+  const { savePersona, deletePersona, deleteTeam, setTeamShared, deleteManagedAgent, isPublishing, error: publishError } = useAgentPublishing();
+  const { sharedTeamIds } = useOwnTeamShares();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -288,6 +292,23 @@ export function AgentsView() {
         persona.id,
         personas.map((p) => p.id),
       );
+    } catch {
+      // surfaced via publishError (passed into the share dialog)
+    }
+  }
+
+  /**
+   * Publish (or retract) the team's kind:30178 catalog projection with the
+   * shared tag flipped. Members are the team's personaIds that still resolve
+   * to a local persona — their sanitized projections are embedded so foreign
+   * readers never need the members' private persona heads.
+   */
+  async function handleTeamSharedChange(team: AgentTeam, shared: boolean): Promise<void> {
+    const members = team.personaIds
+      .map((id) => personas.find((p) => p.id === id))
+      .filter((p): p is AgentPersona => p !== undefined);
+    try {
+      await setTeamShared(team, members, shared);
     } catch {
       // surfaced via publishError (passed into the share dialog)
     }
@@ -405,6 +426,11 @@ export function AgentsView() {
                     {t.version && (
                       <span className="ml-1.5 text-[10px] text-black/35 dark:text-white/35">v{t.version}</span>
                     )}
+                    {sharedTeamIds.has(t.id) && (
+                      <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+                        shared
+                      </span>
+                    )}
                   </p>
                   {t.description && (
                     <p className="text-[11px] text-black/45 dark:text-white/45">{t.description}</p>
@@ -414,6 +440,14 @@ export function AgentsView() {
                   </p>
                 </div>
                 <div className="flex shrink-0">
+                  <button
+                    className={iconBtnCls}
+                    onClick={() => setDialog({ type: "teamShare", teamId: t.id })}
+                    aria-label={`Share ${t.name}`}
+                    title="Share — community catalog"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                  </button>
                   <button className={iconBtnCls} onClick={() => setDialog({ type: "team", existing: t })} aria-label={`Edit ${t.name}`}>
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -526,6 +560,27 @@ export function AgentsView() {
           onClose={() => setDialog(null)}
         />
       )}
+      {dialog?.type === "teamShare" && (() => {
+        // Resolve the live team each render so the toggle reflects the relay
+        // echo after a shared flip; close if the team was deleted.
+        const team = teams.find((t) => t.id === dialog.teamId);
+        if (!team) return null;
+        const members = team.personaIds
+          .map((id) => personas.find((p) => p.id === id))
+          .filter((p): p is AgentPersona => p !== undefined);
+        return (
+          <TeamShareDialog
+            team={team}
+            members={members}
+            missingMemberCount={team.personaIds.length - members.length}
+            shared={sharedTeamIds.has(team.id)}
+            isPublishing={isPublishing}
+            publishError={publishError}
+            onSharedChange={(shared) => void handleTeamSharedChange(team, shared)}
+            onClose={() => setDialog(null)}
+          />
+        );
+      })()}
       {dialog?.type === "team" && (
         <TeamDialog
           existing={dialog.existing}
