@@ -55,44 +55,37 @@ function TypeIcon({ type, isPrivate }: { type: ChannelType; isPrivate: boolean }
   return <Hash className="h-3.5 w-3.5 shrink-0 opacity-60" />;
 }
 
-/** DM sidebar item: label = other participants' names. */
-function DmItem({
-  channel,
-  unread,
+/**
+ * Shared "…" actions menu for sidebar rows (channels and DMs).
+ * Keeps mark-unread / mark-read semantics and toast error handling identical
+ * across both row types. `noun` only affects user-facing wording.
+ */
+function RowActionsMenu({
+  groupId,
   latestTs,
-  myPubkey,
-  profiles,
+  hasUnread,
+  noun,
 }: {
-  channel: Channel;
-  unread?: ChannelUnread;
-  /** Latest tracked message timestamp for this DM (unix secs). */
+  groupId: string;
+  /** Latest tracked message timestamp for this row (unix secs). */
   latestTs?: number;
-  myPubkey?: string;
-  profiles: Map<string, import("@/shared/hooks/use-profiles").Profile>;
+  hasUnread: boolean | undefined;
+  /** User-facing noun: "channel" or "conversation". */
+  noun: "channel" | "conversation";
 }) {
-  const { location } = useRouterState();
-  const isActive = location.pathname === `/channels/${channel.groupId}`;
-  const hasUnread = !isActive && unread && unread.count > 0;
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const others = (channel.participantPubkeys ?? []).filter((pk) => pk !== myPubkey);
-  const label =
-    others.length === 0
-      ? "Just you"
-      : others
-          .map((pk) => profiles.get(pk)?.name ?? `${pk.slice(0, 4)}…${pk.slice(-4)}`)
-          .join(", ");
+  const actionsLabel = noun === "channel" ? "Channel actions" : "Conversation actions";
 
   function handleMarkUnread() {
     setMenuOpen(false);
-    const result = markChannelUnread(channel.groupId, getChannelMarker(channel.groupId));
+    const result = markChannelUnread(groupId, getChannelMarker(groupId));
     if (result.ok) return;
     const message =
       result.reason === "not-ready"
         ? "Mark unread isn't ready yet — read state is still syncing."
         : result.reason === "budget-exceeded"
           ? "Too many channels have been marked unread — the read-state budget is full."
-          : "Mark unread is no longer available for this conversation.";
+          : `Mark unread is no longer available for this ${noun}.`;
     toast.error(message);
   }
 
@@ -101,43 +94,24 @@ function DmItem({
     // Read up to now or the latest tracked message, whichever is later, so
     // the count badge clears even when a future-dated message skewed things.
     const readTs = Math.max(Math.floor(Date.now() / 1000), latestTs ?? 0);
-    const result = markChannelReadAction(channel.groupId, readTs);
+    const result = markChannelReadAction(groupId, readTs);
     if (result.ok) return;
     const message =
       result.reason === "not-ready"
         ? "Mark as read isn't ready yet — read state is still syncing."
         : result.reason === "budget-exceeded"
           ? "Read state is over budget — mark as read can't be saved right now."
-          : "Mark as read is no longer available for this conversation.";
+          : `Mark as read is no longer available for this ${noun}.`;
     toast.error(message);
   }
 
   return (
-    <div className="group relative">
-      <Link
-        to="/channels/$groupId"
-        params={{ groupId: channel.groupId }}
-        className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
-          isActive
-            ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
-            : hasUnread
-              ? "font-semibold text-black hover:bg-black/5 dark:text-white dark:hover:bg-white/5"
-              : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
-        }`}
-      >
-        <TypeIcon type="dm" isPrivate={false} />
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        {hasUnread && (
-          <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">
-            {unread.count > 99 ? "99+" : unread.count}
-          </span>
-        )}
-      </Link>
+    <>
       <button
         type="button"
         onClick={() => setMenuOpen((o) => !o)}
-        title="Conversation actions"
-        aria-label="Conversation actions"
+        title={actionsLabel}
+        aria-label={actionsLabel}
         className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-black/30 transition-opacity hover:bg-black/10 dark:text-white/30 dark:hover:bg-white/10 ${
           menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
@@ -148,7 +122,7 @@ function DmItem({
         <>
           <button
             type="button"
-            aria-label="Close conversation actions"
+            aria-label={`Close ${actionsLabel.toLowerCase()}`}
             className="fixed inset-0 z-10 cursor-default"
             onClick={() => setMenuOpen(false)}
           />
@@ -172,6 +146,64 @@ function DmItem({
           </div>
         </>
       )}
+    </>
+  );
+}
+
+/** DM sidebar item: label = other participants' names. */
+function DmItem({
+  channel,
+  unread,
+  latestTs,
+  myPubkey,
+  profiles,
+}: {
+  channel: Channel;
+  unread?: ChannelUnread;
+  /** Latest tracked message timestamp for this DM (unix secs). */
+  latestTs?: number;
+  myPubkey?: string;
+  profiles: Map<string, import("@/shared/hooks/use-profiles").Profile>;
+}) {
+  const { location } = useRouterState();
+  const isActive = location.pathname === `/channels/${channel.groupId}`;
+  const hasUnread = !isActive && unread && unread.count > 0;
+
+  const others = (channel.participantPubkeys ?? []).filter((pk) => pk !== myPubkey);
+  const label =
+    others.length === 0
+      ? "Just you"
+      : others
+          .map((pk) => profiles.get(pk)?.name ?? `${pk.slice(0, 4)}…${pk.slice(-4)}`)
+          .join(", ");
+
+  return (
+    <div className="group relative">
+      <Link
+        to="/channels/$groupId"
+        params={{ groupId: channel.groupId }}
+        className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors ${
+          isActive
+            ? "bg-black/10 font-medium text-black dark:bg-white/15 dark:text-white"
+            : hasUnread
+              ? "font-semibold text-black hover:bg-black/5 dark:text-white dark:hover:bg-white/5"
+              : "text-black/60 hover:bg-black/5 hover:text-black dark:text-white/50 dark:hover:bg-white/5 dark:hover:text-white"
+        }`}
+      >
+        <TypeIcon type="dm" isPrivate={false} />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        {hasUnread && (
+          <span className="ml-auto flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">
+            {unread.count > 99 ? "99+" : unread.count}
+          </span>
+        )}
+      </Link>
+      <RowActionsMenu
+        groupId={channel.groupId}
+        latestTs={latestTs}
+        hasUnread={hasUnread}
+        noun="conversation"
+      />
     </div>
   );
 }
@@ -193,36 +225,6 @@ function ChannelItem({
   const { location } = useRouterState();
   const isActive = location.pathname === `/channels/${channel.groupId}`;
   const hasUnread = !isActive && unread && unread.count > 0;
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  function handleMarkUnread() {
-    setMenuOpen(false);
-    const result = markChannelUnread(channel.groupId, getChannelMarker(channel.groupId));
-    if (result.ok) return;
-    const message =
-      result.reason === "not-ready"
-        ? "Mark unread isn't ready yet — read state is still syncing."
-        : result.reason === "budget-exceeded"
-          ? "Too many channels have been marked unread — the read-state budget is full."
-          : "Mark unread is no longer available for this channel.";
-    toast.error(message);
-  }
-
-  function handleMarkRead() {
-    setMenuOpen(false);
-    // Read up to now or the latest tracked message, whichever is later, so
-    // the count badge clears even when a future-dated message skewed things.
-    const readTs = Math.max(Math.floor(Date.now() / 1000), latestTs ?? 0);
-    const result = markChannelReadAction(channel.groupId, readTs);
-    if (result.ok) return;
-    const message =
-      result.reason === "not-ready"
-        ? "Mark as read isn't ready yet — read state is still syncing."
-        : result.reason === "budget-exceeded"
-          ? "Read state is over budget — mark as read can't be saved right now."
-          : "Mark as read is no longer available for this channel.";
-    toast.error(message);
-  }
 
   return (
     <div className="group relative">
@@ -263,45 +265,12 @@ function ChannelItem({
           {isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
         </button>
       )}
-      <button
-        type="button"
-        onClick={() => setMenuOpen((o) => !o)}
-        title="Channel actions"
-        aria-label="Channel actions"
-        className={`absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-black/30 transition-opacity hover:bg-black/10 dark:text-white/30 dark:hover:bg-white/10 ${
-          menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
-      >
-        <MoreHorizontal className="h-3 w-3" />
-      </button>
-      {menuOpen && (
-        <>
-          <button
-            type="button"
-            aria-label="Close channel actions"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setMenuOpen(false)}
-          />
-          <div className="absolute right-0 top-full z-20 mt-0.5 w-40 rounded-md border border-black/10 bg-white py-1 shadow-lg dark:border-white/10 dark:bg-zinc-900">
-            <button
-              type="button"
-              onClick={handleMarkUnread}
-              className="w-full px-3 py-1.5 text-left text-xs text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/5"
-            >
-              Mark as unread
-            </button>
-            {hasUnread && (
-              <button
-                type="button"
-                onClick={handleMarkRead}
-                className="w-full px-3 py-1.5 text-left text-xs text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/5"
-              >
-                Mark as read
-              </button>
-            )}
-          </div>
-        </>
-      )}
+      <RowActionsMenu
+        groupId={channel.groupId}
+        latestTs={latestTs}
+        hasUnread={hasUnread}
+        noun="channel"
+      />
     </div>
   );
 }
