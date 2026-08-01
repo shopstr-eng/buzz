@@ -24,12 +24,19 @@ Priority order when `BUZZ_S3_ENDPOINT` == `http://127.0.0.1:9000` (the default):
 
 If `BUZZ_S3_ENDPOINT` is set to something other than `127.0.0.1:9000`, the script leaves it alone and neither proxy nor MinIO starts (operator-supplied S3 bucket used directly).
 
-## Pre-deployment step: provision the bucket
+## Pre-deployment step: provision the bucket + wire .replit
 
-The Replit sidecar returns `{"bucketId":""}` if no App Storage bucket is provisioned. The proxy exits with a clear error in this case. To provision:
-1. Open the **App Storage** tool in the Replit editor (Tools → App Storage)
-2. Create a new bucket for this repl
-3. Redeploy — the proxy will then get a real bucket ID from the sidecar
+The Replit sidecar returns `{"bucketId":""}` if no App Storage bucket is provisioned **or** the `.replit` file is missing the `[objectStorage]` section. Both steps are required:
+1. Open the **App Storage** tool in the Replit editor (Tools → App Storage) and create a bucket
+2. Get the Bucket ID from App Storage → dropdown → Settings
+3. Add to `.replit`:
+   ```toml
+   [objectStorage]
+   defaultBucketId = "<bucket-id>"
+   ```
+4. Redeploy — the proxy will then get a real bucket ID from the sidecar
+
+**Current bucket:** `replit-objstore-8e89a5d2-66a4-4635-a33f-79527f6fd3cc` (wired in `.replit` as of 2026-08-01)
 
 ## Deploy-environment reality check (2026-07-30 publish failure)
 
