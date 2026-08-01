@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { useRelay } from "@/shared/context/relay-context";
 import { useChannels } from "../use-channels";
 import { getChannelMarker, useReadState, type ChannelUnread } from "../use-read-state";
-import { markChannelUnread } from "../use-sync-30078";
+import { markChannelReadAction, markChannelUnread } from "../use-sync-30078";
 import { usePinnedChannels } from "../use-pinned-channels";
 import { usePresenceLifecycle } from "../use-presence";
 import { useUserStatusLifecycle, useUserStatusMap } from "../use-user-status";
@@ -105,11 +105,14 @@ function DmItem({
 function ChannelItem({
   channel,
   unread,
+  latestTs,
   isPinned,
   onTogglePin,
 }: {
   channel: Channel;
   unread?: ChannelUnread;
+  /** Latest tracked message timestamp for this channel (unix secs). */
+  latestTs?: number;
   isPinned?: boolean;
   onTogglePin?: () => void;
 }) {
@@ -128,6 +131,22 @@ function ChannelItem({
         : result.reason === "budget-exceeded"
           ? "Too many channels have been marked unread — the read-state budget is full."
           : "Mark unread is no longer available for this channel.";
+    toast.error(message);
+  }
+
+  function handleMarkRead() {
+    setMenuOpen(false);
+    // Read up to now or the latest tracked message, whichever is later, so
+    // the count badge clears even when a future-dated message skewed things.
+    const readTs = Math.max(Math.floor(Date.now() / 1000), latestTs ?? 0);
+    const result = markChannelReadAction(channel.groupId, readTs);
+    if (result.ok) return;
+    const message =
+      result.reason === "not-ready"
+        ? "Mark as read isn't ready yet — read state is still syncing."
+        : result.reason === "budget-exceeded"
+          ? "Read state is over budget — mark as read can't be saved right now."
+          : "Mark as read is no longer available for this channel.";
     toast.error(message);
   }
 
@@ -197,6 +216,15 @@ function ChannelItem({
             >
               Mark as unread
             </button>
+            {hasUnread && (
+              <button
+                type="button"
+                onClick={handleMarkRead}
+                className="w-full px-3 py-1.5 text-left text-xs text-black/70 hover:bg-black/5 dark:text-white/70 dark:hover:bg-white/5"
+              >
+                Mark as read
+              </button>
+            )}
           </div>
         </>
       )}
@@ -241,7 +269,7 @@ function SidebarSearch() {
 
 export function ChannelSidebar() {
   const { channels, isLoading } = useChannels();
-  const { unread } = useReadState();
+  const { unread, latestTs } = useReadState();
   const { pinned, togglePin } = usePinnedChannels();
   const { identity, logout } = useRelay();
   const { location } = useRouterState();
@@ -405,6 +433,7 @@ export function ChannelSidebar() {
                       key={ch.groupId}
                       channel={ch}
                       unread={unread.get(ch.groupId)}
+                      latestTs={latestTs.get(ch.groupId)}
                       isPinned
                       onTogglePin={() => togglePin(ch.groupId)}
                     />
@@ -419,6 +448,7 @@ export function ChannelSidebar() {
                   key={ch.groupId}
                   channel={ch}
                   unread={unread.get(ch.groupId)}
+                  latestTs={latestTs.get(ch.groupId)}
                   onTogglePin={() => togglePin(ch.groupId)}
                 />
               ))}

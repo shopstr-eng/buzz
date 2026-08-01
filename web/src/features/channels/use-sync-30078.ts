@@ -38,12 +38,14 @@ import { getNip44SelfAsync } from "@/shared/lib/nip44-self";
 import { buildSlot, mergeContexts, parseSlotJson } from "./lib/read-state-sync";
 import {
   canonicalWireEntries,
+  markReadRegister,
   planMarkUnread,
   splitContexts,
   type OverrideRegister,
 } from "./lib/unread-override";
 import { parsePinsJson } from "./lib/pins-sync";
 import {
+  clearChannelForcedUnread,
   getReadStateSnapshot,
   markChannelForcedUnread,
   markChannelRead,
@@ -66,6 +68,7 @@ export type MarkUnreadResult =
 
 interface Session {
   markChannelUnread: (groupId: string, markerAtForce: number) => MarkUnreadResult;
+  markChannelReadAction: (groupId: string, readTs: number) => MarkUnreadResult;
 }
 
 let currentSession: Session | null = null;
@@ -79,6 +82,18 @@ let currentSession: Session | null = null;
 export function markChannelUnread(groupId: string, markerAtForce: number): MarkUnreadResult {
   if (!currentSession) return { ok: false, reason: "not-ready" };
   return currentSession.markChannelUnread(groupId, markerAtForce);
+}
+
+/**
+ * Explicit "Mark as read" (NIP-RS Actions): advance the frontier to `readTs`
+ * AND increment ov_c (C = max(S, C) + 1) so the override deactivates even
+ * when the frontier cannot advance past the baseline (e.g. a future-dated
+ * message skewed it). Requires a completed full-state load; refuses visibly
+ * at the uint32 counter ceiling or when the slot no longer fits the budget.
+ */
+export function markChannelReadAction(groupId: string, readTs: number): MarkUnreadResult {
+  if (!currentSession) return { ok: false, reason: "not-ready" };
+  return currentSession.markChannelReadAction(groupId, readTs);
 }
 
 function loadOrCreate(key: string, gen: () => string): string {
@@ -331,6 +346,35 @@ export function useSync30078(): void {
         overrides = plan.overrides;
         frontier = plan.frontier;
         markChannelForcedUnread(groupId, markerAtForce);
+        scheduleReadPublish();
+        return { ok: true };
+      },
+      markChannelReadAction(groupId, readTs) {
+        if (loadComplete !== true) return { ok: false, reason: "not-ready" };
+        // Effective frontier = merged wire frontier max-merged with local
+        // markers still inside the debounce window, then advanced to readTs.
+        const candidateFrontier = mergeContexts(frontier, getReadStateSnapshot());
+        if ((candidateFrontier[groupId] ?? 0) < readTs) candidateFrontier[groupId] = readTs;
+        let candidateOverrides = overrides;
+        const reg = overrides[groupId];
+        if (reg) {
+          const next = markReadRegister(reg);
+          if (!next) return { ok: false, reason: "counter-exhausted" };
+          candidateOverrides = { ...overrides, [groupId]: next };
+        }
+        const { fits } = buildSlot(
+          clientId,
+          candidateFrontier,
+          canonicalWireEntries(candidateOverrides, candidateFrontier),
+        );
+        if (!fits) return { ok: false, reason: "budget-exceeded" };
+        overrides = candidateOverrides;
+        frontier = candidateFrontier;
+        // Local mirror: advance the marker and drop the forced pin outright —
+        // the ov_c increment is the durable verdict, so the dot must clear
+        // even when readTs cannot pass a future-skewed baseline.
+        markChannelRead(groupId, readTs);
+        clearChannelForcedUnread(groupId);
         scheduleReadPublish();
         return { ok: true };
       },

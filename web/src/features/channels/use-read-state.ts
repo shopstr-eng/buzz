@@ -127,6 +127,21 @@ export function markChannelForcedUnread(groupId: string, baseline: number): void
 }
 
 /**
+ * Explicit local force release (mark-read action): drop the forced-unread pin
+ * regardless of whether the marker covered the baseline — the NIP-RS ov_c
+ * increment (use-sync-30078) is the durable cross-client verdict; this clears
+ * the dot immediately even when a future-dated message skewed the frontier so
+ * the marker cannot advance past the baseline.
+ */
+export function clearChannelForcedUnread(groupId: string): void {
+  if (forcedMap[groupId] === undefined) return;
+  forcedMap = { ...forcedMap };
+  delete forcedMap[groupId];
+  persist();
+  emit();
+}
+
+/**
  * Mirror the merged wire state (NIP-RS override registers + frontier) into
  * the local badge store, so a mark-unread made on ANOTHER client lights the
  * dot here — and a remote clear (or a frontier advance past the baseline)
