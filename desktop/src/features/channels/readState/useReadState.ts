@@ -17,6 +17,7 @@ const noopMarkUnread = (): MarkUnreadResult => ({
 });
 const noopOverrideStatus = (): OverrideStatus => "none";
 const noopActiveOverrides = (): Record<string, number> => ({});
+const noopIsLoadComplete = () => false;
 
 /**
  * React hook that creates and manages a ReadStateManager instance.
@@ -117,6 +118,10 @@ export function useReadState(
     return managerRef.current?.getActiveOverrides() ?? {};
   }, []);
 
+  const isLoadComplete = React.useCallback((): boolean => {
+    return managerRef.current?.isLoadComplete() ?? false;
+  }, []);
+
   const drainSyncedAdvances = React.useCallback((): ReadonlySet<string> => {
     return managerRef.current?.drainSyncedAdvances() ?? new Set<string>();
   }, []);
@@ -146,6 +151,7 @@ export function useReadState(
       markContextManualRead: noopMarkRead,
       getOverrideStatus: noopOverrideStatus,
       getActiveOverrides: noopActiveOverrides,
+      isLoadComplete: noopIsLoadComplete,
     };
   }
 
@@ -162,5 +168,6 @@ export function useReadState(
     markContextManualRead,
     getOverrideStatus,
     getActiveOverrides,
+    isLoadComplete,
   };
 }

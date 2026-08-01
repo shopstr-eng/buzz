@@ -173,6 +173,7 @@ export function useUnreadChannels(
     markContextManualRead,
     getOverrideStatus,
     getActiveOverrides,
+    isLoadComplete,
   } = useReadState(pubkey, relayClient);
 
   // Observed "latest external trigger event" per channel (unix seconds). This
@@ -209,6 +210,11 @@ export function useUnreadChannels(
   //    syncForcedFromOverrides): an active ov_* group — set on ANY device —
   //    lights the dot here; a register that went inactive (remote ov_c clear
   //    or a frontier advance past its baseline) releases it.
+  // 3. Replay legacy local-only forces (made while the override layer was
+  //    unavailable, e.g. offline) through markContextUnread once the
+  //    full-state load has proven complete, so the force syncs to other
+  //    devices. Forces the frontier has since covered (a later read advanced
+  //    the marker past the force-time baseline) are dropped, not resurrected.
   // biome-ignore lint/correctness/useExhaustiveDependencies: readStateVersion is the intentional drain trigger
   React.useEffect(() => {
     const advanced = drainSyncedAdvances();
@@ -239,6 +245,33 @@ export function useUnreadChannels(
         anyNew = true;
       }
     }
+    if (isLoadComplete()) {
+      for (const [ctx, baseline] of Object.entries(forcedUnreadRef.current)) {
+        if (ctx.startsWith("msg:") || ctx.startsWith("thread:")) continue;
+        // Entries with a register (any status) already went through the
+        // override layer — only legacy local-only forces need replay.
+        if (getOverrideStatus(ctx) !== "none") continue;
+        const own = getOwnTimestamp(ctx);
+        if (own !== null && own > (baseline ?? 0)) {
+          // A later read advanced the marker past the force-time baseline —
+          // the cross-device read wins; don't resurrect the force.
+          delete forcedUnreadRef.current[ctx];
+          anyNew = true;
+          continue;
+        }
+        const result = markContextUnread(ctx);
+        if (result.ok) {
+          if (forcedUnreadRef.current[ctx] !== result.baseline) {
+            forcedUnreadRef.current[ctx] = result.baseline;
+            anyNew = true;
+          }
+        } else {
+          console.warn(
+            `[useUnreadChannels] replay of local-only force failed (${result.reason}) — will retry on next read-state change`,
+          );
+        }
+      }
+    }
     if (anyNew) {
       if (pubkey) {
         forcedUnreadStore.write(pubkey, forcedUnreadRef.current);
@@ -250,6 +283,9 @@ export function useUnreadChannels(
     drainSyncedAdvances,
     getOverrideStatus,
     getActiveOverrides,
+    isLoadComplete,
+    getOwnTimestamp,
+    markContextUnread,
   ]);
 
   // Root event IDs of threads where the current user has replied at least once.

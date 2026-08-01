@@ -105,3 +105,6 @@ Related tooling traps in this environment:
 - `ss -tlnp` shows NOTHING here (not even live listeners) — probe with `(exec 3<>/dev/tcp/127.0.0.1/PORT)` or read `/proc/net/tcp` (state 0A = LISTEN, hex ports).
 - `pkill -f <pattern>` from a shell command kills the shell itself when the pattern appears in its own command line (e.g. `pkill -f 'target/release/buzz'`); use a non-self-matching pattern like `'release/buzz[-]relay'`.
 - `.replit` edits go through the verifyAndReplaceDotReplit temp-file flow, and the platform re-normalizes the [[ports]] section afterwards (it resurrected a stale 8080→8080 mapping and reassigned external ports) — always `cat .replit` after applying to confirm what actually landed.
+
+## Desktop tests need Node 22+
+Default workspace node is 20.x, which lacks `--experimental-strip-types`; `pnpm test` in desktop/ fails with "bad option". Prepend a Node 22 nix store bin to PATH (e.g. /nix/store/51gywl5jn4nna7al9waj142pw4vfhy0k-nodejs-22.19.0/bin) before running.

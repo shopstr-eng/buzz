@@ -218,3 +218,12 @@ test("no-op suppression fires only when frontier AND override wire are unchanged
   assert.equal(calls, 2, "override change must trigger a publish");
   mgr.destroy();
 });
+
+test("isLoadComplete: false before load, true after successful full-state load", async () => {
+  globalThis.window.localStorage = makeLocalStorage();
+  const mgr = new ReadStateManager(PUBKEY, makeFakeRelay());
+  assert.equal(mgr.isLoadComplete(), false);
+  await mgr.initialize();
+  assert.equal(mgr.isLoadComplete(), true);
+  mgr.destroy();
+});

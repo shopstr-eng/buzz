@@ -477,6 +477,15 @@ export class ReadStateManager {
     this.notifyListeners();
   }
 
+  /**
+   * True once the NIP-RS full-state load has proven complete (override
+   * mutations allowed). Surfaces use this to replay pending local-only
+   * forces through the override layer after a reconnect.
+   */
+  isLoadComplete(): boolean {
+    return this.loadComplete === true;
+  }
+
   /** Whether a context has no register, a live one, or a dead/cleared one. */
   getOverrideStatus(contextId: string): OverrideStatus {
     const reg = this.overrides[contextId];
