@@ -11,6 +11,8 @@
  *   - stsd sample entry avc1 -> hvc1       -> 415 WrongCodec
  *   - udta atom renamed to uuid            -> 422 MetadataForbidden
  *   - ftyp major brand isom -> "qt  "      -> 415 UnsupportedContainer
+ *   - mvhd/tkhd/mdhd durations -> 601s     -> 422 DurationTooLong
+ *   - stsd avc1 width/height -> 7680x4320  -> 422 ResolutionTooHigh
  *
  * Also asserts the web client surfaces the server's reason text: the error
  * thrown by uploadMediaBytes must include the response body.
@@ -102,6 +104,24 @@ function patchAscii(bytes: Uint8Array, at: number, replacement: string): void {
   for (let j = 0; j < replacement.length; j++) {
     bytes[at + j] = replacement.charCodeAt(j);
   }
+}
+
+function readU32(bytes: Uint8Array, at: number): number {
+  return (
+    ((bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]) >>> 0
+  );
+}
+
+function writeU32(bytes: Uint8Array, at: number, value: number): void {
+  bytes[at] = (value >>> 24) & 0xff;
+  bytes[at + 1] = (value >>> 16) & 0xff;
+  bytes[at + 2] = (value >>> 8) & 0xff;
+  bytes[at + 3] = value & 0xff;
+}
+
+function writeU16(bytes: Uint8Array, at: number, value: number): void {
+  bytes[at] = (value >>> 8) & 0xff;
+  bytes[at + 1] = value & 0xff;
 }
 
 async function uploadExpectingRejection(
@@ -255,6 +275,67 @@ describe.skipIf(!RELAY_URL || !SECKEY_HEX)(
       const err = await uploadExpectingRejection(bytes, "metadata.mp4");
       expect(err.message).toContain("Upload failed (422)");
       expect(err.message.toLowerCase()).toContain("metadata");
+    }, 60_000);
+
+    it("rejects a video longer than 600 seconds with 422 'video too long'", async () => {
+      const bytes = baseMp4();
+      // Patch every duration field to 601 seconds so the file is internally
+      // consistent. All boxes here are version 0:
+      //   mvhd: fourcc + ver/flags(4) + creation(4) + modification(4)
+      //         + timescale(4) @+16 + duration(4) @+20
+      //   tkhd: fourcc + ver/flags(4) + creation(4) + modification(4)
+      //         + track_id(4) + reserved(4) + duration(4) @+24 (movie timescale)
+      //   mdhd: same layout as mvhd — timescale @+16, duration @+20.
+      // The relay's duration check reads mdhd (track timescale), but patching
+      // mvhd/tkhd too keeps the container coherent.
+      const SECONDS = 601;
+      const mvhd = indexOfAscii(bytes, "mvhd");
+      expect(mvhd).toBeGreaterThan(0);
+      const movieTimescale = readU32(bytes, mvhd + 16);
+      expect(movieTimescale).toBeGreaterThan(0);
+      writeU32(bytes, mvhd + 20, movieTimescale * SECONDS);
+
+      const tkhd = indexOfAscii(bytes, "tkhd");
+      expect(tkhd).toBeGreaterThan(0);
+      writeU32(bytes, tkhd + 24, movieTimescale * SECONDS);
+
+      const mdhd = indexOfAscii(bytes, "mdhd");
+      expect(mdhd).toBeGreaterThan(0);
+      const trackTimescale = readU32(bytes, mdhd + 16);
+      expect(trackTimescale).toBeGreaterThan(0);
+      writeU32(bytes, mdhd + 20, trackTimescale * SECONDS);
+
+      const err = await uploadExpectingRejection(bytes, "too-long.mp4");
+      expect(err.message).toContain("Upload failed (422)");
+      expect(err.message.toLowerCase()).toContain("video too long");
+    }, 60_000);
+
+    it("rejects a resolution over 3840x2160 with 422 'resolution too high'", async () => {
+      const bytes = baseMp4();
+      // The relay reads resolution from the stsd avc1 sample entry (falling
+      // back to tkhd only when absent). avc1 layout after the fourcc:
+      // reserved(6) + data_ref_index(2) + pre_defined(2) + reserved(2)
+      // + pre_defined(12) + width(2) @+28 + height(2) @+30.
+      const stsd = indexOfAscii(bytes, "stsd");
+      expect(stsd).toBeGreaterThan(0);
+      const avc1 = indexOfAscii(bytes, "avc1", stsd);
+      expect(avc1).toBeGreaterThan(stsd);
+      writeU16(bytes, avc1 + 28, 7680);
+      writeU16(bytes, avc1 + 30, 4320);
+
+      // Keep tkhd's fixed-point 16.16 width/height consistent: fourcc
+      // + ver/flags(4) + creation(4) + modification(4) + track_id(4)
+      // + reserved(4) + duration(4) + reserved(8) + layer(2) + alt_group(2)
+      // + volume(2) + reserved(2) + matrix(36) => width @+80, height @+84
+      // (offsets from the start of the "tkhd" fourcc itself).
+      const tkhd = indexOfAscii(bytes, "tkhd");
+      expect(tkhd).toBeGreaterThan(0);
+      writeU32(bytes, tkhd + 80, 7680 << 16);
+      writeU32(bytes, tkhd + 84, 4320 << 16);
+
+      const err = await uploadExpectingRejection(bytes, "8k.mp4");
+      expect(err.message).toContain("Upload failed (422)");
+      expect(err.message.toLowerCase()).toContain("resolution too high");
     }, 60_000);
 
     it("rejects a QuickTime container (ftyp major brand qt) with 415", async () => {
