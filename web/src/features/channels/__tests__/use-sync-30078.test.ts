@@ -8,11 +8,13 @@
  *     never lowers merged override counters;
  *  3. a foreign client_id on our d-tag rotates the slot and republishes the
  *     FULL override set under the fresh slot id (NIP-RS carry-forward);
- *  4. multi-page enumeration paginates with a strictly decreasing `until`
+ *  4. a mid-load collision suppresses the immediate republish and the
+ *     completion republish carries the merged state under the rotated slot;
+ *  5. multi-page enumeration paginates with a strictly decreasing `until`
  *     cursor and unlocks mark-unread only after a short page (< max(cap, L));
- *  5. MAX_ENUMERATION_PAGES exhaustion leaves loadComplete=false so override
+ *  6. MAX_ENUMERATION_PAGES exhaustion leaves loadComplete=false so override
  *     actions keep failing "not-ready";
- *  6. over-budget publishes are refused outright — never truncated — and the
+ *  7. over-budget publishes are refused outright — never truncated — and the
  *     debounced-publish path downgrades loadComplete so later override
  *     actions fail "not-ready".
  */
@@ -236,6 +238,55 @@ describe("useSync30078 (stateful NIP-RS flow)", () => {
     expect(localStorage.getItem(`buzz.nip-rs.slot-id:${ME}`)).toBe(
       rotated.dTag.slice("read-state:".length),
     );
+    unmount();
+  });
+
+  it("a mid-load slot collision suppresses the immediate republish and carries overrides at completion under the rotated slot", async () => {
+    const { subs, published, unmount } = setup();
+    // Fence up; enumeration query issued but NOT yet complete.
+    await act(async () => {
+      subs[0].onEose?.();
+    });
+    const page = subs[subs.length - 1];
+    expect(page).not.toBe(subs[0]);
+    // Peer overrides arrive on the enumeration page (still in flight).
+    await act(async () => {
+      page.onEvent(
+        blob(
+          "peer1",
+          { "t7-chan": 100, "ov_s:t7-chan": 2, "ov_c:t7-chan": 1, "ov_b:t7-chan": 100 },
+          2000,
+          PEER_SLOT,
+        ),
+      );
+    });
+    // Foreign client_id lands on OUR d-tag while the load is in flight:
+    // the slot rotates, but the republish is deferred to load completion.
+    await act(async () => {
+      subs[0].onEvent(blob("intruder", { "t7-intr": 7 }, 3000, `read-state:${SLOT}`));
+    });
+    const rotatedSlotId = localStorage.getItem(`buzz.nip-rs.slot-id:${ME}`)!;
+    expect(rotatedSlotId).not.toBe(SLOT);
+    expect(rotatedSlotId).toMatch(/^[0-9a-f]{32}$/);
+    // Deliberately suppressed: nothing published before completion.
+    expect(readStatePublishes(published)).toHaveLength(0);
+    // Short page (1 < max(cap, L)) discharges the load → completion republish.
+    await act(async () => {
+      page.onEose?.();
+    });
+    const pubs = readStatePublishes(published);
+    expect(pubs).toHaveLength(1);
+    const completion = pubs[0];
+    // Under the ROTATED slot id — the old coordinate is abandoned.
+    expect(completion.dTag).toBe(`read-state:${rotatedSlotId}`);
+    expect(completion.dTag).not.toBe(`read-state:${SLOT}`);
+    // Carry-forward: all merged ov_* registers and frontier entries survive.
+    expect(completion.slot.client_id).toBe(MY_CLIENT);
+    expect(completion.slot.contexts["ov_s:t7-chan"]).toBe(2);
+    expect(completion.slot.contexts["ov_c:t7-chan"]).toBe(1);
+    expect(completion.slot.contexts["ov_b:t7-chan"]).toBe(100);
+    expect(completion.slot.contexts["t7-chan"]).toBe(100);
+    expect(completion.slot.contexts["t7-intr"]).toBe(7);
     unmount();
   });
 
