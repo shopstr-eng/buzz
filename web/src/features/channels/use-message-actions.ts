@@ -11,7 +11,9 @@
  *             shape the desktop publishes for self-deletes (kind 9005 is the
  *             group-scoped moderation variant; the relay accepts both).
  *
- * Both apply an optimistic local update; the live subscription confirms.
+ * Both publish via publishAndWait so relay rejections (permissions,
+ * validation) surface as errors; the local update is applied only after the
+ * relay accepts the event.
  */
 
 import { useCallback, useState } from "react";
@@ -59,8 +61,10 @@ export function useMessageActions(
           tags,
           content: trimmed,
         });
+        // publishAndWait surfaces relay rejections (permissions, validation);
+        // only apply the optimistic local edit once the relay accepted it.
+        await connection.publishAndWait(signed);
         applyLocalEdit(messageId, trimmed);
-        connection.publish(signed);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to edit message.");
       }
@@ -89,8 +93,10 @@ export function useMessageActions(
           ],
           content: "",
         });
+        // publishAndWait surfaces relay rejections; only remove locally once
+        // the relay accepted the deletion.
+        await connection.publishAndWait(signed);
         applyLocalDelete(messageId);
-        connection.publish(signed);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to delete message.");
       }

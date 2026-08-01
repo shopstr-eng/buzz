@@ -61,7 +61,7 @@ function ChatChannelView({ channel }: Props) {
     addOptimistic,
     applyLocalDelete,
   );
-  const { editMessage, deleteMessage } = useMessageActions(
+  const { editMessage, deleteMessage, error: messageActionError } = useMessageActions(
     channel.groupId,
     applyLocalEdit,
     applyLocalDelete,
@@ -295,6 +295,13 @@ function ChatChannelView({ channel }: Props) {
             ) : (
               `${agentWorking.length} agents are working…`
             )}
+          </div>
+        )}
+
+        {/* Relay rejection of an edit/delete (permissions, validation) */}
+        {messageActionError && (
+          <div className="shrink-0 px-4 pb-1 text-[11px] text-red-600 dark:text-red-400">
+            {messageActionError}
           </div>
         )}
 

@@ -74,7 +74,9 @@ export function ProfileEditDialog({ onClose }: Props) {
         tags: [],
         content: JSON.stringify(content),
       });
-      connection.publish(signed);
+      // publishAndWait surfaces relay rejections (permissions, validation)
+      // instead of silently pretending the save succeeded.
+      await connection.publishAndWait(signed);
       setSaved(true);
       // Close after a short pause so the user sees the confirmation.
       setTimeout(onClose, 1200);

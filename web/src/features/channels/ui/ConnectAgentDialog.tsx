@@ -149,7 +149,9 @@ export function ConnectAgentDialog({ groupId, onClose }: Props) {
         if (resolvedModel) metaTags.push(["agent_config", "MODEL_NAME", resolvedModel]);
 
         const metaSigned = await signFn({ kind: KIND_EDIT_METADATA, created_at: now, tags: metaTags, content: "" });
-        connection.publish(metaSigned);
+        // publishAndWait so a rejected metadata update (permissions, validation)
+        // is surfaced instead of silently proceeding to add the member.
+        await connection.publishAndWait(metaSigned);
 
         // 2. Add the ACP worker as a channel member via kind:9000.
         let acpPubkey: string | null = null;

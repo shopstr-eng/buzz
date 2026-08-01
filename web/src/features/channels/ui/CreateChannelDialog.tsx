@@ -285,7 +285,9 @@ export function CreateChannelDialog({ onClose }: Props) {
 
       const now = Math.floor(Date.now() / 1000);
       const signed = await signFn({ kind: KIND_CREATE_GROUP, created_at: now, tags, content: "" });
-      connection.publish(signed);
+      // publishAndWait surfaces the relay's OK false reason (permissions,
+      // validation) instead of closing as if creation succeeded.
+      await connection.publishAndWait(signed);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create channel.");
