@@ -87,7 +87,11 @@ const METADATA_LIMIT = 1000;
 const UNREAD_EXISTENCE_LIMIT = 50;
 const MENTION_COUNT_LIMIT = 100;
 const READ_STATE_FETCH_LIMIT = 500;
-const READ_STATE_HORIZON_SECONDS = 7 * 24 * 60 * 60;
+// NIP-RS Full-State Load bounds (mirrors ReadStateManager.fetchAndMerge):
+// continuations only advance on a non-empty page, so this cannot spin; it
+// just bounds a pathological history.
+const READ_STATE_MAX_ENUMERATION_PAGES = 64;
+const READ_STATE_FLOOR_L = 2; // NIP-RS Full-State Load floor (fixed by the NIP)
 
 export type CommunityUnreadObserverResult = {
   hasUnread: boolean;
@@ -144,6 +148,47 @@ export async function fetchObservedChannels(
   );
 }
 
+/**
+ * NIP-RS Full-State Load for the rail observer (mirrors
+ * ReadStateManager.fetchAndMerge). The fetch MUST NOT be filtered by age or
+ * tag: a mark-unread force can live on a coordinate whose last republish
+ * predates any horizon, and a tag constraint can withhold events past the
+ * relay's result cap. Completeness is established by continuation on a
+ * strictly decreasing `until` cursor; each band is discharged when it
+ * delivers fewer events than max(C, L), where C is the largest single
+ * delivery seen so far and L = 2 is the NIP's floor.
+ */
+export async function fetchAllReadStateEvents(
+  client: CommunityUnreadRelay,
+  pubkey: string,
+): Promise<RelayEvent[]> {
+  const collected: RelayEvent[] = [];
+  let cap = 0;
+  let until: number | undefined;
+  for (let page = 0; page < READ_STATE_MAX_ENUMERATION_PAGES; page += 1) {
+    const events = await client.fetchEvents({
+      kinds: [KIND_READ_STATE],
+      authors: [pubkey],
+      limit: READ_STATE_FETCH_LIMIT,
+      ...(until !== undefined ? { until } : {}),
+    });
+    collected.push(...events);
+
+    const delivered = events.length;
+    if (delivered > cap) cap = delivered;
+    if (delivered === 0 || delivered < Math.max(cap, READ_STATE_FLOOR_L)) {
+      break;
+    }
+    const oldest = Math.min(...events.map((e) => e.created_at));
+    const nextUntil = oldest - 1;
+    if (nextUntil < 0 || (until !== undefined && nextUntil >= until)) {
+      break;
+    }
+    until = nextUntil;
+  }
+  return collected;
+}
+
 export async function pollCommunityUnread(
   community: Community,
   pubkey: string,
@@ -164,7 +209,6 @@ export async function fetchCommunityUnread(args: {
 }): Promise<CommunityUnreadObserverResult> {
   const { client, pubkey } = args;
   const normalizedPubkey = pubkey.toLowerCase();
-  const nowSeconds = args.nowSeconds ?? Math.floor(Date.now() / 1_000);
   const decryptMutes = args.decryptMutes ?? nip44DecryptFromSelf;
   const readRelationships =
     args.readThreadRelationships ?? defaultReadThreadRelationships;
@@ -177,13 +221,7 @@ export async function fetchCommunityUnread(args: {
   }
 
   const [readStateEvents, mutesEvents] = await Promise.all([
-    client.fetchEvents({
-      kinds: [KIND_READ_STATE],
-      authors: [pubkey],
-      "#t": ["read-state"],
-      since: nowSeconds - READ_STATE_HORIZON_SECONDS,
-      limit: READ_STATE_FETCH_LIMIT,
-    }),
+    fetchAllReadStateEvents(client, pubkey),
     client.fetchEvents({
       kinds: [KIND_CHANNEL_MUTES],
       authors: [pubkey],

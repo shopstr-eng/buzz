@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   extractHiddenDmIds,
   extractMemberChannelIds,
+  fetchAllReadStateEvents,
   fetchCommunityUnread,
   resolveObservedChannels,
 } from "./communityUnreadObserver.ts";
@@ -726,6 +727,120 @@ function quietRelayWithReadState(readAtSeconds) {
     () => [],
   ]);
 }
+
+// ── NIP-RS full-state load tests ─────────────────────────────────────────
+
+function readStateEvent(overrides = {}) {
+  return event({
+    pubkey: PUBKEY,
+    created_at: overrides.created_at ?? 100,
+    tags: [
+      ["d", overrides.dTag ?? "read-state:slot"],
+      ["t", "read-state"],
+    ],
+    content: JSON.stringify({
+      v: 1,
+      client_id: overrides.clientId ?? "client",
+      contexts: overrides.contexts ?? {},
+    }),
+    ...(overrides.id ? { id: overrides.id } : {}),
+  });
+}
+
+test("fetchAllReadStateEvents queries tag-free with no since horizon", async () => {
+  const relay = relayFor([() => []]);
+  await fetchAllReadStateEvents(relay, PUBKEY);
+  assert.equal(relay.requests.length, 1);
+  const filter = relay.requests[0];
+  assert.equal(filter["#t"], undefined);
+  assert.equal(filter.since, undefined);
+  assert.equal(filter.until, undefined);
+  assert.deepEqual(filter.authors, [PUBKEY]);
+});
+
+test("fetchAllReadStateEvents pages with a descending until cursor until the band is discharged", async () => {
+  // Page 1 delivers 3 events (cap=3) → continue below the oldest (created_at 50).
+  // Page 2 delivers 1 event (< max(cap,2)) → discharged.
+  const page1 = [
+    readStateEvent({ dTag: "read-state:a", created_at: 100 }),
+    readStateEvent({ dTag: "read-state:b", created_at: 80 }),
+    readStateEvent({ dTag: "read-state:c", created_at: 50 }),
+  ];
+  const page2 = [readStateEvent({ dTag: "read-state:old", created_at: 10 })];
+  const relay = relayFor([() => page1, () => page2]);
+
+  const events = await fetchAllReadStateEvents(relay, PUBKEY);
+
+  assert.equal(events.length, 4);
+  assert.equal(relay.requests.length, 2);
+  assert.equal(relay.requests[0].until, undefined);
+  assert.equal(relay.requests[1].until, 49);
+});
+
+test("fetchCommunityUnread lights dot for active override on a coordinate older than any horizon", async () => {
+  // The override-carrying coordinate was last republished long ago
+  // (created_at far below now) AND only surfaces on the second enumeration
+  // page — a #t/since-filtered single fetch would have missed it.
+  const recentPage = [
+    readStateEvent({ dTag: "read-state:r1", created_at: 1_000_000 }),
+    readStateEvent({ dTag: "read-state:r2", created_at: 999_000 }),
+  ];
+  const oldPage = [
+    readStateEvent({
+      dTag: "read-state:ancient",
+      created_at: 5,
+      contexts: {
+        [CHANNEL_ID]: 40,
+        [`ov_s:${CHANNEL_ID}`]: 1,
+        [`ov_c:${CHANNEL_ID}`]: 0,
+        [`ov_b:${CHANNEL_ID}`]: 40,
+      },
+    }),
+  ];
+
+  const relay = relayFor([
+    // 1. member events
+    () => [
+      event({
+        tags: [
+          ["d", CHANNEL_ID],
+          ["p", PUBKEY],
+        ],
+      }),
+    ],
+    // 2. metadata events (parallel with visibility)
+    () => [
+      event({
+        tags: [
+          ["d", CHANNEL_ID],
+          ["t", "stream"],
+        ],
+      }),
+    ],
+    // 3. visibility events
+    () => [],
+    // 4. read-state enumeration page 1 (recent coordinates, cap=2 → continue)
+    () => recentPage,
+    // 5. mutes events (parallel with read-state page 1)
+    () => [],
+    // 6. read-state enumeration page 2 (the ancient override coordinate)
+    () => oldPage,
+    // 7. mention events (unread fetch skipped — override already lit the dot)
+    () => [],
+  ]);
+
+  const result = await fetchCommunityUnread({
+    client: relay,
+    pubkey: PUBKEY,
+    nowSeconds: 2_000_000,
+    decryptReadState: async (v) => v,
+    decryptMutes: async (v) => v,
+    readThreadRelationships: readRelationships(),
+    readForcedUnread: () => ({}),
+  });
+
+  assert.deepEqual(result, { hasUnread: true, mentionCount: 0 });
+});
 
 test("fetchCommunityUnread forced-unread channel lights rail dot (hasUnread:true)", async () => {
   const relay = quietRelay();
