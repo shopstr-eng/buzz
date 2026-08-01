@@ -8,7 +8,11 @@
  *     never lowers merged override counters;
  *  3. a foreign client_id on our d-tag rotates the slot and republishes the
  *     FULL override set under the fresh slot id (NIP-RS carry-forward);
- *  4. over-budget publishes are refused outright — never truncated — and the
+ *  4. multi-page enumeration paginates with a strictly decreasing `until`
+ *     cursor and unlocks mark-unread only after a short page (< max(cap, L));
+ *  5. MAX_ENUMERATION_PAGES exhaustion leaves loadComplete=false so override
+ *     actions keep failing "not-ready";
+ *  6. over-budget publishes are refused outright — never truncated — and the
  *     debounced-publish path downgrades loadComplete so later override
  *     actions fail "not-ready".
  */
@@ -232,6 +236,71 @@ describe("useSync30078 (stateful NIP-RS flow)", () => {
     expect(localStorage.getItem(`buzz.nip-rs.slot-id:${ME}`)).toBe(
       rotated.dTag.slice("read-state:".length),
     );
+    unmount();
+  });
+
+  it("multi-page enumeration: until cursor decreases and unlocks only after the short page", async () => {
+    const { subs, unmount } = setup();
+    // Full first page (LOAD_QUERY_LIMIT = 50 events) → continuation required.
+    const page1: NostrEvent[] = [];
+    for (let i = 0; i < 50; i++) {
+      page1.push(blob("peer1", { [`t5-chan-${i}`]: 10 }, 5000 - i, PEER_SLOT));
+    }
+    await act(async () => {
+      subs[0].onEose?.();
+    });
+    const firstPage = subs[subs.length - 1];
+    expect(firstPage).not.toBe(subs[0]);
+    expect(firstPage.filter.until).toBeUndefined();
+    await act(async () => {
+      for (const ev of page1) firstPage.onEvent(ev);
+      firstPage.onEose?.();
+    });
+    // Full page ⇒ NOT complete yet; a second enumeration query was issued.
+    expect(markChannelUnread("t5-chan-0", 1)).toEqual({ ok: false, reason: "not-ready" });
+    const secondPage = subs[subs.length - 1];
+    expect(secondPage).not.toBe(firstPage);
+    // until cursor = min(created_at of page 1) - 1, strictly below page 1.
+    expect(secondPage.filter.until).toBe(5000 - 49 - 1);
+    // Short second page (1 < max(cap=50, L=2)) discharges the load.
+    await act(async () => {
+      secondPage.onEvent(blob("peer1", { "t5-old": 5 }, 4000, PEER_SLOT));
+      secondPage.onEose?.();
+    });
+    expect(markChannelUnread("t5-chan-0", 1)).toEqual({ ok: true });
+    unmount();
+  });
+
+  it("MAX_ENUMERATION_PAGES exhaustion leaves override actions failing not-ready", async () => {
+    const { subs, unmount } = setup();
+    await act(async () => {
+      subs[0].onEose?.();
+    });
+    // Every page delivers exactly FLOOR_L = 2 events (= max(cap, L), never
+    // short) so completeness is never proven; 64 pages exhausts the budget.
+    let prevUntil: number | undefined;
+    for (let p = 0; p < 64; p++) {
+      const page = subs[subs.length - 1];
+      expect(page).not.toBe(subs[0]);
+      if (p > 0) {
+        expect(page.filter.until).toBeDefined();
+        expect(page.filter.until!).toBeLessThan(prevUntil ?? Infinity);
+      }
+      prevUntil = page.filter.until;
+      const ts = 1_000_000 - p * 10;
+      await act(async () => {
+        page.onEvent(blob("peer1", { [`t6-a-${p}`]: 1 }, ts, PEER_SLOT));
+        page.onEvent(blob("peer1", { [`t6-b-${p}`]: 1 }, ts - 1, PEER_SLOT));
+        page.onEose?.();
+      });
+    }
+    // Exhausted: no 65th enumeration query, and mark-unread stays locked.
+    const subCount = subs.length;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100);
+    });
+    expect(subs.length).toBe(subCount);
+    expect(markChannelUnread("t6-a-0", 1)).toEqual({ ok: false, reason: "not-ready" });
     unmount();
   });
 
