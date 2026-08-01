@@ -106,6 +106,9 @@ Related tooling traps in this environment:
 - `pkill -f <pattern>` from a shell command kills the shell itself when the pattern appears in its own command line (e.g. `pkill -f 'target/release/buzz'`); use a non-self-matching pattern like `'release/buzz[-]relay'`.
 - `.replit` edits go through the verifyAndReplaceDotReplit temp-file flow, and the platform re-normalizes the [[ports]] section afterwards (it resurrected a stale 8080→8080 mapping and reassigned external ports) — always `cat .replit` after applying to confirm what actually landed.
 
+## Dev-domain proxy buffers request bodies — early 4xx never arrives
+The Replit dev-domain reverse proxy holds a request until the declared body is fully sent, so a server that fast-fails on Content-Length (e.g. the relay's 413 for oversized videos) responds early but the client through the proxy just hangs. Test early-rejection paths directly against loopback (http://127.0.0.1:5000) with a `Host: <dev-domain>` header (node http allows it; fetch drops it). The video-reject e2e test exposes this as `E2E_RELAY_DIRECT_URL`. Also: the upload handler sniffs the first 4 KiB of body before the Content-Length fast-fail, so a test body must cover the sniff window or the server itself waits. Redis is now a Nix system dep (`redis`) — if `redis-server: command not found` reappears, reinstall it via package management. Web test files must compile under the web tsc pass (no node types): no `Buffer`, no typed `node:http` imports.
+
 ## Desktop Tauri Rust cannot compile in this env
 `cargo check` in desktop/src-tauri fails at `glib-sys` (no GTK/webkit2gtk system libs in this Nix env), so desktop Rust unit tests can't run here. Verify desktop Rust changes via `rustfmt --edition 2021 --check` + careful review; frontend via `pnpm typecheck` + biome (deps install with `pnpm install`, not npm).
 
