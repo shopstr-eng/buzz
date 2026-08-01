@@ -21,6 +21,7 @@ import {
   forcedUnreadStore,
   type ForcedUnreadMap,
 } from "@/features/channels/forcedUnreadStore";
+import { reconcileForcedUnread } from "@/features/channels/forcedUnreadReconcile";
 import {
   getThreadReference,
   isBroadcastReply,
@@ -203,75 +204,20 @@ export function useUnreadChannels(
   );
 
   // Reconcile the forced-unread overlay with synced state on every read-state
-  // change:
-  // 1. Drain synced advances — a cross-device read clears LEGACY local-only
-  //    forces (entries without an ov_* register).
-  // 2. Mirror the merged NIP-RS override verdict (like web's
-  //    syncForcedFromOverrides): an active ov_* group — set on ANY device —
-  //    lights the dot here; a register that went inactive (remote ov_c clear
-  //    or a frontier advance past its baseline) releases it.
-  // 3. Replay legacy local-only forces (made while the override layer was
-  //    unavailable, e.g. offline) through markContextUnread once the
-  //    full-state load has proven complete, so the force syncs to other
-  //    devices. Forces the frontier has since covered (a later read advanced
-  //    the marker past the force-time baseline) are dropped, not resurrected.
+  // change. The decision logic (drain synced advances, mirror the ov_*
+  // verdict, replay legacy local-only forces once the full-state load has
+  // proven complete) is the pure `reconcileForcedUnread` — see
+  // forcedUnreadReconcile.ts for the full contract and its unit tests.
   // biome-ignore lint/correctness/useExhaustiveDependencies: readStateVersion is the intentional drain trigger
   React.useEffect(() => {
-    const advanced = drainSyncedAdvances();
-    let anyNew = false;
-    for (const channelId of advanced) {
-      if (
-        Object.hasOwn(forcedUnreadRef.current, channelId) &&
-        getOverrideStatus(channelId) === "none"
-      ) {
-        delete forcedUnreadRef.current[channelId];
-        anyNew = true;
-      }
-    }
-    const activeOverrides = getActiveOverrides();
-    for (const [ctx, baseline] of Object.entries(activeOverrides)) {
-      if (ctx.startsWith("msg:") || ctx.startsWith("thread:")) continue;
-      if (forcedUnreadRef.current[ctx] !== baseline) {
-        forcedUnreadRef.current[ctx] = baseline;
-        anyNew = true;
-      }
-    }
-    for (const ctx of Object.keys(forcedUnreadRef.current)) {
-      if (
-        !Object.hasOwn(activeOverrides, ctx) &&
-        getOverrideStatus(ctx) === "inactive"
-      ) {
-        delete forcedUnreadRef.current[ctx];
-        anyNew = true;
-      }
-    }
-    if (isLoadComplete()) {
-      for (const [ctx, baseline] of Object.entries(forcedUnreadRef.current)) {
-        if (ctx.startsWith("msg:") || ctx.startsWith("thread:")) continue;
-        // Entries with a register (any status) already went through the
-        // override layer — only legacy local-only forces need replay.
-        if (getOverrideStatus(ctx) !== "none") continue;
-        const own = getOwnTimestamp(ctx);
-        if (own !== null && own > (baseline ?? 0)) {
-          // A later read advanced the marker past the force-time baseline —
-          // the cross-device read wins; don't resurrect the force.
-          delete forcedUnreadRef.current[ctx];
-          anyNew = true;
-          continue;
-        }
-        const result = markContextUnread(ctx);
-        if (result.ok) {
-          if (forcedUnreadRef.current[ctx] !== result.baseline) {
-            forcedUnreadRef.current[ctx] = result.baseline;
-            anyNew = true;
-          }
-        } else {
-          console.warn(
-            `[useUnreadChannels] replay of local-only force failed (${result.reason}) — will retry on next read-state change`,
-          );
-        }
-      }
-    }
+    const anyNew = reconcileForcedUnread(forcedUnreadRef.current, {
+      drainSyncedAdvances,
+      getOverrideStatus,
+      getActiveOverrides,
+      isLoadComplete,
+      getOwnTimestamp,
+      markContextUnread,
+    });
     if (anyNew) {
       if (pubkey) {
         forcedUnreadStore.write(pubkey, forcedUnreadRef.current);
