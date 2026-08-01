@@ -22,6 +22,8 @@ export function useSendMessage(
   send: (content: string, replyToId?: string, mentionPubkeys?: string[]) => Promise<void>;
   isSending: boolean;
   error: string | null;
+  /** Clears a previous send rejection (e.g. when the user starts typing again). */
+  clearError: () => void;
   /** Set when the relay rejected a send because the user is timed out. */
   timeoutRejection: TimeoutRejection | null;
 } {
@@ -98,5 +100,7 @@ export function useSendMessage(
     [connection, identity, groupId, addOptimistic, removeOptimistic],
   );
 
-  return { send, isSending, error, timeoutRejection };
+  const clearError = useCallback(() => setError(null), []);
+
+  return { send, isSending, error, clearError, timeoutRejection };
 }

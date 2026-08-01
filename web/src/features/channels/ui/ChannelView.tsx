@@ -56,7 +56,7 @@ function ChatChannelView({ channel }: Props) {
     fetchOlder,
     canFetchOlder,
   } = useMessages(channel.groupId);
-  const { send, isSending, timeoutRejection } = useSendMessage(
+  const { send, isSending, error: sendError, clearError: clearSendError, timeoutRejection } = useSendMessage(
     channel.groupId,
     addOptimistic,
     applyLocalDelete,
@@ -305,6 +305,13 @@ function ChatChannelView({ channel }: Props) {
           </div>
         )}
 
+        {/* Relay rejection of a plain send (permissions, validation) */}
+        {sendError && (
+          <div className="shrink-0 px-4 pb-1 text-[11px] text-red-600 dark:text-red-400">
+            {sendError}
+          </div>
+        )}
+
         {/* Composer */}
         <MessageComposer
           channelName={channel.name}
@@ -324,7 +331,10 @@ function ChatChannelView({ channel }: Props) {
             // Desktop parity: an edit cleared to empty is a delete request.
             if (window.confirm("Delete this message?")) await deleteMessage(id);
           }}
-          onTyping={notifyTyping}
+          onTyping={() => {
+            clearSendError();
+            notifyTyping();
+          }}
           timeoutRejection={timeoutRejection}
         />
           </>
