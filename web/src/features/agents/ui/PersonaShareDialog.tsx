@@ -51,6 +51,13 @@ const MAX_RECIPIENTS = 8;
 
 type SendPhase = "idle" | "uploading" | "sending" | "done";
 type CopyStatus = "idle" | "copying" | "copied";
+/** File format for the DM-send / copy-link snapshot upload. */
+type SnapshotFormat = "json" | "png";
+
+const SHARE_FORMATS: { value: SnapshotFormat; label: string; hint: string }[] = [
+  { value: "png", label: "Image (.agent.png)", hint: "Shows the agent’s avatar as a preview" },
+  { value: "json", label: "File (.agent.json)", hint: "Plain JSON snapshot file" },
+];
 
 function formatRecipientAudience(names: readonly string[]): string {
   if (names.length === 0) return "The people you selected";
@@ -106,6 +113,7 @@ export function PersonaShareDialog({
   const people = useCommunityPeople();
 
   const [shareLevel, setShareLevel] = useState<SnapshotMemoryLevel>("none");
+  const [shareFormat, setShareFormat] = useState<SnapshotFormat>("png");
   const [recipients, setRecipients] = useState<CommunityPerson[]>([]);
   const [search, setSearch] = useState("");
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
@@ -154,7 +162,36 @@ export function PersonaShareDialog({
     };
   }
 
-  async function uploadSnapshot(level: SnapshotMemoryLevel): Promise<BlobDescriptor> {
+  /**
+   * Encode the snapshot as an .agent.png — the manifest embedded in a
+   * buzz_agent_snapshot tEXt chunk, with the persona's PNG avatar as the
+   * image body when available (desktop parity; same as the PNG export).
+   */
+  function encodeSnapshotPng(level: SnapshotMemoryLevel): { bytes: Uint8Array; fileName: string } {
+    const { bytes } = encodeSnapshot(level);
+    const avatarBytes = persona.avatarUrl ? dataUrlToBytes(persona.avatarUrl) : null;
+    const png = encodePngWithSnapshotJson(
+      new TextDecoder().decode(bytes),
+      AGENT_PNG_CHUNK_KEYWORD,
+      avatarBytes,
+    );
+    return { bytes: png, fileName: `${persona.id}.agent.png` };
+  }
+
+  /**
+   * Upload the snapshot in the chosen share format. PNG uploads point the
+   * imeta `thumb` at the blob itself so the attachment card previews the
+   * agent's avatar in chat.
+   */
+  async function uploadSnapshot(
+    level: SnapshotMemoryLevel,
+    format: SnapshotFormat,
+  ): Promise<BlobDescriptor> {
+    if (format === "png") {
+      const { bytes, fileName } = encodeSnapshotPng(level);
+      const uploaded = await uploadMediaBytes(bytes, fileName, "image/png");
+      return { ...uploaded, thumb: uploaded.url };
+    }
     const { bytes, fileName } = encodeSnapshot(level);
     return uploadMediaBytes(bytes, fileName, "application/json");
   }
@@ -167,15 +204,8 @@ export function PersonaShareDialog({
       downloadBytes(bytes, fileName, "application/json");
       return;
     }
-    // PNG: embed the manifest in a buzz_agent_snapshot tEXt chunk, using the
-    // persona's PNG avatar as the image body when available (desktop parity).
-    const avatarBytes = persona.avatarUrl ? dataUrlToBytes(persona.avatarUrl) : null;
-    const png = encodePngWithSnapshotJson(
-      new TextDecoder().decode(bytes),
-      AGENT_PNG_CHUNK_KEYWORD,
-      avatarBytes,
-    );
-    downloadBytes(png, `${persona.id}.agent.png`, "image/png");
+    const png = encodeSnapshotPng(effectiveLevel);
+    downloadBytes(png.bytes, png.fileName, "image/png");
   }
 
   /** Upload the snapshot and copy its blob URL to the clipboard. */
@@ -187,7 +217,7 @@ export function PersonaShareDialog({
     setActionError(null);
     setCopyStatus("copying");
     try {
-      const uploaded = await uploadSnapshot(effectiveLevel);
+      const uploaded = await uploadSnapshot(effectiveLevel, shareFormat);
       await navigator.clipboard.writeText(uploaded.url);
       setCopyStatus("copied");
     } catch (err) {
@@ -246,7 +276,7 @@ export function PersonaShareDialog({
     setActionError(null);
     setSendPhase("uploading");
     try {
-      const uploaded = await uploadSnapshot(effectiveLevel);
+      const uploaded = await uploadSnapshot(effectiveLevel, shareFormat);
       const channel = await resolveDmChannel(recipients.map((r) => r.pubkey));
 
       setSendPhase("sending");
@@ -385,6 +415,29 @@ export function PersonaShareDialog({
               Memory options appear when a linked agent has decryptable memories.
             </p>
           )}
+        </div>
+
+        <div>
+          <label className={labelCls} htmlFor="persona-share-format">
+            Send as
+          </label>
+          <select
+            id="persona-share-format"
+            className={inputCls}
+            value={shareFormat}
+            disabled={isActionPending}
+            onChange={(e) => setShareFormat(e.target.value as SnapshotFormat)}
+            data-testid="persona-share-format"
+          >
+            {SHARE_FORMATS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[10px] text-black/35 dark:text-white/35">
+            {SHARE_FORMATS.find((o) => o.value === shareFormat)?.hint}
+          </p>
         </div>
 
         {effectiveLevel !== "none" && (
