@@ -13,6 +13,7 @@ import { Bot, Check, Plus, Users } from "lucide-react";
 import type { CatalogPersona } from "../lib/agent-catalog";
 import type { CatalogTeam } from "../lib/team-catalog";
 import { truncatePubkey } from "@/shared/lib/pubkey";
+import { relativeTime } from "@/shared/lib/relative-time";
 import { useProfiles } from "@/shared/hooks/use-profiles";
 
 function AddButton({
@@ -90,7 +91,7 @@ export function CatalogSection({
                   </span>
                 </p>
                 <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
-                  by {publisherName(team.authorPubkey)}
+                  by {publisherName(team.authorPubkey)} · shared {relativeTime(team.createdAt)}
                 </p>
                 {team.tagline && (
                   <p className="mt-1 line-clamp-2 text-[11px] text-black/55 dark:text-white/55">
@@ -136,7 +137,7 @@ export function CatalogSection({
             </p>
             <p className="mt-0.5 text-[10px] text-black/35 dark:text-white/35">
               by {profiles.get(entry.authorPubkey)?.name ?? truncatePubkey(entry.authorPubkey)}
-              {entry.model ? ` · ${entry.model}` : ""}
+              {entry.model ? ` · ${entry.model}` : ""} · shared {relativeTime(entry.createdAt)}
             </p>
             {entry.systemPrompt && (
               <p className="mt-1 line-clamp-2 text-[11px] text-black/55 dark:text-white/55">
