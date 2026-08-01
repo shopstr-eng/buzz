@@ -17,6 +17,7 @@ import {
   buildTeamCatalogEvent,
   buildManagedAgentEvent,
   buildDirectoryDeleteEvent,
+  buildTeamCatalogDeleteEvent,
   slugifyPersonaName,
   ensureUniqueSlug,
   type PersonaFormInput,
@@ -33,7 +34,7 @@ export function useAgentPublishing(): {
   savePersona: (input: PersonaFormInput, existingId: string | null, takenSlugs: string[]) => Promise<string>;
   deletePersona: (id: string) => Promise<void>;
   saveTeam: (input: TeamFormInput, existingId: string | null) => Promise<string>;
-  deleteTeam: (id: string) => Promise<void>;
+  deleteTeam: (id: string, opts?: { retractCatalog?: boolean }) => Promise<void>;
   setTeamShared: (
     team: { id: string; name: string; description: string | null; instructions: string | null },
     members: TeamCatalogMemberSource[],
@@ -113,10 +114,16 @@ export function useAgentPublishing(): {
   );
 
   const deleteTeam = useCallback(
-    (id: string) =>
+    (id: string, opts?: { retractCatalog?: boolean }) =>
       run(async () => {
         const owner = requireOwner();
         await publishTemplate(buildDirectoryDeleteEvent(KIND_TEAM, owner, id, nowSec()));
+        // Retract the kind:30178 catalog projection too (NIP-AP deletion,
+        // k-tagged kind 5) so a deleted team never lingers in the community
+        // catalog. Callers set retractCatalog when a catalog head exists.
+        if (opts?.retractCatalog) {
+          await publishTemplate(buildTeamCatalogDeleteEvent(owner, id, nowSec()));
+        }
       }),
     [run, publishTemplate, requireOwner],
   );

@@ -335,3 +335,25 @@ export function buildDirectoryDeleteEvent(
     content: "",
   };
 }
+
+/**
+ * Kind-5 deletion of a team's kind:30178 catalog projection (NIP-AP
+ * "Deletion"): address a-tag `30178:<owner>:<team-id>` plus ["k","30178"].
+ * Published alongside the team's own kind:30176 deletion so a deleted team
+ * never lingers in the community catalog with stale member instructions.
+ */
+export function buildTeamCatalogDeleteEvent(
+  ownerPubkey: string,
+  teamId: string,
+  now: number,
+): UnsignedNostrEvent {
+  return {
+    kind: 5,
+    created_at: now,
+    tags: [
+      ["a", `${KIND_TEAM_CATALOG}:${ownerPubkey}:${teamId}`],
+      ["k", String(KIND_TEAM_CATALOG)],
+    ],
+    content: "",
+  };
+}

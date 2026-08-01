@@ -17,6 +17,7 @@ import {
   buildManagedAgentEvent,
   agentToFormInput,
   buildDirectoryDeleteEvent,
+  buildTeamCatalogDeleteEvent,
   PERSONA_SLUG_RE,
 } from "../agent-events";
 import { KIND_PERSONA, KIND_TEAM, KIND_MANAGED_AGENT } from "../use-agents";
@@ -583,5 +584,18 @@ describe("buildDirectoryDeleteEvent", () => {
     expect(buildDirectoryDeleteEvent(KIND_MANAGED_AGENT, OWNER, "m", NOW).tags[0][1]).toBe(
       `${KIND_MANAGED_AGENT}:${OWNER}:m`,
     );
+  });
+});
+
+describe("buildTeamCatalogDeleteEvent", () => {
+  it("emits kind 5 with the 30178 address a-tag and k tag (NIP-AP)", () => {
+    const ev = buildTeamCatalogDeleteEvent(OWNER, "team-uuid", NOW);
+    expect(ev.kind).toBe(5);
+    expect(ev.created_at).toBe(NOW);
+    expect(ev.tags).toEqual([
+      ["a", `30178:${OWNER}:team-uuid`],
+      ["k", "30178"],
+    ]);
+    expect(ev.content).toBe("");
   });
 });

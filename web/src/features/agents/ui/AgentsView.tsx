@@ -269,13 +269,14 @@ export function AgentsView() {
     }
   }
   const { savePersona, deletePersona, deleteTeam, setTeamShared, deleteManagedAgent, isPublishing, error: publishError } = useAgentPublishing();
-  const { sharedTeamIds } = useOwnTeamShares();
+  const { sharedTeamIds, catalogTeamIds } = useOwnTeamShares();
   const [dialog, setDialog] = useState<DialogState>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  function confirmDelete(label: string, action: () => Promise<void>) {
-    if (window.confirm(`Delete ${label}? This publishes a deletion event and cannot be undone.`)) {
+  function confirmDelete(label: string, action: () => Promise<void>, extra?: string) {
+    const suffix = extra ? ` ${extra}` : "";
+    if (window.confirm(`Delete ${label}? This publishes a deletion event and cannot be undone.${suffix}`)) {
       action().catch(() => {/* surfaced via publishError */});
     }
   }
@@ -451,7 +452,19 @@ export function AgentsView() {
                   <button className={iconBtnCls} onClick={() => setDialog({ type: "team", existing: t })} aria-label={`Edit ${t.name}`}>
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
-                  <button className={iconBtnCls} onClick={() => confirmDelete(`team "${t.name}"`, () => deleteTeam(t.id))} aria-label={`Delete ${t.name}`}>
+                  <button
+                    className={iconBtnCls}
+                    onClick={() =>
+                      confirmDelete(
+                        `team "${t.name}"`,
+                        () => deleteTeam(t.id, { retractCatalog: catalogTeamIds.has(t.id) }),
+                        sharedTeamIds.has(t.id)
+                          ? "Its community catalog listing will be retracted as well."
+                          : undefined,
+                      )
+                    }
+                    aria-label={`Delete ${t.name}`}
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>

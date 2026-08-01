@@ -11,10 +11,16 @@ import type { NostrEvent } from "@/shared/lib/relay-connection";
 import { personaEventIsShared } from "./lib/agent-catalog";
 import { KIND_TEAM_CATALOG } from "./lib/team-catalog";
 
-export function useOwnTeamShares(): { sharedTeamIds: Set<string>; isLoading: boolean } {
+export function useOwnTeamShares(): {
+  sharedTeamIds: Set<string>;
+  /** Every team id with ANY kind:30178 head (shared or not) — a delete must also retract these. */
+  catalogTeamIds: Set<string>;
+  isLoading: boolean;
+} {
   const { connection, connectionState, identity } = useRelay();
   const me = identity?.pubkey;
   const [sharedTeamIds, setSharedTeamIds] = useState<Set<string>>(new Set());
+  const [catalogTeamIds, setCatalogTeamIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -26,10 +32,13 @@ export function useOwnTeamShares(): { sharedTeamIds: Set<string>; isLoading: boo
 
     function recompute(): void {
       const next = new Set<string>();
+      const all = new Set<string>();
       for (const [teamId, ev] of heads) {
+        all.add(teamId);
         if (personaEventIsShared(ev)) next.add(teamId);
       }
       setSharedTeamIds(next);
+      setCatalogTeamIds(all);
     }
 
     const unsub = connection.subscribe(
@@ -55,5 +64,5 @@ export function useOwnTeamShares(): { sharedTeamIds: Set<string>; isLoading: boo
     return unsub;
   }, [connection, connectionState, me]);
 
-  return { sharedTeamIds, isLoading };
+  return { sharedTeamIds, catalogTeamIds, isLoading };
 }
