@@ -54,7 +54,9 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
         tags,
         content: "",
       });
-      connection.publish(signed);
+      // publishAndWait surfaces the relay's OK false reason (e.g. permission
+      // denied for non-admins) instead of silently dropping the edit.
+      await connection.publishAndWait(signed);
 
       // Topic changes mirror desktop's set-topic contract exactly: a
       // standalone kind:9002 carrying only ["h", …] + ["topic", …] tags.
@@ -69,7 +71,7 @@ export function ChannelSettingsDialog({ channel, onClose }: Props) {
           ],
           content: "",
         });
-        connection.publish(topicSigned);
+        await connection.publishAndWait(topicSigned);
       }
       onClose();
     } catch (err) {
