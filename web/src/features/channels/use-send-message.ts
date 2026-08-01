@@ -5,7 +5,7 @@
  * mentionPubkeys — pubkeys typed via @mention picker; each becomes a ["p", pk] tag.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRelay } from "@/shared/context/relay-context";
 import { getSignFn } from "@/shared/lib/identity";
 import { KIND_STREAM_MSG, type ChatMessage } from "./types";
@@ -53,6 +53,19 @@ export function useSendMessage(
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<SendError | null>(null);
   const [timeoutRejection, setTimeoutRejection] = useState<OriginTimeoutRejection | null>(null);
+
+  // Auto-dismiss the timeout notice once the expiry time passes, so users
+  // aren't misled into thinking they're still blocked.
+  useEffect(() => {
+    if (!timeoutRejection?.expiresAtMs) return;
+    const remaining = timeoutRejection.expiresAtMs - Date.now();
+    if (remaining <= 0) {
+      setTimeoutRejection(null);
+      return;
+    }
+    const timer = setTimeout(() => setTimeoutRejection(null), remaining);
+    return () => clearTimeout(timer);
+  }, [timeoutRejection]);
 
   const send = useCallback(
     async (
@@ -104,18 +117,25 @@ export function useSendMessage(
         // Single publish: publishAndWait emits EVENT and resolves on the
         // relay's OK. Reactive timeout detection (mirrors desktop): the relay
         // refuses writes from timed-out members with "restricted: …".
-        void connection.publishAndWait(signed).catch((err: unknown) => {
-          // Roll back the optimistic row — rejected sends get no echo and
-          // would otherwise linger as pending forever.
-          removeOptimistic?.(signed.id);
-          const msg = err instanceof Error ? err.message : String(err);
-          const rejection = parseTimeoutRejection(msg);
-          if (rejection) {
-            setTimeoutRejection({ ...rejection, origin });
-          } else {
-            setError({ origin, message: msg });
-          }
-        });
+        void connection
+          .publishAndWait(signed)
+          .then(() => {
+            // A fresh successful send proves the timeout is over — clear any
+            // stale notice (e.g. no-expiry timeouts lifted by a moderator).
+            setTimeoutRejection(null);
+          })
+          .catch((err: unknown) => {
+            // Roll back the optimistic row — rejected sends get no echo and
+            // would otherwise linger as pending forever.
+            removeOptimistic?.(signed.id);
+            const msg = err instanceof Error ? err.message : String(err);
+            const rejection = parseTimeoutRejection(msg);
+            if (rejection) {
+              setTimeoutRejection({ ...rejection, origin });
+            } else {
+              setError({ origin, message: msg });
+            }
+          });
       } catch (err) {
         setError({
           origin,
