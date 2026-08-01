@@ -10,6 +10,7 @@ import {
   AlertDialogTitle,
 } from "@/shared/ui/alert-dialog";
 import { Button } from "@/shared/ui/button";
+import { useTeamCatalogShared } from "@/features/agents/lib/useTeamCatalogShared";
 
 type TeamDeleteDialogProps = {
   open: boolean;
@@ -24,6 +25,9 @@ export function TeamDeleteDialog({
   onConfirm,
   onOpenChange,
 }: TeamDeleteDialogProps) {
+  // Only shared teams have a live community-catalog listing to retract; the
+  // deletion itself always publishes the catalog retraction regardless.
+  const catalogShared = useTeamCatalogShared(team?.id ?? null);
   return (
     <AlertDialog onOpenChange={onOpenChange} open={open}>
       <AlertDialogContent>
@@ -31,7 +35,11 @@ export function TeamDeleteDialog({
           <AlertDialogTitle>Delete team?</AlertDialogTitle>
           <AlertDialogDescription>
             {team
-              ? `Delete "${team.name}". Already-deployed agents are not affected, but this team template will no longer be available.`
+              ? `Delete "${team.name}". Already-deployed agents are not affected, but this team template will no longer be available.${
+                  catalogShared
+                    ? " This team is shared, so its listing will also be removed from the community catalog."
+                    : ""
+                }`
               : "Delete this team."}
           </AlertDialogDescription>
         </AlertDialogHeader>

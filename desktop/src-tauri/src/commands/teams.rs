@@ -90,9 +90,9 @@ fn tombstone_team_pending(app: &AppHandle, state: &AppState, d_tag: &str) {
             delete_retained_event, open_retention_db, retain_event, tombstone_retention_d_tag,
             RetainedEvent,
         },
-        team_events::build_team_delete,
+        team_events::{build_team_catalog_delete, build_team_delete},
     };
-    use buzz_core_pkg::kind::KIND_TEAM;
+    use buzz_core_pkg::kind::{KIND_TEAM, KIND_TEAM_CATALOG};
     use nostr::JsonUtil;
 
     const KIND_DELETE: u32 = 5;
@@ -109,13 +109,33 @@ fn tombstone_team_pending(app: &AppHandle, state: &AppState, d_tag: &str) {
             &conn,
             &RetainedEvent {
                 kind: KIND_DELETE,
-                pubkey,
+                pubkey: pubkey.clone(),
                 // Key by the target coordinate so cross-kind d-tag tombstones
                 // occupy distinct rows (F2c).
                 d_tag: tombstone_retention_d_tag(KIND_TEAM, d_tag),
                 content: event.content.to_string(),
                 created_at: event.created_at.as_secs() as i64,
                 raw_event: event.as_json(),
+                pending_sync: true,
+            },
+        )?;
+        // Also retract the team's kind:30178 catalog projection (NIP-AP), so
+        // a team shared to the community catalog never lingers there with
+        // stale member instructions after deletion. Desktop does not track
+        // catalog heads, so this is unconditional: a coordinate delete with
+        // no live 30178 target is a harmless relay-side no-op.
+        let catalog_event = build_team_catalog_delete(d_tag, &pubkey)?
+            .sign_with_keys(&scope.owner_keys)
+            .map_err(|e| format!("failed to sign catalog tombstone: {e}"))?;
+        retain_event(
+            &conn,
+            &RetainedEvent {
+                kind: KIND_DELETE,
+                pubkey,
+                d_tag: tombstone_retention_d_tag(KIND_TEAM_CATALOG, d_tag),
+                content: catalog_event.content.to_string(),
+                created_at: catalog_event.created_at.as_secs() as i64,
+                raw_event: catalog_event.as_json(),
                 pending_sync: true,
             },
         )

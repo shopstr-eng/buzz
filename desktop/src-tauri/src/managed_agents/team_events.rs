@@ -6,7 +6,7 @@
 //! flush loop publish them — this module only owns the kind-specific
 //! projection, build, and tombstone.
 
-use buzz_core_pkg::kind::KIND_TEAM;
+use buzz_core_pkg::kind::{KIND_TEAM, KIND_TEAM_CATALOG};
 use nostr::{EventBuilder, Kind, Tag};
 use serde::{Deserialize, Serialize};
 
@@ -97,6 +97,27 @@ pub fn build_team_delete(d_tag: &str, owner_pubkey_hex: &str) -> Result<EventBui
     let coord = format!("{KIND_TEAM}:{owner_pubkey_hex}:{d_tag}");
     let tag = Tag::parse(["a", coord.as_str()]).map_err(|e| format!("invalid a-tag: {e}"))?;
     Ok(EventBuilder::new(Kind::Custom(5), "").tags(vec![tag]))
+}
+
+/// Build a NIP-09 deletion (kind:5) targeting a team's kind:30178 catalog
+/// projection (NIP-AP "Deletion").
+///
+/// Mirrors the web contract (`buildTeamCatalogDeleteEvent` in
+/// `web/src/features/agents/agent-events.ts`): one `a`-tag with the coordinate
+/// `30178:<owner>:<team-id>` plus `["k","30178"]`, no `e`-tag, empty content.
+/// Published alongside [`build_team_delete`] so a deleted team never lingers
+/// in the community catalog with stale member instructions. Desktop does not
+/// track 30178 heads, so this is published unconditionally — the relay
+/// accepts a coordinate delete with no live target as a harmless no-op.
+pub fn build_team_catalog_delete(
+    d_tag: &str,
+    owner_pubkey_hex: &str,
+) -> Result<EventBuilder, String> {
+    let coord = format!("{KIND_TEAM_CATALOG}:{owner_pubkey_hex}:{d_tag}");
+    let a_tag = Tag::parse(["a", coord.as_str()]).map_err(|e| format!("invalid a-tag: {e}"))?;
+    let k_tag = Tag::parse(["k", KIND_TEAM_CATALOG.to_string().as_str()])
+        .map_err(|e| format!("invalid k-tag: {e}"))?;
+    Ok(EventBuilder::new(Kind::Custom(5), "").tags(vec![a_tag, k_tag]))
 }
 
 #[cfg(test)]
@@ -239,6 +260,45 @@ mod tests {
         assert_eq!(event_content.instructions, Some(None));
         let json = serde_json::to_string(&event_content).unwrap();
         assert!(json.contains("\"instructions\":null"));
+    }
+
+    #[test]
+    fn build_team_catalog_delete_mirrors_web_contract() {
+        const OWNER: &str = "79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+        let builder = build_team_catalog_delete("team-123", OWNER).unwrap();
+        let keys = nostr::Keys::generate();
+        let event = builder.sign_with_keys(&keys).unwrap();
+
+        assert_eq!(event.kind, Kind::Custom(5));
+        assert_eq!(event.content.as_str(), "");
+
+        let a_tags: Vec<&[String]> = event
+            .tags
+            .iter()
+            .map(|t| t.as_slice())
+            .filter(|v| v.first().map(String::as_str) == Some("a"))
+            .collect();
+        assert_eq!(a_tags.len(), 1);
+        assert_eq!(
+            a_tags[0][1],
+            format!("{KIND_TEAM_CATALOG}:{OWNER}:team-123")
+        );
+
+        // NIP-AP: catalog deletions SHOULD carry ["k","30178"].
+        let k_tags: Vec<&[String]> = event
+            .tags
+            .iter()
+            .map(|t| t.as_slice())
+            .filter(|v| v.first().map(String::as_str) == Some("k"))
+            .collect();
+        assert_eq!(k_tags.len(), 1);
+        assert_eq!(k_tags[0][1], KIND_TEAM_CATALOG.to_string());
+
+        // No e-tag: coordinate deletion only.
+        assert!(event
+            .tags
+            .iter()
+            .all(|t| t.as_slice().first().map(String::as_str) != Some("e")));
     }
 
     #[test]
