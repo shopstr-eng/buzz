@@ -169,6 +169,10 @@ export function useUnreadChannels(
     setContextParentResolver,
     readStateVersion,
     getOwnTimestamp,
+    markContextUnread,
+    markContextManualRead,
+    getOverrideStatus,
+    getActiveOverrides,
   } = useReadState(pubkey, relayClient);
 
   // Observed "latest external trigger event" per channel (unix seconds). This
@@ -197,15 +201,41 @@ export function useUnreadChannels(
     pubkey ? forcedUnreadStore.read(pubkey) : {},
   );
 
-  // When a synced event advances a read marker (cross-device mark-as-read),
-  // remove from forcedUnreadRef so the dot clears immediately.
+  // Reconcile the forced-unread overlay with synced state on every read-state
+  // change:
+  // 1. Drain synced advances — a cross-device read clears LEGACY local-only
+  //    forces (entries without an ov_* register).
+  // 2. Mirror the merged NIP-RS override verdict (like web's
+  //    syncForcedFromOverrides): an active ov_* group — set on ANY device —
+  //    lights the dot here; a register that went inactive (remote ov_c clear
+  //    or a frontier advance past its baseline) releases it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: readStateVersion is the intentional drain trigger
   React.useEffect(() => {
     const advanced = drainSyncedAdvances();
     let anyNew = false;
     for (const channelId of advanced) {
-      if (Object.hasOwn(forcedUnreadRef.current, channelId)) {
+      if (
+        Object.hasOwn(forcedUnreadRef.current, channelId) &&
+        getOverrideStatus(channelId) === "none"
+      ) {
         delete forcedUnreadRef.current[channelId];
+        anyNew = true;
+      }
+    }
+    const activeOverrides = getActiveOverrides();
+    for (const [ctx, baseline] of Object.entries(activeOverrides)) {
+      if (ctx.startsWith("msg:") || ctx.startsWith("thread:")) continue;
+      if (forcedUnreadRef.current[ctx] !== baseline) {
+        forcedUnreadRef.current[ctx] = baseline;
+        anyNew = true;
+      }
+    }
+    for (const ctx of Object.keys(forcedUnreadRef.current)) {
+      if (
+        !Object.hasOwn(activeOverrides, ctx) &&
+        getOverrideStatus(ctx) === "inactive"
+      ) {
+        delete forcedUnreadRef.current[ctx];
         anyNew = true;
       }
     }
@@ -215,7 +245,12 @@ export function useUnreadChannels(
       }
       bumpLatestVersion();
     }
-  }, [readStateVersion, drainSyncedAdvances]);
+  }, [
+    readStateVersion,
+    drainSyncedAdvances,
+    getOverrideStatus,
+    getActiveOverrides,
+  ]);
 
   // Root event IDs of threads where the current user has replied at least once.
   // Used to determine if thread replies should trigger unread notifications.
@@ -312,6 +347,9 @@ export function useUnreadChannels(
       readAt: string | null | undefined,
       { topLevelOnly = false }: { topLevelOnly?: boolean } = {},
     ) => {
+      // Explicit mark-read of an override-forced channel increments ov_c so
+      // the clear propagates to other devices (NIP-RS override layer).
+      markContextManualRead(channelId);
       if (Object.hasOwn(forcedUnreadRef.current, channelId)) {
         delete forcedUnreadRef.current[channelId];
         if (pubkey) {
@@ -339,15 +377,33 @@ export function useUnreadChannels(
         bumpLatestVersion();
       }
     },
-    [markContextRead, pubkey],
+    [markContextManualRead, markContextRead, pubkey],
   );
 
-  // Manually mark a channel unread (e.g., right-click → "mark unread"). Persists
-  // the current NIP-RS read marker as baseline to localStorage so the rail
-  // observer can detect when a cross-device read has since covered the force.
-  // NIP-RS markers are monotonic, so we do not publish a lower timestamp.
+  // Manually mark a channel unread (e.g., right-click → "mark unread").
+  // Primary path: write a NIP-RS ov_* override group to the primary
+  // read-state coordinate so the force syncs to other devices (web parity).
+  // The returned register baseline is mirrored into the local forced store so
+  // the sidebar dot and the rail observer keep working offline. When the
+  // override layer is unavailable (full-state load not proven complete,
+  // counter ceiling), fall back to the legacy local-only force and warn —
+  // markers are monotonic, so we never publish a lower timestamp.
   const markChannelUnread = React.useCallback(
     (channelId: string) => {
+      const result = markContextUnread(channelId);
+      if (result.ok) {
+        if (forcedUnreadRef.current[channelId] !== result.baseline) {
+          forcedUnreadRef.current[channelId] = result.baseline;
+          if (pubkey) {
+            forcedUnreadStore.write(pubkey, forcedUnreadRef.current);
+          }
+          bumpLatestVersion();
+        }
+        return;
+      }
+      console.warn(
+        `[useUnreadChannels] mark-unread override unavailable (${result.reason}) — falling back to local-only force`,
+      );
       if (!Object.hasOwn(forcedUnreadRef.current, channelId)) {
         forcedUnreadRef.current[channelId] = getOwnTimestamp(channelId);
         if (pubkey) {
@@ -356,7 +412,7 @@ export function useUnreadChannels(
         bumpLatestVersion();
       }
     },
-    [getOwnTimestamp, pubkey],
+    [getOwnTimestamp, markContextUnread, pubkey],
   );
 
   // Record the thread root of an EXTERNAL message that @-mentioned the user.
@@ -953,6 +1009,7 @@ export function useUnreadChannels(
 
   const markAllChannelsRead = React.useCallback(() => {
     for (const channelId of unreadChannelIdsRef.current) {
+      markContextManualRead(channelId);
       delete forcedUnreadRef.current[channelId];
       const unixSeconds =
         latestByChannelRef.current.get(channelId) ??
@@ -968,7 +1025,7 @@ export function useUnreadChannels(
       forcedUnreadStore.write(pubkey, forcedUnreadRef.current);
     }
     bumpLatestVersion();
-  }, [getEffectiveTimestamp, markContextRead, pubkey]);
+  }, [getEffectiveTimestamp, markContextManualRead, markContextRead, pubkey]);
 
   // Identity-stable snapshots of the membership sets for the notify gate.
   // Re-derived only when membershipVersion bumps (a set actually changed), so

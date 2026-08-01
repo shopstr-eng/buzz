@@ -2,6 +2,8 @@ import * as React from "react";
 import {
   ReadStateManager,
   type ContextParentResolver,
+  type MarkUnreadResult,
+  type OverrideStatus,
 } from "@/features/channels/readState/readStateManager";
 import type { RelayClient } from "@/shared/api/relayClientSession";
 
@@ -9,6 +11,12 @@ const noopGetTimestamp = () => null;
 const noopMarkRead = () => {};
 const noopDrainAdvances = (): ReadonlySet<string> => new Set<string>();
 const noopSetResolver = () => {};
+const noopMarkUnread = (): MarkUnreadResult => ({
+  ok: false,
+  reason: "not-ready",
+});
+const noopOverrideStatus = (): OverrideStatus => "none";
+const noopActiveOverrides = (): Record<string, number> => ({});
 
 /**
  * React hook that creates and manages a ReadStateManager instance.
@@ -82,6 +90,33 @@ export function useReadState(
     [],
   );
 
+  const markContextUnread = React.useCallback(
+    (contextId: string): MarkUnreadResult => {
+      return (
+        managerRef.current?.markContextUnread(contextId) ?? {
+          ok: false,
+          reason: "not-ready",
+        }
+      );
+    },
+    [],
+  );
+
+  const markContextManualRead = React.useCallback((contextId: string): void => {
+    managerRef.current?.markContextManualRead(contextId);
+  }, []);
+
+  const getOverrideStatus = React.useCallback(
+    (contextId: string): OverrideStatus => {
+      return managerRef.current?.getOverrideStatus(contextId) ?? "none";
+    },
+    [],
+  );
+
+  const getActiveOverrides = React.useCallback((): Record<string, number> => {
+    return managerRef.current?.getActiveOverrides() ?? {};
+  }, []);
+
   const drainSyncedAdvances = React.useCallback((): ReadonlySet<string> => {
     return managerRef.current?.drainSyncedAdvances() ?? new Set<string>();
   }, []);
@@ -107,6 +142,10 @@ export function useReadState(
       setContextParentResolver: noopSetResolver,
       readStateVersion: 0,
       getOwnTimestamp: noopGetTimestamp,
+      markContextUnread: noopMarkUnread,
+      markContextManualRead: noopMarkRead,
+      getOverrideStatus: noopOverrideStatus,
+      getActiveOverrides: noopActiveOverrides,
     };
   }
 
@@ -119,5 +158,9 @@ export function useReadState(
     setContextParentResolver,
     readStateVersion,
     getOwnTimestamp,
+    markContextUnread,
+    markContextManualRead,
+    getOverrideStatus,
+    getActiveOverrides,
   };
 }

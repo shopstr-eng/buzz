@@ -5,7 +5,6 @@ import { KIND_READ_STATE } from "@/shared/constants/kinds";
 import {
   READ_STATE_D_TAG_PREFIX,
   READ_STATE_FETCH_LIMIT,
-  READ_STATE_HORIZON_SECONDS,
   READ_STATE_MAX_PLAINTEXT_BYTES,
   READ_STATE_MAX_SLOTS,
   MSG_PREFIX,
@@ -15,15 +14,42 @@ import {
 } from "@/features/channels/readState/readStateFormat";
 import { parseReadStateEvent } from "@/features/channels/readState/readStateSnapshot";
 import {
+  readStoredOverrides,
   readStoredReadState,
+  writeStoredOverrides,
   writeStoredReadState,
 } from "@/features/channels/readState/readStateStorage";
+import {
+  canonicalWireEntries,
+  escapeFrontierKey,
+  markReadRegister,
+  mergeRegister,
+  overrideActive,
+  planMarkUnread,
+  splitContexts,
+  unescapeFrontierKey,
+  type OverrideRegister,
+} from "@/features/channels/readState/unreadOverride";
 import { setLocalStorageItemWithRecovery } from "@/shared/lib/localStorageQuota";
 import { truncatePubkey } from "@/shared/lib/pubkey";
 
 const CLIENT_ID_KEY_PREFIX = "buzz.nip-rs.client-id";
 const SLOT_ID_KEY_PREFIX = "buzz.nip-rs.slot-id";
 const DEBOUNCE_MS = 5_000;
+
+// NIP-RS Full-State Load: continuations only advance on a non-empty page, so
+// this cannot spin; it just bounds a pathological history.
+const MAX_ENUMERATION_PAGES = 64;
+const FLOOR_L = 2; // NIP-RS Full-State Load floor (fixed by the NIP)
+
+export type MarkUnreadResult =
+  | { ok: true; baseline: number }
+  | {
+      ok: false;
+      reason: "not-ready" | "budget-exceeded" | "counter-exhausted";
+    };
+
+export type OverrideStatus = "none" | "active" | "inactive";
 
 function generateHex(bytes: number): string {
   const arr = new Uint8Array(bytes);
@@ -70,6 +96,18 @@ function saveExtraSlotIds(pubkey: string, ids: string[]): void {
 }
 
 export type ApplyRemoteContextResult = "unchanged" | "advanced";
+
+function wireEntriesEqual(
+  a: Record<string, number>,
+  b: Record<string, number>,
+): boolean {
+  const aKeys = Object.keys(a);
+  if (aKeys.length !== Object.keys(b).length) return false;
+  for (const key of aKeys) {
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
+}
 
 export type ContextParentResolver = (contextId: string) => string | null;
 
@@ -320,6 +358,17 @@ export class ReadStateManager {
   private pendingSyncedAdvances = new Set<string>();
   private destroyed = false;
   private parentResolver: ContextParentResolver | null = null;
+  // NIP-RS manual-unread override registers (raw ctx → register). Durable —
+  // never pruned by horizon/budget; live ONLY in the primary coordinate.
+  private overrides: Record<string, OverrideRegister> = {};
+  // Wire-shape ov_* entries of the last successful primary-slot publish, so
+  // suppression covers override changes too.
+  private lastPublishedOverrideWire: Record<string, number> = {};
+  // null = full-state load in progress (publishing suspended); true = proven
+  // complete (override mutations allowed); false = not loaded / could not
+  // prove completeness (override mutations must fail visibly, publishing of
+  // the frontier is still allowed).
+  private loadComplete: boolean | null = false;
 
   constructor(pubkey: string, relayClient: RelayClient) {
     this.pubkey = pubkey;
@@ -331,6 +380,7 @@ export class ReadStateManager {
       generateHex(16),
     );
     this.extraSlotIds = loadExtraSlotIds(pubkey);
+    this.overrides = readStoredOverrides(pubkey);
   }
 
   async initialize(): Promise<void> {
@@ -341,9 +391,17 @@ export class ReadStateManager {
 
     this.hydrateFromLocalStorage();
 
-    await this.fetchAndMerge();
-    if (this.destroyed) return;
+    // Suspend publishing for the duration of the full-state load (NIP-RS:
+    // no writes to own coordinates while the load is in progress).
+    this.loadComplete = null;
+
+    // NIP-RS Full-State Load: the live subscription is the fence — it must be
+    // established BEFORE the first enumeration query so a coordinate that is
+    // republished above the descending cursor during the load is still
+    // delivered (and collected) before the completeness verdict.
     await this.startLiveSubscription();
+    if (this.destroyed) return;
+    await this.fetchAndMerge();
     if (this.destroyed) return;
     const initContexts = this.currentContexts();
     if (initContexts === null) {
@@ -370,6 +428,76 @@ export class ReadStateManager {
 
   seedContextRead(contextId: string, unixTimestamp: number): void {
     this.advanceContext(contextId, unixTimestamp, { publishable: false });
+  }
+
+  /**
+   * Manual mark-unread (NIP-RS override layer): write a live ov_* register
+   * for the context (S = max(S,C)+1, B = current effective frontier) and
+   * schedule canonical publication to the primary coordinate. Requires a
+   * completed full-state load — fails visibly otherwise (never silently).
+   */
+  markContextUnread(contextId: string): MarkUnreadResult {
+    if (this.destroyed || this.loadComplete !== true) {
+      return { ok: false, reason: "not-ready" };
+    }
+    const frontier: Record<string, number> = {};
+    for (const [ctx, ts] of this.effectiveState) frontier[ctx] = ts;
+    // effectiveState already folds local markers in (desktop merges local and
+    // remote into one map), so localMarkers is empty here.
+    const plan = planMarkUnread(this.overrides, frontier, {}, contextId);
+    if (!plan) return { ok: false, reason: "counter-exhausted" };
+    this.overrides = plan.overrides;
+    writeStoredOverrides(this.pubkey, this.overrides);
+    this.schedulePublish();
+    this.notifyListeners();
+    return { ok: true, baseline: plan.register.b };
+  }
+
+  /**
+   * Explicit mark-read of a context that carries an override register:
+   * increments ov_c (C = max(S,C)+1), deactivating the force everywhere.
+   * No-op when the context has no register or a virgin one. At the counter
+   * ceiling the increment is refused (frontier advance still clears the dot
+   * locally via overrideActive's baseline check).
+   */
+  markContextManualRead(contextId: string): void {
+    const reg = this.overrides[contextId];
+    if (!reg || (reg.s === 0 && reg.c === 0)) return;
+    if (reg.c >= reg.s) return; // already cleared — nothing to increment
+    const next = markReadRegister(reg);
+    if (next === null) {
+      console.warn(
+        "[ReadStateManager] markContextManualRead: counter ceiling reached — refusing increment",
+      );
+      return;
+    }
+    this.overrides = { ...this.overrides, [contextId]: next };
+    writeStoredOverrides(this.pubkey, this.overrides);
+    this.schedulePublish();
+    this.notifyListeners();
+  }
+
+  /** Whether a context has no register, a live one, or a dead/cleared one. */
+  getOverrideStatus(contextId: string): OverrideStatus {
+    const reg = this.overrides[contextId];
+    if (!reg || (reg.s === 0 && reg.c === 0)) return "none";
+    return overrideActive(reg, this.effectiveState.get(contextId) ?? 0)
+      ? "active"
+      : "inactive";
+  }
+
+  /**
+   * Currently-active override registers as ctx → baseline (ov_b). Surfaces
+   * use this to light the manual-unread dot for forces made on any device.
+   */
+  getActiveOverrides(): Record<string, number> {
+    const out: Record<string, number> = {};
+    for (const [ctx, reg] of Object.entries(this.overrides)) {
+      if (overrideActive(reg, this.effectiveState.get(ctx) ?? 0)) {
+        out[ctx] = reg.b;
+      }
+    }
+    return out;
   }
 
   private advanceContext(
@@ -453,23 +581,58 @@ export class ReadStateManager {
     this.listeners.clear();
   }
 
+  /**
+   * NIP-RS Full-State Load. Clients that implement the manual-unread override
+   * layer MUST NOT filter the fetch by age or tag: an event-level window can
+   * exclude the only coordinate carrying a tombstone floor. Completeness is
+   * established by continuation on a strictly decreasing `until` cursor; each
+   * band is discharged when it delivers fewer events than max(C, L), where C
+   * is the largest single delivery seen so far and L = 2 is the NIP's floor.
+   * On success `loadComplete` becomes true (override mutations are allowed);
+   * on failure it becomes false (they fail visibly). Frontier merging happens
+   * either way — the layer degrades, frontier sync does not.
+   */
   private async fetchAndMerge(): Promise<void> {
-    let events: RelayEvent[];
+    let cap = 0;
+    let until: number | undefined;
     try {
-      events = await this.relayClient.fetchEvents({
-        kinds: [KIND_READ_STATE],
-        authors: [this.pubkey],
-        "#t": ["read-state"],
-        since: Math.floor(Date.now() / 1_000) - READ_STATE_HORIZON_SECONDS,
-        limit: READ_STATE_FETCH_LIMIT,
-      });
+      for (let page = 0; page < MAX_ENUMERATION_PAGES; page += 1) {
+        const events: RelayEvent[] = await this.relayClient.fetchEvents({
+          kinds: [KIND_READ_STATE],
+          authors: [this.pubkey],
+          limit: READ_STATE_FETCH_LIMIT,
+          ...(until !== undefined ? { until } : {}),
+        });
+        if (this.destroyed) return;
+
+        const delivered = events.length;
+        if (delivered > cap) cap = delivered;
+
+        await this.mergeEvents(events);
+
+        if (delivered === 0 || delivered < Math.max(cap, FLOOR_L)) {
+          this.loadComplete = true;
+          break;
+        }
+        const oldest = Math.min(...events.map((e) => e.created_at));
+        const nextUntil = oldest - 1;
+        if (nextUntil < 0 || (until !== undefined && nextUntil >= until)) {
+          this.loadComplete = true;
+          break;
+        }
+        until = nextUntil;
+      }
+      if (this.loadComplete === null) {
+        // Page budget exhausted without a discharged band.
+        this.loadComplete = false;
+      }
     } catch (error) {
       console.debug("[ReadStateManager] fetchAndMerge failed:", error);
-      // If fetch fails, proceed with local state only
+      // Proceed with local state only; override actions must fail visibly.
+      this.loadComplete = false;
       return;
     }
 
-    await this.mergeEvents(events);
     this.persistLocalState();
     this.notifyListeners();
   }
@@ -491,7 +654,10 @@ export class ReadStateManager {
         parsed.createdAt,
       );
 
-      for (const [ctx, ts] of Object.entries(parsed.blob.contexts)) {
+      // Group-first split: ov_* groups validated as a unit; frontier keys
+      // unescaped to raw ctx ids (NIP-RS Reserved Namespace).
+      const split = splitContexts(parsed.blob.contexts);
+      for (const [ctx, ts] of Object.entries(split.frontier)) {
         const result = applyRemoteContextTimestamp({
           effectiveState: this.effectiveState,
           contextSourceCreatedAt: this.contextSourceCreatedAt,
@@ -504,6 +670,7 @@ export class ReadStateManager {
           this.publishableContextIds.add(ctx);
         }
       }
+      this.mergeIncomingOverrides(split.overrides);
 
       if (parsed.blob.client_id === this.clientId) {
         const existing = ownBlobsBySlot.get(parsed.dTag);
@@ -529,30 +696,68 @@ export class ReadStateManager {
     }
 
     // Union all own-slot blobs into lastPublishedContexts (max-merge).
+    // Frontier entries only — ov_* wire entries are tracked separately (from
+    // the own PRIMARY slot, the only coordinate allowed to carry them).
     if (ownBlobsBySlot.size > 0) {
       const unionContexts: Record<string, number> = {};
-      for (const { blob } of ownBlobsBySlot.values()) {
-        for (const [key, ts] of Object.entries(blob.contexts)) {
+      for (const [dTag, { blob }] of ownBlobsBySlot) {
+        const split = splitContexts(blob.contexts);
+        for (const [key, ts] of Object.entries(split.frontier)) {
           const existing = unionContexts[key];
           if (existing === undefined || ts > existing) {
             unionContexts[key] = ts;
           }
+          this.publishableContextIds.add(key);
         }
-        for (const contextId of Object.keys(blob.contexts)) {
-          this.publishableContextIds.add(contextId);
+        if (dTag === `${READ_STATE_D_TAG_PREFIX}${this.slotId}`) {
+          const ovWire: Record<string, number> = {};
+          for (const [key, value] of Object.entries(blob.contexts)) {
+            if (key.startsWith("ov_")) ovWire[key] = value;
+          }
+          this.lastPublishedOverrideWire = ovWire;
         }
       }
       this.lastPublishedContexts = unionContexts;
     }
   }
 
+  /**
+   * Merge validated incoming override registers (componentwise max) and
+   * persist/notify when anything changed. Also marks the register's context
+   * as a pending synced advance when the merged verdict may have changed, so
+   * badge surfaces re-evaluate the forced dot.
+   */
+  private mergeIncomingOverrides(
+    incoming: Record<string, OverrideRegister>,
+  ): void {
+    let changed = false;
+    for (const [ctx, reg] of Object.entries(incoming)) {
+      const current = this.overrides[ctx];
+      const merged = current ? mergeRegister(current, reg) : reg;
+      if (
+        !current ||
+        merged.s !== current.s ||
+        merged.c !== current.c ||
+        merged.b !== current.b
+      ) {
+        this.overrides[ctx] = merged;
+        changed = true;
+      }
+    }
+    if (changed) {
+      writeStoredOverrides(this.pubkey, this.overrides);
+    }
+  }
+
   private async startLiveSubscription(): Promise<void> {
     try {
+      // Tag-free fence filter (NIP-RS Full-State Load): a tag constraint can
+      // withhold events after the relay's result cap. parseReadStateEvent
+      // still applies the d/t tag rules as a local correctness filter.
       const unsub = await this.relayClient.subscribeLive(
         {
           kinds: [KIND_READ_STATE],
           authors: [this.pubkey],
-          "#t": ["read-state"],
           limit: READ_STATE_FETCH_LIMIT,
         },
         (event: RelayEvent) => {
@@ -588,7 +793,13 @@ export class ReadStateManager {
 
     const { blob } = parsed;
     let anyAdvanced = false;
-    for (const [ctx, ts] of Object.entries(blob.contexts)) {
+    const split = splitContexts(blob.contexts);
+    const overridesBefore = JSON.stringify(this.overrides);
+    this.mergeIncomingOverrides(split.overrides);
+    if (JSON.stringify(this.overrides) !== overridesBefore) {
+      anyAdvanced = true;
+    }
+    for (const [ctx, ts] of Object.entries(split.frontier)) {
       const result = applyRemoteContextTimestamp({
         effectiveState: this.effectiveState,
         contextSourceCreatedAt: this.contextSourceCreatedAt,
@@ -632,6 +843,12 @@ export class ReadStateManager {
   }
 
   private async publish(): Promise<void> {
+    // NIP-RS: a client MUST NOT publish to its own coordinates while its own
+    // full-state load is in progress (self-inflicted replacement race).
+    if (this.loadComplete === null) {
+      if (!this.destroyed) this.schedulePublish();
+      return;
+    }
     console.debug(`[ReadStateManager] publish starting slotId=${this.slotId}`);
     await this.fetchOwnBlobBeforePublish();
 
@@ -656,9 +873,25 @@ export class ReadStateManager {
       this.lastPublishedContexts = {};
     }
 
-    if (this.isIdenticalToLastPublished(contexts)) return;
+    const overrideWire = this.currentOverrideWire();
+    if (
+      this.isIdenticalToLastPublished(contexts) &&
+      wireEntriesEqual(overrideWire, this.lastPublishedOverrideWire)
+    )
+      return;
 
-    await this.publishOneSlot(this.slotId, contexts);
+    await this.publishOneSlot(this.slotId, contexts, overrideWire);
+  }
+
+  /**
+   * Canonical ov_* wire entries against the current effective frontier
+   * (mandatory canonical publication: live → 3 keys, dead → tombstone floor,
+   * virgin → omitted).
+   */
+  private currentOverrideWire(): Record<string, number> {
+    const frontier: Record<string, number> = {};
+    for (const [ctx, ts] of this.effectiveState) frontier[ctx] = ts;
+    return canonicalWireEntries(this.overrides, frontier);
   }
 
   /**
@@ -668,11 +901,45 @@ export class ReadStateManager {
   private async publishOneSlot(
     slotId: string,
     contexts: Record<string, number>,
+    overrideWire: Record<string, number> | null = null,
   ): Promise<void> {
+    // Wire assembly: escape raw frontier keys (NIP-RS Reserved Namespace) and
+    // overlay canonical ov_* entries (primary slot only). Overrides are
+    // durable and NEVER evicted; when frontier + overrides exceed the budget,
+    // trim frontier msg:/thread: entries further, and if overrides + channel
+    // keys still don't fit, fail visibly (no publish) rather than degrade.
+    const escaped: Record<string, number> = {};
+    for (const [key, ts] of Object.entries(contexts)) {
+      escaped[escapeFrontierKey(key)] = ts;
+    }
+    let wireContexts = escaped;
+    if (overrideWire && Object.keys(overrideWire).length > 0) {
+      const encoder = new TextEncoder();
+      const overrideBytes = encoder.encode(JSON.stringify(overrideWire)).length;
+      const { fitsAfterTrim } = trimContextsToBudget(
+        escaped,
+        this.clientId,
+        READ_STATE_MAX_PLAINTEXT_BYTES - overrideBytes,
+      );
+      if (!fitsAfterTrim) {
+        console.warn(
+          "[ReadStateManager] publishOneSlot: overrides + channel keys exceed byte budget — not publishing",
+        );
+        return;
+      }
+      wireContexts = { ...escaped, ...overrideWire };
+    }
+    // Bookkeeping must reflect what actually shipped: the trim above may
+    // have dropped msg:/thread: entries from `escaped`.
+    const publishedFrontier: Record<string, number> = {};
+    for (const [key, ts] of Object.entries(escaped)) {
+      publishedFrontier[unescapeFrontierKey(key)] = ts;
+    }
+
     const blob: ReadStateBlob = {
       v: 1,
       client_id: this.clientId,
-      contexts,
+      contexts: wireContexts,
     };
 
     try {
@@ -705,14 +972,17 @@ export class ReadStateManager {
         `[ReadStateManager] publish accepted slotId=${slotId} createdAt=${createdAt}`,
       );
 
-      for (const key of Object.keys(contexts)) {
-        if (this.lastPublishedContexts[key] !== contexts[key]) {
+      for (const key of Object.keys(publishedFrontier)) {
+        if (this.lastPublishedContexts[key] !== publishedFrontier[key]) {
           this.contextSourceCreatedAt.set(key, createdAt);
         }
       }
       // Merge this slot's contexts into lastPublishedContexts (union).
-      for (const [key, ts] of Object.entries(contexts)) {
+      for (const [key, ts] of Object.entries(publishedFrontier)) {
         this.lastPublishedContexts[key] = ts;
+      }
+      if (overrideWire !== null) {
+        this.lastPublishedOverrideWire = { ...overrideWire };
       }
       this.maxFetchedCreatedAt = Math.max(
         this.maxFetchedCreatedAt,
@@ -743,14 +1013,26 @@ export class ReadStateManager {
         if (existing === undefined || ts > existing) unionContexts[key] = ts;
       }
     }
-    if (this.isIdenticalToLastPublished(unionContexts)) return;
+    // ov_* entries live ONLY in the primary coordinate (NIP-RS): pass the
+    // override wire to the primary slot alone. Suppression must include it —
+    // an override-only mutation (mark-unread / manual mark-read) can change
+    // the wire while every frontier timestamp stays identical.
+    const overrideWire = this.currentOverrideWire();
+    if (
+      this.isIdenticalToLastPublished(unionContexts) &&
+      wireEntriesEqual(overrideWire, this.lastPublishedOverrideWire)
+    )
+      return;
 
     // Reset lastPublishedContexts before the multi-slot publish so we can
     // rebuild it as the union of all slots.
     this.lastPublishedContexts = {};
-
     for (const { slotId, contexts } of slots) {
-      await this.publishOneSlot(slotId, contexts);
+      await this.publishOneSlot(
+        slotId,
+        contexts,
+        slotId === this.slotId ? overrideWire : null,
+      );
     }
   }
 

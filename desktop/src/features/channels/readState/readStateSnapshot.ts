@@ -6,6 +6,11 @@ import {
   sanitizeContexts,
   type ReadStateBlob,
 } from "@/features/channels/readState/readStateFormat";
+import {
+  mergeOverrides,
+  splitContexts,
+  type OverrideRegister,
+} from "@/features/channels/readState/unreadOverride";
 
 export type ReadStateDecrypt = (ciphertext: string) => Promise<string>;
 
@@ -54,26 +59,55 @@ export async function parseReadStateEvent(
   }
 }
 
-export async function mergeReadStateEvents(
+export type MergedReadState = {
+  /** Frontier entries keyed by RAW (unescaped) context ID, max-merged. */
+  contexts: Map<string, number>;
+  /** Validated ov_* override registers, componentwise-max merged. */
+  overrides: Record<string, OverrideRegister>;
+};
+
+/**
+ * Merge blobs into a frontier map plus override registers. ov_* groups are
+ * validated group-first per NIP-RS (invalid groups dropped wholesale, the
+ * frontier entry retained) and merged componentwise; frontier wire keys are
+ * unescaped to raw context IDs.
+ */
+export async function mergeReadStateEventsWithOverrides(
   events: RelayEvent[],
   pubkey: string,
   decrypt?: ReadStateDecrypt,
-): Promise<Map<string, number>> {
+): Promise<MergedReadState> {
   const contexts = new Map<string, number>();
+  let overrides: Record<string, OverrideRegister> = {};
 
   for (const event of events) {
     const parsed = await parseReadStateEvent(event, pubkey, decrypt);
     if (!parsed) continue;
 
-    for (const [contextId, timestamp] of Object.entries(parsed.blob.contexts)) {
+    const split = splitContexts(parsed.blob.contexts);
+    for (const [contextId, timestamp] of Object.entries(split.frontier)) {
       const current = contexts.get(contextId) ?? 0;
       if (timestamp > current) {
         contexts.set(contextId, timestamp);
       }
     }
+    overrides = mergeOverrides(overrides, split.overrides);
   }
 
-  return contexts;
+  return { contexts, overrides };
+}
+
+export async function mergeReadStateEvents(
+  events: RelayEvent[],
+  pubkey: string,
+  decrypt?: ReadStateDecrypt,
+): Promise<Map<string, number>> {
+  const merged = await mergeReadStateEventsWithOverrides(
+    events,
+    pubkey,
+    decrypt,
+  );
+  return merged.contexts;
 }
 
 export function getSnapshotReadTimestamp(

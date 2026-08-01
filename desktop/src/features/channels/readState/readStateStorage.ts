@@ -1,6 +1,7 @@
 import {
   isPlainRecord,
   localIsoToUnixSeconds,
+  localOverridesKey,
   localPublishableContextKey,
   localReadStateKey,
   localSourceCreatedAtKey,
@@ -10,6 +11,53 @@ import {
   THREAD_PREFIX,
 } from "@/features/channels/readState/readStateFormat";
 import { setLocalStorageItemWithRecovery } from "@/shared/lib/localStorageQuota";
+import {
+  OV_MAX,
+  type OverrideRegister,
+} from "@/features/channels/readState/unreadOverride";
+
+function isU32(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= OV_MAX
+  );
+}
+
+/**
+ * Read persisted NIP-RS override registers for a pubkey. Durable state —
+ * survives reloads independently of the (prunable) frontier contexts map.
+ */
+export function readStoredOverrides(
+  pubkey: string,
+): Record<string, OverrideRegister> {
+  const result: Record<string, OverrideRegister> = {};
+  const raw = localStorage.getItem(localOverridesKey(pubkey));
+  if (!raw) return result;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!isPlainRecord(parsed)) return result;
+    for (const [ctx, value] of Object.entries(parsed)) {
+      if (!isPlainRecord(value)) continue;
+      if (!isU32(value.s) || !isU32(value.c) || !isU32(value.b)) continue;
+      result[ctx] = { s: value.s, c: value.c, b: value.b };
+    }
+  } catch (error) {
+    console.debug("[ReadStateManager] storage: overrides JSON corrupt:", error);
+  }
+  return result;
+}
+
+export function writeStoredOverrides(
+  pubkey: string,
+  overrides: Record<string, OverrideRegister>,
+): void {
+  setLocalStorageItemWithRecovery(
+    localOverridesKey(pubkey),
+    JSON.stringify(overrides),
+  );
+}
 
 export type StoredReadState = {
   contexts: Map<string, number>;

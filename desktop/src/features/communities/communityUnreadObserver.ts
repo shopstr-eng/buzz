@@ -4,7 +4,8 @@ import {
   type ForcedUnreadMap,
 } from "@/features/channels/forcedUnreadStore";
 import { DM_NOTIFIABLE_EVENT_KINDS } from "@/features/channels/isDmNotifiableKind";
-import { mergeReadStateEvents } from "@/features/channels/readState/readStateSnapshot";
+import { mergeReadStateEventsWithOverrides } from "@/features/channels/readState/readStateSnapshot";
+import { overrideActive } from "@/features/channels/readState/unreadOverride";
 import {
   maxReadAt,
   msgContextKey,
@@ -191,11 +192,12 @@ export async function fetchCommunityUnread(args: {
     }),
   ]);
 
-  const readState = await mergeReadStateEvents(
-    readStateEvents,
-    pubkey,
-    args.decryptReadState,
-  );
+  const { contexts: readState, overrides: readStateOverrides } =
+    await mergeReadStateEventsWithOverrides(
+      readStateEvents,
+      pubkey,
+      args.decryptReadState,
+    );
 
   let mutedIds = new Set<string>();
   if (mutesEvents.length > 0) {
@@ -243,6 +245,16 @@ export async function fetchCommunityUnread(args: {
         readAt === null ||
         (markerAtWhenForced !== null && readAt <= markerAtWhenForced)
       ) {
+        hasUnread = true;
+      }
+    }
+
+    // NIP-RS manual-unread override: a live ov_* group set on ANY device
+    // lights the rail dot, even when this device never forced the channel
+    // locally (web ↔ desktop parity).
+    if (!hasUnread) {
+      const register = readStateOverrides[channel.id];
+      if (register && overrideActive(register, readAt ?? 0)) {
         hasUnread = true;
       }
     }

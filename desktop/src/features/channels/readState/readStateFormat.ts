@@ -119,6 +119,13 @@ export function localExtraSlotIdsKey(pubkey: string): string {
   return `buzz.nip-rs.extra-slot-ids:${pubkey}`;
 }
 
+// Manual-unread override registers (NIP-RS override layer). Durable state —
+// exempt from horizon pruning and budget eviction, persisted independently of
+// the frontier contexts map.
+export function localOverridesKey(pubkey: string): string {
+  return `buzz.nip-rs.overrides.v1:${pubkey}`;
+}
+
 export function localIsoToUnixSeconds(value: unknown): number | null {
   if (typeof value !== "string" || value.length === 0) {
     return null;
