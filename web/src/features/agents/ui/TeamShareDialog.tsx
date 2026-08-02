@@ -53,6 +53,42 @@ const SHARE_FORMATS: { value: SnapshotFormat; label: string; hint: string }[] = 
   { value: "json", label: "File (.team.json)", hint: "Plain JSON snapshot file" },
 ];
 
+function formatRecipientAudience(names: readonly string[]): string {
+  if (names.length === 0) return "The people you selected";
+  if (names.length === 1) return names[0] ?? "The person you selected";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+/**
+ * One-time confirm before uploading a team whose members include private
+ * (unshared) personas — mirrors PersonaShareDialog's confirmMemoryShare.
+ * Link shares warn about anyone with the link; DM sends name the recipients
+ * (plus anyone with the file link). Returns true when the user confirms or
+ * no private members are included.
+ */
+function confirmPrivateMembersShare(
+  privateMembers: readonly AgentPersona[],
+  action: "copy" | "send",
+  recipientNames: readonly string[],
+): boolean {
+  if (privateMembers.length === 0) return true;
+  const memberLabel =
+    privateMembers.length === 1
+      ? `a private persona (${privateMembers[0]?.displayName})`
+      : `${privateMembers.length} private personas (${privateMembers
+          .map((m) => m.displayName)
+          .join(", ")})`;
+  const audience =
+    action === "copy"
+      ? "Anyone with the link can read their full instructions."
+      : `${formatRecipientAudience(recipientNames)}—and anyone with the file link—can read their full instructions.`;
+  return window.confirm(
+    `Share private personas?\n\nThis team snapshot includes ${memberLabel}. ` +
+      `${audience} Only share with people you trust.`,
+  );
+}
+
 export function TeamShareDialog({
   team,
   members,
@@ -101,6 +137,8 @@ export function TeamShareDialog({
   const isSending = sendPhase === "uploading" || sendPhase === "sending";
   const isActionPending = isPublishing || isSending || copyStatus === "copying";
   const hasMembers = members.length > 0;
+  /** Members whose personas are private (not individually catalog-shared). */
+  const privateMembers = useMemo(() => members.filter((m) => !m.shared), [members]);
 
   const selectedPubkeys = useMemo(
     () => new Set(recipients.map((r) => r.pubkey)),
@@ -182,6 +220,7 @@ export function TeamShareDialog({
   /** Upload the snapshot and copy its blob URL to the clipboard. */
   async function handleCopyLink(): Promise<void> {
     if (inFlightRef.current || isActionPending) return;
+    if (!confirmPrivateMembersShare(privateMembers, "copy", [])) return;
 
     inFlightRef.current = true;
     setActionError(null);
@@ -232,6 +271,9 @@ export function TeamShareDialog({
     if (inFlightRef.current || isActionPending || recipients.length === 0) return;
     if (!connection || !identity) {
       setActionError("Not connected to the relay.");
+      return;
+    }
+    if (!confirmPrivateMembersShare(privateMembers, "send", recipients.map((r) => r.name))) {
       return;
     }
 
