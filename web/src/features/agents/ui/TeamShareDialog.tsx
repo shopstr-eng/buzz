@@ -89,6 +89,8 @@ export function TeamShareDialog({
   const [sendPhase, setSendPhase] = useState<SendPhase>("idle");
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   const [actionError, setActionError] = useState<string | null>(null);
+  /** Upload percent (0–100) while a snapshot upload is in flight, else null. */
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
 
   // Latest channels for the post-openDm resolver, without re-running it.
   const channelsRef = useRef<Channel[]>(channels);
@@ -150,13 +152,20 @@ export function TeamShareDialog({
    * preview in chat.
    */
   async function uploadSnapshot(format: SnapshotFormat): Promise<BlobDescriptor> {
-    if (format === "png") {
-      const { bytes, fileName } = encodeSnapshotPng();
-      const uploaded = await uploadMediaBytes(bytes, fileName, "image/png");
-      return { ...uploaded, thumb: uploaded.url };
+    const onProgress = (sent: number, total: number) =>
+      setUploadPercent(total > 0 ? Math.min(100, Math.round((sent / total) * 100)) : 0);
+    setUploadPercent(0);
+    try {
+      if (format === "png") {
+        const { bytes, fileName } = encodeSnapshotPng();
+        const uploaded = await uploadMediaBytes(bytes, fileName, "image/png", { onProgress });
+        return { ...uploaded, thumb: uploaded.url };
+      }
+      const { bytes, fileName } = encodeSnapshot();
+      return await uploadMediaBytes(bytes, fileName, "application/json", { onProgress });
+    } finally {
+      setUploadPercent(null);
     }
-    const { bytes, fileName } = encodeSnapshot();
-    return uploadMediaBytes(bytes, fileName, "application/json");
   }
 
   /** Download a .team.json or .team.png snapshot of the team + members. */
@@ -269,8 +278,16 @@ export function TeamShareDialog({
     setSearch("");
   }
 
+  const uploadProgressLabel =
+    uploadPercent !== null ? `Uploading… ${uploadPercent}%` : "Uploading…";
   const copyLabel =
-    copyStatus === "copying" ? "Copying…" : copyStatus === "copied" ? "Copied" : "Copy link";
+    copyStatus === "copying"
+      ? uploadPercent !== null
+        ? uploadProgressLabel
+        : "Copying…"
+      : copyStatus === "copied"
+        ? "Copied"
+        : "Copy link";
 
   return (
     <AgentDialogShell title={`Share ${team.name}`} onClose={onClose}>
@@ -460,7 +477,7 @@ export function TeamShareDialog({
           >
             <Send className="h-4 w-4 shrink-0" />
             {sendPhase === "uploading"
-              ? "Uploading…"
+              ? uploadProgressLabel
               : sendPhase === "sending"
                 ? "Sending…"
                 : "Send"}
