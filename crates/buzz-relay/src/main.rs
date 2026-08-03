@@ -1036,8 +1036,19 @@ async fn main() -> anyhow::Result<()> {
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(10)
             .max(1); // tokio::time::interval panics on Duration::ZERO
+        // Saturation watch: warn when the writer pool sits above 90% active
+        // for a sustained window (3 consecutive polls, i.e. ~30s at the
+        // default 10s interval). This surfaces pressure in deployment logs
+        // before acquires start timing out (task 77 right-sized the pools;
+        // this is the early-warning layer on top).
+        let saturation_ticks_needed = std::env::var("BUZZ_POOL_SATURATION_TICKS")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(3)
+            .max(1);
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+            let mut saturated_ticks: u32 = 0;
             loop {
                 interval.tick().await;
                 let db_stats = pool_state.db.pool_stats();
@@ -1046,6 +1057,35 @@ async fn main() -> anyhow::Result<()> {
                 metrics::gauge!("buzz_db_pool_idle").set(db_stats.idle as f64);
                 metrics::gauge!("buzz_db_pool_active").set(active as f64);
                 metrics::gauge!("buzz_db_pool_max").set(db_stats.max as f64);
+
+                // >90% of max connections busy counts as a saturated tick.
+                // Uses max (configured cap), not size (currently-open), so a
+                // pool that is fully dialed-out AND fully busy is what trips
+                // it — exactly the state that precedes acquire timeouts.
+                let saturated = db_stats.max > 0 && (active as f64) > 0.9 * (db_stats.max as f64);
+                if saturated {
+                    saturated_ticks = saturated_ticks.saturating_add(1);
+                    if saturated_ticks == saturation_ticks_needed {
+                        metrics::counter!("buzz_db_pool_saturation_total").increment(1);
+                        warn!(
+                            active,
+                            max = db_stats.max,
+                            window_secs = interval_secs * saturation_ticks_needed as u64,
+                            "writer DB pool >90% active for a sustained window; \
+                             acquire timeouts may follow — consider raising \
+                             BUZZ_DB_POOL_SIZE or checking for slow queries"
+                        );
+                    }
+                } else {
+                    if saturated_ticks >= saturation_ticks_needed {
+                        info!(
+                            active,
+                            max = db_stats.max,
+                            "writer DB pool saturation cleared"
+                        );
+                    }
+                    saturated_ticks = 0;
+                }
 
                 if let Some(read_stats) = pool_state.db.read_pool_stats() {
                     let read_active = read_stats.size.saturating_sub(read_stats.idle);

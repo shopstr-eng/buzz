@@ -154,6 +154,28 @@ module). All crates compile fine on 1.88.0. The `--ignore-rust-version` flag is 
 suppress version-guard errors. Do **not** prepend `/home/runner/workspace/bin` to PATH — the
 hermit cargo shim there routes through a broken rustc 1.95.0 with a TLS shared-library error.
 
+## DB pool health after a republish
+
+The relay polls pool stats every 10s and exports gauges (`buzz_db_pool_active/idle/max`, plus
+`buzz_db_read_pool_*` and `buzz_redis_pool_*`). On top of that, a saturation watch fires when
+the **writer** pool sits above 90% active for 3 consecutive polls (~30s):
+
+- A `WARN` log line: `writer DB pool >90% active for a sustained window; acquire timeouts may follow…`
+  with the current `active`/`max` numbers — visible in deployment logs.
+- A counter `buzz_db_pool_saturation_total` increments once per sustained episode; an `INFO`
+  "saturation cleared" line marks the end of an episode.
+
+**After a republish**, watch the deployment logs for a few minutes of real traffic:
+
+- No saturation WARNs → pools have headroom; nothing to do.
+- Occasional WARN followed by "cleared" → transient spikes; note the `active`/`max` numbers.
+- Repeated WARNs or WARNs followed by `pool timed out` errors → exhaustion is back; raise
+  `BUZZ_DB_POOL_SIZE` (mind the managed-Postgres connection cap × autoscale pods) or look for
+  slow queries holding connections.
+
+Tuning knobs: `BUZZ_POOL_METRICS_INTERVAL_SECS` (poll interval, default 10) and
+`BUZZ_POOL_SATURATION_TICKS` (consecutive saturated polls before warning, default 3).
+
 ## Invite flow summary
 
 1. **Admin mints an invite** — visit `https://your-domain.com/admin` in a browser with a Nostr extension (Alby, nos2x) loaded with the relay owner key → Invites → Generate invite link. The admin SPA signs each request with NIP-98; only the relay owner's key is accepted.
