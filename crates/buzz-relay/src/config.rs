@@ -1076,9 +1076,36 @@ mod tests {
     // value set by `invalid_bind_addr_returns_error`, causing a flaky failure.
     static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
+    /// Acquire the env mutex (tolerating poison from a previously failed
+    /// test) and scrub relay env vars that a host workspace may export
+    /// (e.g. the Replit dev environment sets BUZZ_REQUIRE_RELAY_MEMBERSHIP,
+    /// RELAY_OWNER_PUBKEY, ...), which would otherwise flip config defaults
+    /// and break these unit tests.
+    fn env_guard() -> std::sync::MutexGuard<'static, ()> {
+        let guard = ENV_MUTEX
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        for key in [
+            "BUZZ_BIND_ADDR",
+            "BUZZ_REQUIRE_RELAY_MEMBERSHIP",
+            "BUZZ_REQUIRE_AUTH_TOKEN",
+            "BUZZ_AUTO_MIGRATE",
+            "BUZZ_GIT_CONFORMANCE_PROBE",
+            "BUZZ_SERVE_GIT_WEB_GUI",
+            "BUZZ_MEDIA_BASE_URL",
+            "BUZZ_WEB_DIR",
+            "BUZZ_ADMIN_WEB_DIR",
+            "RELAY_OWNER_PUBKEY",
+            "RELAY_URL",
+        ] {
+            std::env::remove_var(key);
+        }
+        guard
+    }
+
     #[test]
     fn defaults_are_valid() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let config = Config::from_env().expect("default config");
         assert!(config.bind_addr.port() > 0);
         assert!(!config.database_url.is_empty());
@@ -1135,7 +1162,7 @@ mod tests {
 
     #[test]
     fn s3_addressing_style_env_accepts_virtual_and_rejects_invalid_values() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_S3_ADDRESSING_STYLE");
 
         std::env::set_var("BUZZ_S3_ADDRESSING_STYLE", "virtual");
@@ -1166,7 +1193,7 @@ mod tests {
     fn s3_addressing_style_env_rejects_non_unicode_values() {
         use std::os::unix::ffi::OsStringExt;
 
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_S3_ADDRESSING_STYLE");
         std::env::set_var(
             "BUZZ_S3_ADDRESSING_STYLE",
@@ -1190,7 +1217,7 @@ mod tests {
 
     #[test]
     fn redis_pool_size_env_override_and_invalid_fallback() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_REDIS_POOL_SIZE");
 
         std::env::set_var("BUZZ_REDIS_POOL_SIZE", "32");
@@ -1215,7 +1242,7 @@ mod tests {
 
     #[test]
     fn db_pool_size_env_override_and_invalid_fallback() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_DB_POOL_SIZE");
 
         std::env::set_var("BUZZ_DB_POOL_SIZE", "80");
@@ -1240,7 +1267,7 @@ mod tests {
 
     #[test]
     fn db_acquire_timeout_env_override_and_invalid_fallback() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_DB_ACQUIRE_TIMEOUT_SECS");
 
         std::env::set_var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS", "30");
@@ -1265,7 +1292,7 @@ mod tests {
 
     #[test]
     fn db_read_pool_size_env_override_and_invalid_fallback() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_DB_READ_POOL_SIZE");
 
         std::env::remove_var("BUZZ_DB_READ_POOL_SIZE");
@@ -1294,7 +1321,7 @@ mod tests {
 
     #[test]
     fn read_database_url_unset_or_blank_is_none() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("READ_DATABASE_URL");
 
         std::env::remove_var("READ_DATABASE_URL");
@@ -1322,7 +1349,7 @@ mod tests {
 
     #[test]
     fn replica_read_max_age_defaults_off_and_rejects_junk() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_REPLICA_READ_MAX_AGE_MS");
         let previous_old = std::env::var_os("BUZZ_REPLICA_HEAD_MAX_AGE_SECS");
         std::env::remove_var("BUZZ_REPLICA_HEAD_MAX_AGE_SECS");
@@ -1374,7 +1401,7 @@ mod tests {
 
     #[test]
     fn audit_logging_defaults_on_and_accepts_explicit_off() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_AUDIT_ENABLED");
         std::env::remove_var("BUZZ_AUDIT_ENABLED");
         assert!(parse_bool("BUZZ_AUDIT_ENABLED", true).unwrap());
@@ -1389,7 +1416,7 @@ mod tests {
 
     #[test]
     fn audit_logging_rejects_invalid_boolean() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_AUDIT_ENABLED");
         std::env::set_var("BUZZ_AUDIT_ENABLED", "sometimes");
         let result = parse_bool("BUZZ_AUDIT_ENABLED", true);
@@ -1407,7 +1434,7 @@ mod tests {
 
     #[test]
     fn join_policy_age_attestation_rejects_invalid_boolean() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_AGE_ATTESTATION_REQUIRED");
         std::env::set_var("BUZZ_AGE_ATTESTATION_REQUIRED", "sometimes");
         let result = parse_optional_bool("BUZZ_AGE_ATTESTATION_REQUIRED");
@@ -1425,7 +1452,7 @@ mod tests {
 
     #[test]
     fn rate_limits_can_be_overridden() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_RATE_LIMIT_HUMAN_MESSAGES_PER_MIN", "1001");
         std::env::set_var("BUZZ_RATE_LIMIT_HUMAN_API_CALLS_PER_MIN", "1002");
         std::env::set_var("BUZZ_RATE_LIMIT_HUMAN_WS_EVENTS_PER_SEC", "1003");
@@ -1442,7 +1469,7 @@ mod tests {
 
     #[test]
     fn rate_limit_overrides_reject_zero() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_RATE_LIMIT_HUMAN_WS_EVENTS_PER_SEC", "0");
         let result = Config::from_env();
         std::env::remove_var("BUZZ_RATE_LIMIT_HUMAN_WS_EVENTS_PER_SEC");
@@ -1456,7 +1483,7 @@ mod tests {
 
     #[test]
     fn relay_operator_pubkeys_parse_dedupe_and_normalize() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var(
             "RELAY_OPERATOR_PUBKEYS",
             "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA,bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1480,7 +1507,7 @@ mod tests {
 
     #[test]
     fn relay_operator_pubkeys_invalid_entry_is_error() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("RELAY_OPERATOR_PUBKEYS", "not-a-pubkey");
         let result = Config::from_env();
         std::env::remove_var("RELAY_OPERATOR_PUBKEYS");
@@ -1493,7 +1520,7 @@ mod tests {
 
     #[test]
     fn relay_operator_pubkeys_require_api_origin() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var(
             "RELAY_OPERATOR_PUBKEYS",
             "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1510,7 +1537,7 @@ mod tests {
 
     #[test]
     fn relay_operator_api_origin_rejects_paths() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("RELAY_OPERATOR_API_ORIGIN", "https://buzz.example/operator");
         let result = Config::from_env();
         std::env::remove_var("RELAY_OPERATOR_API_ORIGIN");
@@ -1523,7 +1550,7 @@ mod tests {
 
     #[test]
     fn push_gateway_defaults_to_buzz_and_can_be_disabled() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         let previous = std::env::var_os("BUZZ_PUSH_GATEWAY_DELIVERY_URL");
         std::env::remove_var("BUZZ_PUSH_GATEWAY_DELIVERY_URL");
         let config = Config::from_env().expect("default config");
@@ -1564,7 +1591,7 @@ mod tests {
 
     #[test]
     fn invalid_push_gateway_timeout_is_not_silently_defaulted() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_PUSH_GATEWAY_TIMEOUT_MS", "99");
         let result = Config::from_env();
         std::env::remove_var("BUZZ_PUSH_GATEWAY_TIMEOUT_MS");
@@ -1577,7 +1604,7 @@ mod tests {
 
     #[test]
     fn invalid_push_executor_key_id_is_rejected() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_PUSH_EXECUTOR_KEY_ID", "");
         let result = Config::from_env();
         std::env::remove_var("BUZZ_PUSH_EXECUTOR_KEY_ID");
@@ -1590,7 +1617,7 @@ mod tests {
 
     #[test]
     fn huddle_audio_available_can_be_disabled_for_horizontal_scaling() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_HUDDLE_AUDIO_AVAILABLE", "false");
         let config = Config::from_env().expect("config");
         std::env::remove_var("BUZZ_HUDDLE_AUDIO_AVAILABLE");
@@ -1610,7 +1637,7 @@ mod tests {
 
     #[test]
     fn pairing_relay_url_accepts_websocket_urls_and_rejects_http() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_PAIRING_RELAY_URL", "wss://pairing.buzz.xyz");
         let config = Config::from_env().expect("config");
         assert_eq!(
@@ -1629,7 +1656,7 @@ mod tests {
 
     #[test]
     fn max_frame_bytes_can_be_configured() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         std::env::set_var("BUZZ_MAX_FRAME_BYTES", "262144");
         let config = Config::from_env().expect("config");
         std::env::remove_var("BUZZ_MAX_FRAME_BYTES");
@@ -1638,7 +1665,7 @@ mod tests {
 
     #[test]
     fn git_repo_path_is_created_if_missing() {
-        let _guard = ENV_MUTEX.lock().unwrap();
+        let _guard = env_guard();
         // Pick a path under temp_dir that definitely doesn't exist yet.
         let base = std::env::temp_dir().join(format!(
             "buzz-test-git-repo-path-{}-{}",

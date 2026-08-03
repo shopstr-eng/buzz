@@ -36,6 +36,14 @@ tokio-websockets = { path = "vendor/tokio-websockets" }
 
 **Revert when:** Replit upgrades to Rust 1.89+; remove the `[patch.crates-io]` entry and delete `vendor/tokio-websockets/`.
 
+## Relay unit tests under rustc 1.88 (vendored redb + hf-hub, openssl)
+
+`cargo test -p buzz-relay --lib` builds the mesh-llm dev-dep chain, which needs three fixes on this 1.88 toolchain:
+
+- `vendor/redb/` and `vendor/hf-hub/` are vendor patches (wired via `[patch.crates-io]`) that replace the std `file_lock` API (unstable until 1.89) with direct `flock(2)` externs and lower `rust-version` to 1.88. Revert both (like tokio-websockets) when Replit ships Rust 1.89+.
+- openssl-sys needs the `openssl` + `pkg-config` Nix system deps (installed 2026-08-03 via package management); without them the dev-dep build dies at "Could not find directory of OpenSSL installation".
+- The workspace shared env exports relay vars (BUZZ_REQUIRE_RELAY_MEMBERSHIP=true, RELAY_OWNER_PUBKEY, ...) that flip config defaults; the config tests scrub them via a poison-tolerant `env_guard()` helper. Any new env-reading config knob's test must go through that guard.
+
 ## Required env vars for relay startup
 
 All must be set (shared environment) for the relay to start:

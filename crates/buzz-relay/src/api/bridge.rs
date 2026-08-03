@@ -3881,10 +3881,13 @@ mod tests {
         };
 
         // Enable auth-token enforcement — X-Pubkey fallback must be refused.
-        Arc::get_mut(&mut state)
-            .expect("exclusive Arc ref for require_auth_token mutation")
-            .config
-            .require_auth_token = true;
+        {
+            let inner = Arc::get_mut(&mut state)
+                .expect("exclusive Arc ref for require_auth_token mutation");
+            let mut cfg = (*inner.config).clone();
+            cfg.require_auth_token = true;
+            inner.config = Arc::new(cfg);
+        }
 
         // Provision a fresh community so bind_community succeeds.
         let host = {
