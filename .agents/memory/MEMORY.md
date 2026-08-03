@@ -10,3 +10,4 @@
 - [Agent typing but never responds](agent-typing-no-response.md) — symptom ⇒ response publish 403 (channel-membership, not LLM); kind:9000 repair via bridge; prod DB bytea/timestamptz query quirks.
 - [Blossom upload progress & environments](blossom-upload-progress.md) — web uploader needs both XHR (progress/stall) and fetch fallback (node e2e); 413-before-streaming e2e is flaky behind the dev proxy.
 - [GCS App Storage proxy for media](gcs-app-storage-proxy.md) — Node.js S3-compatible proxy (scripts/gcs-s3-proxy.mjs) bridges rust-s3 to Replit App Storage via sidecar at 127.0.0.1:1106; dev keeps MinIO; bucket must be provisioned via App Storage tool before first prod deploy.
+- [Git identity policy for main](git-identity-policy.md) — main must carry user's GitHub identity; task-agent merges land under Replit-managed identities and must be filter-branch rewritten before push; GITHUB_TOKEN works via x-access-token URL, not http.extraHeader.
