@@ -1233,7 +1233,22 @@ struct ProjectRejection {
     message: String,
 }
 
-impl std::error::Error for ProjectRejection {}
+impl ProjectRejection {
+    /// Build a rejection carrying the stable rule id and the human-readable
+    /// message forwarded to the client's NOTICE/OK text.
+    fn new(rule: &'static str, message: impl Into<String>) -> Self {
+        Self {
+            rule,
+            message: message.into(),
+        }
+    }
+}
+
+impl std::fmt::Display for ProjectRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} ({})", self.message, self.rule)
+    }
+}
 
 impl std::error::Error for ProjectRejection {}
 

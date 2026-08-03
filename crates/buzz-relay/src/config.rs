@@ -68,14 +68,28 @@ pub struct Config {
     /// pod is only 4 — small enough that rate-limit checks, presence, and
     /// pub/sub publishes queue behind each other under load.
     pub redis_pool_size: usize,
-    /// Maximum connections in the Postgres writer/reader pools. Defaults to 50.
+    /// Maximum connections in the Postgres writer/reader pools. Defaults to 20.
     ///
-    /// The `buzz-db` default of 20 was sized for a handful of pods against
-    /// `max_connections=100`. Against Aurora (~5,000 connections) that cap
-    /// is the binding constraint: a burst of concurrent handlers exhausts
-    /// the per-pod pool and requests fail on acquire timeout while the
-    /// database sits idle.
+    /// Sized per pod: alongside the audit pool (5) and search pool (5), one
+    /// pod claims at most 30 server connections. On managed Postgres with a
+    /// low server-side connection cap (e.g. Replit/Neon) and an autoscale
+    /// deployment running several pods, an oversized per-pod pool exhausts
+    /// the *server* cap — new pool connections are refused and every acquire
+    /// times out ("pool timed out while waiting for an open connection")
+    /// while the database sits idle. Raise via `BUZZ_DB_POOL_SIZE` only when
+    /// the server cap (Aurora: ~5,000) has headroom for
+    /// `pods × (pool + audit + search)`.
     pub db_pool_size: u32,
+    /// Seconds an acquire may wait for a pool connection before timing out
+    /// (`BUZZ_DB_ACQUIRE_TIMEOUT_SECS`). Defaults to 10.
+    ///
+    /// Managed Postgres (Neon-style) suspends idle computes and the pool
+    /// shrinks to `min_connections` when traffic is quiet, so the first
+    /// acquire after an idle period pays a fresh dial: TLS + auth + possible
+    /// compute resume. The previous 3s budget routinely lost that race,
+    /// which surfaced as background jobs (push matcher/wake claims, reminder
+    /// scheduler, usage metrics, NIP-43 reconciliation) skipping work.
+    pub db_acquire_timeout_secs: u64,
     /// Maximum connections in the Postgres read-replica pool
     /// (`BUZZ_DB_READ_POOL_SIZE`). Defaults to `db_pool_size`. Sized
     /// independently so reader capacity can be tuned against the replica's
@@ -479,7 +493,13 @@ impl Config {
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
             .filter(|&v| v > 0)
-            .unwrap_or(50);
+            .unwrap_or(20);
+
+        let db_acquire_timeout_secs = std::env::var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(10);
 
         let db_read_pool_size = std::env::var("BUZZ_DB_READ_POOL_SIZE")
             .ok()
@@ -993,6 +1013,7 @@ impl Config {
             redis_url,
             redis_pool_size,
             db_pool_size,
+            db_acquire_timeout_secs,
             db_read_pool_size,
             relay_url,
             pairing_relay_url,
@@ -1063,7 +1084,8 @@ mod tests {
         assert!(!config.database_url.is_empty());
         assert!(!config.redis_url.is_empty());
         assert_eq!(config.redis_pool_size, 16);
-        assert_eq!(config.db_pool_size, 50);
+        assert_eq!(config.db_pool_size, 20);
+        assert_eq!(config.db_acquire_timeout_secs, 10);
         assert!(config.max_connections > 0);
         assert!(config.send_buffer_size > 0);
         assert_eq!(config.max_frame_bytes, DEFAULT_MAX_FRAME_BYTES);
@@ -1212,8 +1234,33 @@ mod tests {
         }
 
         assert_eq!(overridden, 80);
-        assert_eq!(zero, 50, "zero must fall back to the default");
-        assert_eq!(junk, 50, "unparsable value must fall back to the default");
+        assert_eq!(zero, 20, "zero must fall back to the default");
+        assert_eq!(junk, 20, "unparsable value must fall back to the default");
+    }
+
+    #[test]
+    fn db_acquire_timeout_env_override_and_invalid_fallback() {
+        let _guard = ENV_MUTEX.lock().unwrap();
+        let previous = std::env::var_os("BUZZ_DB_ACQUIRE_TIMEOUT_SECS");
+
+        std::env::set_var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS", "30");
+        let overridden = Config::from_env().expect("config").db_acquire_timeout_secs;
+
+        std::env::set_var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS", "0");
+        let zero = Config::from_env().expect("config").db_acquire_timeout_secs;
+
+        std::env::set_var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS", "not-a-number");
+        let junk = Config::from_env().expect("config").db_acquire_timeout_secs;
+
+        if let Some(value) = previous {
+            std::env::set_var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS", value);
+        } else {
+            std::env::remove_var("BUZZ_DB_ACQUIRE_TIMEOUT_SECS");
+        }
+
+        assert_eq!(overridden, 30);
+        assert_eq!(zero, 10, "zero must fall back to the default");
+        assert_eq!(junk, 10, "unparsable value must fall back to the default");
     }
 
     #[test]

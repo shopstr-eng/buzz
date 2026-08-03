@@ -169,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
         replica_read_max_age_ms: config.replica_read_max_age_ms,
         max_connections: config.db_pool_size,
         read_max_connections: config.db_read_pool_size,
+        acquire_timeout_secs: config.db_acquire_timeout_secs,
         ..DbConfig::default()
     };
     let db = Db::new(&db_config).await.map_err(|e| {
@@ -399,6 +400,9 @@ async fn main() -> anyhow::Result<()> {
         let audit_pool = sqlx::postgres::PgPoolOptions::new()
             .max_connections(5)
             .min_connections(1)
+            .acquire_timeout(std::time::Duration::from_secs(
+                config.db_acquire_timeout_secs,
+            ))
             .connect(&config.database_url)
             .await
             .map_err(|e| anyhow::anyhow!("Audit DB connection failed: {e}"))?;
@@ -452,7 +456,16 @@ async fn main() -> anyhow::Result<()> {
         .read_database_url
         .as_deref()
         .unwrap_or(&config.database_url);
+    // Cap the search pool explicitly: sqlx's default (10) plus the writer and
+    // audit pools multiplied across autoscale pods can exceed a managed
+    // Postgres server-side connection cap, which surfaces as pool acquire
+    // timeouts everywhere else. min_connections=0 keeps idle pods lean.
     let search_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .min_connections(0)
+        .acquire_timeout(std::time::Duration::from_secs(
+            config.db_acquire_timeout_secs,
+        ))
         .connect(search_db_url)
         .await
         .map_err(|e| anyhow::anyhow!("Search DB connection failed: {e}"))?;
