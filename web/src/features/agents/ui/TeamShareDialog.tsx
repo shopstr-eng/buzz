@@ -69,7 +69,7 @@ function formatRecipientAudience(names: readonly string[]): string {
  */
 function confirmPrivateMembersShare(
   privateMembers: readonly AgentPersona[],
-  action: "copy" | "send",
+  action: "export" | "copy" | "send",
   recipientNames: readonly string[],
 ): boolean {
   if (privateMembers.length === 0) return true;
@@ -82,7 +82,9 @@ function confirmPrivateMembersShare(
   const audience =
     action === "copy"
       ? "Anyone with the link can read their full instructions."
-      : `${formatRecipientAudience(recipientNames)}—and anyone with the file link—can read their full instructions.`;
+      : action === "export"
+        ? "Anyone with the file can read their full instructions."
+        : `${formatRecipientAudience(recipientNames)}—and anyone with the file link—can read their full instructions.`;
   return window.confirm(
     `Share private personas?\n\nThis team snapshot includes ${memberLabel}. ` +
       `${audience} Only share with people you trust.`,
@@ -208,6 +210,7 @@ export function TeamShareDialog({
 
   /** Download a .team.json or .team.png snapshot of the team + members. */
   function handleExport(format: SnapshotFormat): void {
+    if (!confirmPrivateMembersShare(privateMembers, "export", [])) return;
     if (format === "json") {
       const { bytes, fileName } = encodeSnapshot();
       downloadBytes(bytes, fileName, "application/json");
